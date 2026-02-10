@@ -1631,39 +1631,14 @@ class NivChat {
         const firstName = this.get_first_name();
         this.$chatArea.html(`
             <div class="niv-empty-state">
-                <div class="empty-avatar">N</div>
+                <div class="empty-orb">
+                    <div class="empty-orb-inner"></div>
+                    <div class="empty-orb-ring"></div>
+                </div>
                 <div class="empty-greeting">${greeting}, ${frappe.utils.escape_html(firstName)}</div>
                 <div class="empty-subtitle">How can I help you today?</div>
-                <div class="empty-suggestions">
-                    <button class="btn suggestion" data-msg="Show me today's sales summary">
-                        <span class="suggestion-icon">📊</span>
-                        <span class="suggestion-title">Today's sales summary</span>
-                        <span class="suggestion-desc">Get an overview of today's revenue</span>
-                    </button>
-                    <button class="btn suggestion" data-msg="List all pending Sales Orders">
-                        <span class="suggestion-icon">📋</span>
-                        <span class="suggestion-title">Pending Sales Orders</span>
-                        <span class="suggestion-desc">View orders awaiting fulfillment</span>
-                    </button>
-                    <button class="btn suggestion" data-msg="Create a new Customer">
-                        <span class="suggestion-icon">➕</span>
-                        <span class="suggestion-title">Create a Customer</span>
-                        <span class="suggestion-desc">Add a new customer record</span>
-                    </button>
-                    <button class="btn suggestion" data-msg="What reports are available?">
-                        <span class="suggestion-icon">📈</span>
-                        <span class="suggestion-title">Available reports</span>
-                        <span class="suggestion-desc">Explore built-in report options</span>
-                    </button>
-                </div>
             </div>
         `);
-        this.$chatArea.find(".suggestion").on("click", async (e) => {
-            const msg = $(e.currentTarget).data("msg");
-            if (!this.current_conversation) await this.new_conversation();
-            this.$input.val(msg);
-            this.send_message();
-        });
     }
 
     hide_empty_state() {
