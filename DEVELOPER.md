@@ -1,286 +1,179 @@
-# 🔧 Niv AI — Developer Guide
+# 🛠️ Niv AI — Developer Guide
 
-> Architecture, APIs, customization, and contribution guide.
-
----
-
-## 📁 Project Structure
-
-```
-niv_ai/
-├── niv_ai/
-│   ├── hooks.py                    # App config, routes, events
-│   ├── install.py                  # Post-install setup (DocTypes, tools, prompts)
-│   ├── modules.txt                 # Frappe modules list
-│   │
-│   ├── niv_core/                   # Core AI engine
-│   │   ├── api/
-│   │   │   ├── chat.py             # Non-streaming chat API
-│   │   │   ├── stream.py           # SSE streaming chat API
-│   │   │   ├── conversation.py     # CRUD for conversations
-│   │   │   ├── voice.py            # TTS (Piper/OpenAI/Browser) + STT
-│   │   │   ├── mcp.py              # MCP server management
-│   │   │   ├── knowledge.py        # RAG knowledge base
-│   │   │   ├── scheduler.py        # Scheduled reports
-│   │   │   ├── automation.py       # Auto-actions on doc events
-│   │   │   ├── instructions.py     # Custom user instructions
-│   │   │   └── health.py           # Health check endpoint
-│   │   ├── mcp_client.py           # MCP protocol client (JSON-RPC 2.0)
-│   │   ├── compat.py               # Frappe v14/v15 compatibility layer
-│   │   ├── utils/
-│   │   │   ├── rate_limiter.py     # Request rate limiting
-│   │   │   ├── error_handler.py    # Structured error responses
-│   │   │   ├── logger.py           # API call logging
-│   │   │   ├── retry.py            # Retry logic for API calls
-│   │   │   └── validators.py       # Input validation
-│   │   └── doctype/                # 12 DocTypes (see below)
-│   │
-│   ├── niv_billing/                # Billing & payments
-│   │   ├── api/
-│   │   │   ├── billing.py          # Balance check, deduction, dual modes
-│   │   │   ├── payment.py          # Razorpay integration + demo mode
-│   │   │   └── admin.py            # Analytics APIs (8 endpoints)
-│   │   └── doctype/                # 4 DocTypes
-│   │
-│   ├── niv_tools/                  # Tool execution engine
-│   │   ├── api/
-│   │   │   ├── tool_executor.py    # 3-path resolution: Niv → FAC → MCP
-│   │   │   └── tool_registry.py    # Tool registration
-│   │   ├── fac_adapter.py          # Frappe Assistant Core wrapper
-│   │   ├── tools/                  # 26 built-in tools
-│   │   │   ├── document_tools.py   # CRUD operations (6 tools)
-│   │   │   ├── search_tools.py     # Search & filter (3 tools)
-│   │   │   ├── report_tools.py     # Report generation (3 tools)
-│   │   │   ├── workflow_tools.py   # Workflow actions (2 tools)
-│   │   │   ├── database_tools.py   # Raw DB queries (2 tools)
-│   │   │   ├── email_tools.py      # Email drafts (3 tools)
-│   │   │   ├── image_tools.py      # Image generation
-│   │   │   └── utility_tools.py    # Date, math, format (7 tools)
-│   │   └── doctype/
-│   │
-│   ├── niv_ui/                     # Frontend pages
-│   │   └── page/
-│   │       ├── niv_chat/           # Main chat (3000+ lines JS, 3200+ lines CSS)
-│   │       ├── niv_chat_shared/    # Read-only shared chat view
-│   │       ├── niv_credits/        # Recharge & billing page
-│   │       └── niv_dashboard/      # Admin analytics dashboard
-│   │
-│   └── public/                     # Global assets (widget)
-│       ├── js/niv_widget.js        # Floating chat widget
-│       └── css/niv_widget.css      # Widget styles
-│
-├── docker/                         # Docker helper scripts
-├── scripts/                        # Dev tools
-│   └── validate_before_deploy.py   # Pre-deploy safety checks
-├── requirements.txt
-└── setup.py
-```
-
----
-
-## 🗄️ DocTypes
-
-### Core (niv_core)
-| DocType | Type | Purpose |
-|---------|------|---------|
-| **Niv Settings** | Single | Global config (provider, model, billing, widget) |
-| **Niv AI Provider** | Regular | AI API providers (URL, key, model) |
-| **Niv Conversation** | Regular | Chat sessions per user |
-| **Niv Message** | Regular | Individual messages (user/assistant/system) |
-| **Niv System Prompt** | Regular | System prompt templates |
-| **Niv File** | Regular | File attachments metadata |
-| **Niv MCP Server** | Regular | External MCP server connections |
-| **Niv MCP Tool** | Child | Tools discovered from MCP servers |
-| **Niv Knowledge Base** | Regular | RAG document collections |
-| **Niv KB Chunk** | Regular | Text chunks for RAG search |
-| **Niv Shared Chat** | Regular | Shared chat links |
-| **Niv Auto Action** | Regular | Document event triggers |
-| **Niv Custom Instruction** | Regular | Per-user custom system prompts |
-| **Niv Scheduled Report** | Regular | Automated report schedules |
-
-### Billing (niv_billing)
-| DocType | Type | Purpose |
-|---------|------|---------|
-| **Niv Credit Plan** | Regular | Token plans (free/paid) |
-| **Niv Wallet** | Regular | Per-user credit balance |
-| **Niv Recharge** | Regular | Payment/recharge records |
-| **Niv Usage Log** | Regular | Per-request token usage |
-
-### Tools (niv_tools)
-| DocType | Type | Purpose |
-|---------|------|---------|
-| **Niv Tool** | Regular | Registered AI tools with schemas |
-| **Niv Tool Log** | Regular | Tool execution history |
-
----
-
-## 🔌 API Reference
-
-### Chat
-```python
-# Non-streaming
-POST /api/method/niv_ai.niv_core.api.chat.send_message
-  args: conversation_id, message, model?, attachments?, context?
-
-# Streaming (SSE)
-GET /api/method/niv_ai.niv_core.api.stream.stream_message
-  args: conversation_id, message, model?, attachments?, context?
-  returns: EventSource with types: token, tool_call, tool_result, suggestions, done
-```
-
-### Conversation
-```python
-POST /api/method/niv_ai.niv_core.api.conversation.create_conversation
-POST /api/method/niv_ai.niv_core.api.conversation.list_conversations
-POST /api/method/niv_ai.niv_core.api.conversation.get_messages
-POST /api/method/niv_ai.niv_core.api.conversation.delete_conversation
-POST /api/method/niv_ai.niv_core.api.conversation.update_title
-```
-
-### Voice
-```python
-POST /api/method/niv_ai.niv_core.api.voice.text_to_speech
-POST /api/method/niv_ai.niv_core.api.voice.speech_to_text
-POST /api/method/niv_ai.niv_core.api.voice.voice_chat
-POST /api/method/niv_ai.niv_core.api.voice.get_tts_status
-POST /api/method/niv_ai.niv_core.api.voice.get_available_voices
-```
-
-### Billing
-```python
-POST /api/method/niv_ai.niv_billing.api.billing.check_balance
-POST /api/method/niv_ai.niv_billing.api.payment.get_plans
-POST /api/method/niv_ai.niv_billing.api.payment.create_order
-POST /api/method/niv_ai.niv_billing.api.payment.verify_payment
-```
-
----
-
-## 🛠️ Adding Custom Tools
-
-1. Create a Python file in `niv_tools/tools/`:
-
-```python
-# niv_tools/tools/my_tools.py
-
-TOOLS = [
-    {
-        "name": "my_custom_tool",
-        "description": "Does something useful",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "param1": {"type": "string", "description": "First parameter"}
-            },
-            "required": ["param1"]
-        }
-    }
-]
-
-def execute_my_custom_tool(params):
-    """Execute the tool and return result"""
-    return {"result": f"Processed: {params['param1']}"}
-```
-
-2. Register in `install.py` DEFAULT_TOOLS list
-3. Run `bench migrate` to create tool records
-
----
-
-## 🔗 Adding MCP Servers
-
-Via UI: **Niv Settings → MCP Servers → Add**
-
-Via API:
-```python
-frappe.get_doc({
-    "doctype": "Niv MCP Server",
-    "server_name": "My Server",
-    "server_url": "http://localhost:3000/mcp",
-    "transport_type": "streamable-http",
-    "api_key": "your-key",
-    "is_active": 1
-}).insert()
-```
-
-The MCP client (`mcp_client.py`) implements JSON-RPC 2.0 directly — no `mcp` pip package needed.
-
----
-
-## 🔄 Tool Resolution Order
-
-When AI calls a tool, `tool_executor.py` resolves in order:
-1. **Niv Tool** (DocType) — registered built-in tools
-2. **FAC Adapter** — Frappe Assistant Core tools (if installed)
-3. **MCP Servers** — External MCP server tools
-4. **Error** — Tool not found
-
----
-
-## 🏗️ Development Setup
+## Development Setup
 
 ```bash
 # Clone
 git clone https://github.com/kulharir7/niv_ai.git
 cd niv_ai
 
-# Install in dev mode
-bench get-app ./niv_ai
-bench --site your-site install-app niv_ai
+# Install in development mode
+cd /path/to/frappe-bench
+bench get-app /path/to/niv_ai  # or from GitHub
+bench --site your-site.com install-app niv_ai
 
-# Build frontend
-bench build --app niv_ai
+# Install Python dependencies
+pip install -e apps/niv_ai
 
-# Run validation before deploy
-python scripts/validate_before_deploy.py
+# Run migrations
+bench --site your-site.com migrate
 ```
 
-### Pre-deploy Safety Rules
-The validation script checks:
-1. **No single quotes** in HTML page files (Frappe template wrapping breaks)
-2. **No HTML comments** in JS page files (breaks template literals)
-3. **No unprotected utils imports** in API files (need try/except fallback)
+## Architecture Overview
 
----
+### Engine: LangChain/LangGraph
 
-## 🧪 Testing
+The AI engine is entirely powered by LangChain and LangGraph:
+
+```
+User Message → stream.py/chat.py
+    → agent.py (create_react_agent)
+        → llm.py (auto-detect provider → ChatOpenAI/ChatAnthropic/ChatGoogleGenerativeAI)
+        → tools.py (MCP tools → LangChain StructuredTool)
+        → memory.py (conversation history → LangChain messages)
+        → callbacks.py (streaming + billing + logging)
+    → MCP Client → External MCP Servers
+```
+
+### Key Design Decisions
+
+1. **MCP-Only Tools**: No native Python tool implementations. All tools come from MCP servers. This keeps Niv AI lightweight and extensible.
+
+2. **Auto-Detection**: Provider type auto-detected from URL/name:
+   - URL contains "anthropic" or "claude" → `ChatAnthropic`
+   - URL contains "google" or "gemini" → `ChatGoogleGenerativeAI`
+   - Everything else → `ChatOpenAI` (OpenAI-compatible)
+
+3. **handle_tool_error=True**: All tools have this flag to prevent LangGraph from crashing on bad tool arguments.
+
+4. **werkzeug.wrappers.Response for SSE**: Frappe v15 does NOT support `frappe.response["type"] = "generator"`. SSE uses werkzeug Response directly.
+
+5. **Billing via Callbacks**: `NivBillingCallback` accumulates tokens across multi-step tool loops, commits once via `finalize()`.
+
+## Code Map
+
+### `niv_ai/niv_core/langchain/`
+
+| File | Purpose |
+|------|---------|
+| `agent.py` | Creates LangGraph ReAct agent, `run_agent()` (sync), `stream_agent()` (SSE) |
+| `llm.py` | `get_llm()` — multi-provider factory with auto-detection |
+| `tools.py` | Wraps MCP tools as LangChain `StructuredTool` objects |
+| `memory.py` | Loads Niv Message → LangChain messages, token-aware truncation |
+| `callbacks.py` | `NivStreamingCallback`, `NivBillingCallback`, `NivLoggingCallback` |
+| `rag.py` | FAISS vectorstore with HuggingFace embeddings |
+
+### `niv_ai/niv_core/api/`
+
+| File | Purpose |
+|------|---------|
+| `stream.py` | SSE endpoint (primary) — `stream_chat()` |
+| `chat.py` | Non-streaming fallback — `send_message()` |
+| `conversation.py` | CRUD for conversations + messages |
+| `voice.py` | TTS (Piper/OpenAI/browser), STT, voice chat |
+| `mcp.py` | MCP server management APIs |
+| `instructions.py` | Custom instructions CRUD |
+| `_helpers.py` | Shared utilities (validate, save message, auto-title) |
+
+### `niv_ai/niv_core/mcp_client.py`
+
+MCP protocol client — JSON-RPC 2.0 over HTTP/SSE/stdio:
+- `get_all_mcp_tools_cached()` — Returns tools in OpenAI function format
+- `find_tool_server(tool_name)` — Instant lookup via cached index
+- `call_tool_fast(server, tool, args)` — Execute with session reuse
+- `clear_cache()` — Clear all caches (after server changes)
+
+## Adding a New Feature
+
+### Adding a New API Endpoint
+
+```python
+# niv_ai/niv_core/api/my_feature.py
+import frappe
+from frappe import _
+
+@frappe.whitelist()  # MUST be the ONLY decorator — never stack with others
+def my_endpoint(param1, param2=None):
+    """Docstring here."""
+    user = frappe.session.user
+    # ... your logic
+    return {"result": "ok"}
+```
+
+**Rules:**
+- `@frappe.whitelist()` must be directly above `def` — no other decorators
+- Never expose raw Python errors — use `frappe.log_error()` + return friendly messages
+- Always validate `frappe.session.user` for auth
+
+### Adding a New DocType
+
+1. Create JSON in the appropriate module directory
+2. Add to `fixtures` in `hooks.py` if it needs seed data
+3. Run `bench --site your-site.com migrate`
+4. For Frappe v14 compatibility: NO `naming_rule` field, NO `sync_fixtures` (use `install.py` instead)
+
+## Testing
 
 ```bash
-# Test install
-bench --site test-site install-app niv_ai
-bench --site test-site migrate
+# Quick API test
+bench --site your-site.com console
+>>> from niv_ai.niv_core.langchain.agent import run_agent
+>>> result = run_agent("hello", user="Administrator")
+>>> print(result)
 
-# Test API
-bench --site test-site execute niv_ai.niv_core.api.chat.send_message \
-  --kwargs '{"conversation_id": "...", "message": "hello"}'
+# Test MCP connection
+>>> from niv_ai.niv_core.mcp_client import get_all_mcp_tools_cached
+>>> tools = get_all_mcp_tools_cached()
+>>> print(f"{len(tools)} tools")
 
-# Test TTS
-bench --site test-site execute niv_ai.niv_core.api.voice.get_tts_status
+# Test streaming
+>>> from niv_ai.niv_core.langchain.agent import stream_agent
+>>> for event in stream_agent("how many customers?", user="Administrator"):
+...     print(event["type"], event.get("content", event.get("tool", ""))[:50])
 ```
 
----
+## Common Pitfalls
 
-## 📝 Key Design Decisions
+| Issue | Solution |
+|-------|----------|
+| `not whitelisted` error | Clear `__pycache__` + restart gunicorn (`kill -HUP 1`) |
+| Gunicorn serves old code | `find apps/niv_ai -name '__pycache__' -exec rm -rf {} +` then restart |
+| Frappe v14 migration fails | Remove `naming_rule` from DocType JSONs, disable `sync_fixtures` |
+| SSE returns 500 | Must return `werkzeug.wrappers.Response`, NOT `frappe.response["type"] = "generator"` |
+| ToolMessage not subscriptable | `on_tool_end(output)` — `output` can be ToolMessage object, use `output.content` |
+| INVALID_CHAT_HISTORY | Set `handle_tool_error=True` on StructuredTool |
+| HTML comments in JS templates | NEVER use `<!-- -->` in template literals — causes blank page |
+| Single quotes in HTML | Frappe wraps page HTML in `'...'` — unescaped `'` breaks eval |
+| Nginx SSE not working | Add `proxy_buffering off` + `Host` + `X-Frappe-Site-Name` headers |
 
-| Decision | Rationale |
-|----------|-----------|
-| Pure Frappe, no MongoDB | Simple install, no extra infra |
-| OpenAI-compatible API format | Works with 10+ providers |
-| SSE for streaming | Native browser support, no WebSocket needed |
-| Piper TTS over Coqui | 30MB vs 3GB, 1-2s vs 10s on CPU |
-| MCP via direct JSON-RPC | No `mcp` pip package (needs Python 3.10+) |
-| SQL LIKE for knowledge search | No vector DB dependency |
-| `functools.wraps` but no `@handle_errors` on whitelist | Frappe whitelist breaks with wrapper decorators |
-| `tar chf` not `tar cf` | Frappe assets use symlinks, must follow them |
+## Docker Development
 
----
+```bash
+# Copy code to container
+docker cp niv_ai/niv_core/api/stream.py container:/home/frappe/frappe-bench/apps/niv_ai/niv_ai/niv_core/api/stream.py
 
-## 🐛 Common Issues
+# Clear cache + restart
+docker exec container bash -c "find /home/frappe/frappe-bench/apps/niv_ai -name '__pycache__' -exec rm -rf {} + 2>/dev/null; kill -HUP 1"
 
-See [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
+# Run migrations
+docker exec container bench --site your-site migrate
 
----
+# Check logs
+docker logs container --tail 50 2>&1 | grep -i "error\|niv"
+```
 
-## 📄 License
+## Release Process
 
-MIT
+```bash
+# 1. Update version in hooks.py and setup.py
+# 2. Update CHANGELOG.md
+# 3. Commit
+git add -A
+git commit -m "release: vX.Y.Z — description"
+
+# 4. Tag
+git tag -a vX.Y.Z -m "vX.Y.Z — description"
+
+# 5. Push
+git push origin main --tags
+```
