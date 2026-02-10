@@ -1,10 +1,10 @@
 <div align="center">
 
-<img src="https://img.icons8.com/3d-fluency/94/bot.png" width="80" alt="Niv AI Logo"/>
+<img src="docs/logo.svg" width="120" alt="Niv AI Logo"/>
 
 # Niv AI
 
-### 🤖 The Complete AI Assistant for ERPNext
+### The Complete AI Assistant for ERPNext
 
 *ChatGPT-level AI, built natively into ERPNext. One command install.*
 
