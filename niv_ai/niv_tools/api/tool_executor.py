@@ -8,9 +8,9 @@ def execute_tool(tool_name, parameters, user, conversation_id=None):
     """
     Execute a tool by name with given parameters.
 
-    Tool resolution order:
-    1. Check Niv Tool DocType (custom/registered tools)
-    2. Check Frappe Assistant Core tools (if installed)
+    Tool resolution order (configurable via Niv Settings.tool_priority):
+    - "MCP First" (default): MCP → Niv Native → FAC Adapter
+    - "Native First": Niv Native → FAC Adapter → MCP
     """
     start_time = time.time()
 
@@ -31,33 +31,79 @@ def execute_tool(tool_name, parameters, user, conversation_id=None):
     }
     tool_name = TOOL_ALIASES.get(tool_name, tool_name)
 
-    # ── Try Niv Tool DocType first ──
-    if frappe.db.exists("Niv Tool", tool_name):
-        tool = frappe.get_doc("Niv Tool", tool_name)
+    # ── Check tool priority setting ──
+    tool_priority = "MCP First"
+    try:
+        tool_priority = frappe.db.get_single_value("Niv Settings", "tool_priority") or "MCP First"
+    except Exception:
+        pass
 
-        if not tool.is_active:
-            return {"error": f"Tool '{tool_name}' is disabled"}
+    if tool_priority == "MCP First":
+        # MCP → Niv Native → FAC
+        result = _try_mcp(tool_name, parameters, user, conversation_id, start_time)
+        if result is not None:
+            return result
+        result = _try_niv_native(tool_name, parameters, user, conversation_id, start_time)
+        if result is not None:
+            return result
+        result = _try_fac(tool_name, parameters, user, conversation_id, start_time)
+        if result is not None:
+            return result
+    else:
+        # Niv Native → FAC → MCP
+        result = _try_niv_native(tool_name, parameters, user, conversation_id, start_time)
+        if result is not None:
+            return result
+        result = _try_fac(tool_name, parameters, user, conversation_id, start_time)
+        if result is not None:
+            return result
+        result = _try_mcp(tool_name, parameters, user, conversation_id, start_time)
+        if result is not None:
+            return result
 
-        # Check permissions
-        if tool.requires_admin and "System Manager" not in frappe.get_roles(user):
-            return {"error": f"Tool '{tool_name}' requires admin access"}
+    return {"error": f"Tool '{tool_name}' not found"}
 
-        if tool.allowed_roles:
-            user_roles = set(frappe.get_roles(user))
-            allowed = set(r.role for r in tool.allowed_roles)
-            if not user_roles.intersection(allowed):
-                return {"error": f"You don't have permission to use '{tool_name}'"}
 
-        # Check if this tool delegates to FAC
-        if tool.function_path and tool.function_path.startswith("fac:"):
-            # Delegate to Frappe Assistant Core
-            fac_tool_name = tool.function_path[4:]  # strip "fac:"
-            return _execute_fac_tool(fac_tool_name, parameters, user, conversation_id, start_time, tool)
+def _try_mcp(tool_name, parameters, user, conversation_id, start_time):
+    """Try executing via MCP servers. Returns None if tool not found."""
+    try:
+        from niv_ai.niv_core.mcp_client import find_tool_server
+        server = find_tool_server(tool_name)
+        if server:
+            return _execute_mcp_tool(tool_name, parameters, user, conversation_id, start_time)
+    except ImportError:
+        pass
+    return None
 
-        # Execute native Niv tool
-        return _execute_native_tool(tool, parameters, user, conversation_id, start_time)
 
-    # ── Try Frappe Assistant Core ──
+def _try_niv_native(tool_name, parameters, user, conversation_id, start_time):
+    """Try executing via Niv Tool DocType. Returns None if not found."""
+    if not frappe.db.exists("Niv Tool", tool_name):
+        return None
+
+    tool = frappe.get_doc("Niv Tool", tool_name)
+
+    if not tool.is_active:
+        return {"error": f"Tool '{tool_name}' is disabled"}
+
+    if tool.requires_admin and "System Manager" not in frappe.get_roles(user):
+        return {"error": f"Tool '{tool_name}' requires admin access"}
+
+    if tool.allowed_roles:
+        user_roles = set(frappe.get_roles(user))
+        allowed = set(r.role for r in tool.allowed_roles)
+        if not user_roles.intersection(allowed):
+            return {"error": f"You don't have permission to use '{tool_name}'"}
+
+    if tool.function_path and tool.function_path.startswith("fac:"):
+        fac_tool_name = tool.function_path[4:]
+        return _execute_fac_tool(fac_tool_name, parameters, user, conversation_id, start_time, tool)
+
+    return _execute_native_tool(tool, parameters, user, conversation_id, start_time)
+
+
+def _try_fac(tool_name, parameters, user, conversation_id, start_time):
+    """Try executing via FAC adapter. Returns None if not found."""
     try:
         from niv_ai.niv_tools.fac_adapter import get_fac_tool
         fac_tool = get_fac_tool(tool_name)
@@ -65,17 +111,7 @@ def execute_tool(tool_name, parameters, user, conversation_id=None):
             return _execute_fac_tool(tool_name, parameters, user, conversation_id, start_time)
     except ImportError:
         pass
-
-    # ── Try MCP servers ──
-    try:
-        from niv_ai.niv_core.mcp_client import find_tool_server, execute_mcp_tool
-        server = find_tool_server(tool_name)
-        if server:
-            return _execute_mcp_tool(tool_name, parameters, user, conversation_id, start_time)
-    except ImportError:
-        pass
-
-    return {"error": f"Tool '{tool_name}' not found"}
+    return None
 
 
 def _execute_native_tool(tool, parameters, user, conversation_id, start_time):
@@ -181,10 +217,16 @@ def _log_execution(tool_name, user, conversation_id, parameters, result, exec_ti
 def get_available_tools(user):
     """
     Get all tools available to a user.
-    Combines Niv Tools + FAC tools (if installed).
+    When tool_priority is "MCP First", MCP tools take precedence over native tools with same name.
     """
     user_roles = set(frappe.get_roles(user))
     is_admin = "System Manager" in user_roles
+
+    tool_priority = "MCP First"
+    try:
+        tool_priority = frappe.db.get_single_value("Niv Settings", "tool_priority") or "MCP First"
+    except Exception:
+        pass
 
     # ── Niv Tools ──
     niv_tools = frappe.get_all(
