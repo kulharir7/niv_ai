@@ -169,32 +169,43 @@ def _http_post(url, payload, api_key=None, timeout=15):
     return resp.json()
 
 
-def http_list_tools(url, api_key=None) -> List[Dict]:
-    # Initialize + list in sequence
-    _http_post(url, _jsonrpc("initialize", {
-        "protocolVersion": "2024-11-05",
-        "capabilities": {},
-        "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
-    }, req_id=_next_id()), api_key)
+# MCP session init cache: url → {"initialized": True, "expires": ts}
+_mcp_init_cache = {}
+_MCP_INIT_TTL = 600  # 10 min — sessions usually persist
+
+
+def _ensure_initialized(url, api_key=None):
+    """Initialize MCP session only if not already done (cached)."""
+    cache_key = url
+    cached = _mcp_init_cache.get(cache_key)
+    if cached and cached["expires"] > time.time():
+        return  # Already initialized
+
     try:
-        _http_post(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
+        _http_post(url, _jsonrpc("initialize", {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
+        }, req_id=_next_id()), api_key)
+        try:
+            _http_post(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
+        except Exception:
+            pass
+        _mcp_init_cache[cache_key] = {"initialized": True, "expires": time.time() + _MCP_INIT_TTL}
     except Exception:
-        pass
+        # Init failed — remove stale cache, let caller handle
+        _mcp_init_cache.pop(cache_key, None)
+        raise
+
+
+def http_list_tools(url, api_key=None) -> List[Dict]:
+    _ensure_initialized(url, api_key)
     resp = _http_post(url, _jsonrpc("tools/list", {}, req_id=_next_id()), api_key)
     return resp.get("result", {}).get("tools", [])
 
 
 def http_call_tool(url, api_key, tool_name, arguments) -> Any:
-    # Initialize + call
-    _http_post(url, _jsonrpc("initialize", {
-        "protocolVersion": "2024-11-05",
-        "capabilities": {},
-        "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
-    }, req_id=_next_id()), api_key)
-    try:
-        _http_post(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
-    except Exception:
-        pass
+    _ensure_initialized(url, api_key)
     resp = _http_post(url, _jsonrpc("tools/call", {
         "name": tool_name, "arguments": arguments
     }, req_id=_next_id()), api_key, timeout=30)
@@ -232,30 +243,37 @@ def _sse_request(url, payload, api_key=None, timeout=30):
     raise MCPError("No valid response from SSE stream")
 
 
-def sse_list_tools(url, api_key=None) -> List[Dict]:
-    _sse_request(url, _jsonrpc("initialize", {
-        "protocolVersion": "2024-11-05",
-        "capabilities": {},
-        "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
-    }, req_id=_next_id()), api_key)
+def _ensure_sse_initialized(url, api_key=None):
+    """Initialize MCP SSE session (cached like HTTP)."""
+    cache_key = f"sse_{url}"
+    cached = _mcp_init_cache.get(cache_key)
+    if cached and cached["expires"] > time.time():
+        return
+
     try:
-        _sse_request(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
+        _sse_request(url, _jsonrpc("initialize", {
+            "protocolVersion": "2024-11-05",
+            "capabilities": {},
+            "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
+        }, req_id=_next_id()), api_key)
+        try:
+            _sse_request(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
+        except Exception:
+            pass
+        _mcp_init_cache[cache_key] = {"initialized": True, "expires": time.time() + _MCP_INIT_TTL}
     except Exception:
-        pass
+        _mcp_init_cache.pop(cache_key, None)
+        raise
+
+
+def sse_list_tools(url, api_key=None) -> List[Dict]:
+    _ensure_sse_initialized(url, api_key)
     resp = _sse_request(url, _jsonrpc("tools/list", {}, req_id=_next_id()), api_key)
     return resp.get("result", {}).get("tools", [])
 
 
 def sse_call_tool(url, api_key, tool_name, arguments) -> Any:
-    _sse_request(url, _jsonrpc("initialize", {
-        "protocolVersion": "2024-11-05",
-        "capabilities": {},
-        "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
-    }, req_id=_next_id()), api_key)
-    try:
-        _sse_request(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
-    except Exception:
-        pass
+    _ensure_sse_initialized(url, api_key)
     resp = _sse_request(url, _jsonrpc("tools/call", {
         "name": tool_name, "arguments": arguments
     }, req_id=_next_id()), api_key, timeout=30)
@@ -463,3 +481,4 @@ def clear_cache(server_name: str = None):
         _tool_index.clear()
         _tool_index_expires = 0
         _openai_tools_cache = {"tools": [], "expires": 0}
+        _mcp_init_cache.clear()

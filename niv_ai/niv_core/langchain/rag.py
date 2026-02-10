@@ -1,19 +1,19 @@
 """
-RAG (Retrieval-Augmented Generation) — replaces knowledge.py
-Uses LangChain VectorStore (FAISS) — no raw SQL, no injection risk.
+RAG (Retrieval-Augmented Generation) — FAISS vectorstore.
+No raw SQL, no injection risk. Lazy-loaded.
 """
 import os
 import json
 import frappe
-from pathlib import Path
+from typing import List, Dict, Optional
 
-# Lazy imports — only when RAG is used
+# Lazy singletons
 _vectorstore = None
 _embeddings = None
 
 
 def _get_embeddings():
-    """Get embeddings model (HuggingFace, free, local)."""
+    """HuggingFace embeddings — free, local, ~90MB model."""
     global _embeddings
     if _embeddings is None:
         from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -25,10 +25,9 @@ def _get_embeddings():
     return _embeddings
 
 
-def _get_store_path():
-    """Get FAISS index storage path."""
-    site_path = frappe.get_site_path()
-    store_dir = os.path.join(site_path, "private", "niv_ai", "faiss_index")
+def _get_store_path() -> str:
+    """FAISS index path under site private files."""
+    store_dir = os.path.join(frappe.get_site_path(), "private", "niv_ai", "faiss_index")
     os.makedirs(store_dir, exist_ok=True)
     return store_dir
 
@@ -40,19 +39,15 @@ def _get_vectorstore():
         return _vectorstore
 
     from langchain_community.vectorstores import FAISS
+    from langchain_core.documents import Document
 
     store_path = _get_store_path()
     index_file = os.path.join(store_path, "index.faiss")
-
     embeddings = _get_embeddings()
 
     if os.path.exists(index_file):
-        _vectorstore = FAISS.load_local(
-            store_path, embeddings, allow_dangerous_deserialization=True
-        )
+        _vectorstore = FAISS.load_local(store_path, embeddings, allow_dangerous_deserialization=True)
     else:
-        # Create empty store with a dummy doc (FAISS needs at least one)
-        from langchain_core.documents import Document
         _vectorstore = FAISS.from_documents(
             [Document(page_content="Niv AI knowledge base initialized.", metadata={"source": "init"})],
             embeddings,
@@ -62,17 +57,17 @@ def _get_vectorstore():
     return _vectorstore
 
 
-def add_documents(texts: list, metadatas: list = None):
-    """Add documents to the knowledge base.
-    
-    Args:
-        texts: List of text strings to add
-        metadatas: Optional list of metadata dicts
-    """
+def _reset_vectorstore():
+    """Force reload on next access (after add/delete)."""
+    global _vectorstore
+    _vectorstore = None
+
+
+def add_documents(texts: List[str], metadatas: List[dict] = None) -> int:
+    """Add documents to knowledge base. Returns count added."""
     from langchain_core.documents import Document
 
     store = _get_vectorstore()
-
     docs = []
     for i, text in enumerate(texts):
         meta = metadatas[i] if metadatas and i < len(metadatas) else {}
@@ -80,101 +75,119 @@ def add_documents(texts: list, metadatas: list = None):
 
     store.add_documents(docs)
     store.save_local(_get_store_path())
-
     return len(docs)
 
 
-def search(query: str, k: int = 5, score_threshold: float = 0.3) -> list:
-    """Search knowledge base — returns relevant documents.
-    
-    Safe — no SQL injection possible (vector similarity search).
-    """
+def search(query: str, k: int = 5) -> List[Dict]:
+    """Similarity search — returns relevant docs with scores."""
     store = _get_vectorstore()
-
     results = store.similarity_search_with_score(query, k=k)
 
     docs = []
     for doc, score in results:
-        if score <= score_threshold:  # Lower = more similar in FAISS L2
+        # Skip init placeholder
+        if doc.metadata.get("source") == "init":
             continue
         docs.append({
             "content": doc.page_content,
             "metadata": doc.metadata,
             "score": round(float(score), 4),
         })
-
     return docs
 
 
-def delete_by_source(source: str):
-    """Delete all documents from a specific source."""
-    # FAISS doesn't support deletion well — rebuild without matching docs
+def delete_by_source(source: str) -> int:
+    """Delete all documents from a source by rebuilding the index."""
+    from langchain_community.vectorstores import FAISS
+    from langchain_core.documents import Document
+
     store = _get_vectorstore()
-    
-    # Get all docs, filter out the source
-    # Note: This is expensive for large stores. For production, consider Chroma.
     all_docs = store.docstore._dict
-    keep_ids = []
-    for doc_id, doc in all_docs.items():
-        if doc.metadata.get("source") != source:
-            keep_ids.append(doc_id)
-    
-    if len(keep_ids) == len(all_docs):
-        return 0  # Nothing to delete
-    
-    # Rebuild (simplified — for large KBs, use Chroma instead)
-    deleted = len(all_docs) - len(keep_ids)
+
+    # Filter out matching source
+    keep_docs = []
+    deleted = 0
+    for _doc_id, doc in all_docs.items():
+        if doc.metadata.get("source") == source:
+            deleted += 1
+        else:
+            keep_docs.append(doc)
+
+    if deleted == 0:
+        return 0
+
+    # Rebuild index without deleted docs
+    if not keep_docs:
+        keep_docs = [Document(page_content="Niv AI knowledge base initialized.", metadata={"source": "init"})]
+
+    embeddings = _get_embeddings()
+    new_store = FAISS.from_documents(keep_docs, embeddings)
+    new_store.save_local(_get_store_path())
+    _reset_vectorstore()
+
     return deleted
 
 
-@frappe.whitelist()
-def search_knowledge(query, k=5):
-    """API endpoint for knowledge base search."""
-    settings = frappe.get_cached_doc("Niv Settings")
-    if not settings.enable_knowledge_base:
-        return {"results": [], "message": "Knowledge base is disabled"}
-
-    k = min(int(k), 20)
-    results = search(query, k=k)
-    return {"results": results}
-
-
-@frappe.whitelist()
-def add_to_knowledge(content, source="manual", title=""):
-    """API endpoint to add content to knowledge base."""
-    if "System Manager" not in frappe.get_roles():
-        frappe.throw("Only System Manager can add to knowledge base")
-
-    meta = {"source": source, "title": title, "user": frappe.session.user}
-    
-    # Split long content into chunks
-    chunks = _chunk_text(content, chunk_size=1000, overlap=200)
-    
-    count = add_documents(chunks, [meta] * len(chunks))
-    return {"added": count, "chunks": len(chunks)}
-
-
-def _chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list:
-    """Split text into overlapping chunks."""
+def _chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[str]:
+    """Split text into overlapping chunks. Tries to break at sentence boundaries."""
     if len(text) <= chunk_size:
         return [text]
 
     chunks = []
     start = 0
     while start < len(text):
-        end = start + chunk_size
-        chunk = text[start:end]
-        chunks.append(chunk)
-        start = end - overlap
+        end = min(start + chunk_size, len(text))
 
-    return chunks
+        # Try to break at sentence boundary
+        if end < len(text):
+            for sep in [". ", ".\n", "\n\n", "\n", " "]:
+                last_sep = text[start:end].rfind(sep)
+                if last_sep > chunk_size // 2:
+                    end = start + last_sep + len(sep)
+                    break
+
+        chunks.append(text[start:end].strip())
+        start = end - overlap
+        if start >= len(text):
+            break
+
+    return [c for c in chunks if c]
+
+
+# ─── API Endpoints ─────────────────────────────────────────────────
+
+@frappe.whitelist()
+def search_knowledge(query, k=5):
+    """Search knowledge base."""
+    settings = frappe.get_cached_doc("Niv Settings")
+    if not settings.enable_knowledge_base:
+        return {"results": [], "message": "Knowledge base is disabled"}
+    return {"results": search(query, k=min(int(k), 20))}
+
+
+@frappe.whitelist()
+def add_to_knowledge(content, source="manual", title=""):
+    """Add content to knowledge base (admin only)."""
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw("Only System Manager can add to knowledge base")
+
+    meta = {"source": source, "title": title, "user": frappe.session.user}
+    chunks = _chunk_text(content)
+    count = add_documents(chunks, [meta] * len(chunks))
+    return {"added": count, "chunks": len(chunks)}
+
+
+@frappe.whitelist()
+def delete_from_knowledge(source):
+    """Delete all docs from a source (admin only)."""
+    if "System Manager" not in frappe.get_roles():
+        frappe.throw("Only System Manager can delete from knowledge base")
+    deleted = delete_by_source(source)
+    return {"deleted": deleted}
 
 
 def get_rag_context(query: str, k: int = 3) -> str:
-    """Get RAG context string to inject into agent prompt.
-    
-    Called by agent.py when knowledge base is enabled.
-    """
+    """Get RAG context to inject into agent prompt. Returns empty string if disabled."""
     try:
         settings = frappe.get_cached_doc("Niv Settings")
         if not settings.enable_knowledge_base:
@@ -184,12 +197,11 @@ def get_rag_context(query: str, k: int = 3) -> str:
         if not results:
             return ""
 
-        context_parts = ["Relevant knowledge base information:"]
+        parts = ["Relevant knowledge base information:"]
         for i, r in enumerate(results, 1):
             title = r["metadata"].get("title", "")
             prefix = f"[{title}] " if title else ""
-            context_parts.append(f"{i}. {prefix}{r['content']}")
-
-        return "\n".join(context_parts)
+            parts.append(f"{i}. {prefix}{r['content']}")
+        return "\n".join(parts)
     except Exception:
         return ""
