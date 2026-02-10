@@ -64,15 +64,10 @@ def _convert_to_langchain(messages: list) -> list:
             lc_messages.append(HumanMessage(content=content))
 
         elif role == "assistant":
-            tool_calls_raw = msg.get("tool_calls_json")
-            if tool_calls_raw:
-                lc_tool_calls = _parse_tool_calls(tool_calls_raw)
-                if lc_tool_calls:
-                    lc_messages.append(AIMessage(content=content, tool_calls=lc_tool_calls))
-                else:
-                    lc_messages.append(AIMessage(content=content))
-            else:
-                lc_messages.append(AIMessage(content=content))
+            # Don't include tool_calls in history — LangGraph requires matching
+            # ToolMessages for every tool_call, which we don't store separately.
+            # The text content already contains the final response.
+            lc_messages.append(AIMessage(content=content))
 
         elif role == "tool":
             # Tool results stored inline — skip as separate messages
