@@ -32,11 +32,16 @@ class NivStreamingCallback(BaseCallbackHandler):
             "arguments": input_str[:2000],
         })
 
-    def on_tool_end(self, output: str, **kwargs) -> None:
+    def on_tool_end(self, output, **kwargs) -> None:
+        # output can be str or ToolMessage object
+        if hasattr(output, "content"):
+            result_str = str(output.content or "")
+        else:
+            result_str = str(output or "")
         self.events.append({
             "type": "tool_result",
             "tool": self._current_tool or "unknown",
-            "result": (output or "")[:2000],
+            "result": result_str[:2000],
         })
         self._current_tool = None
 
@@ -144,13 +149,14 @@ class NivLoggingCallback(BaseCallbackHandler):
             "start": time.time(),
         }
 
-    def on_tool_end(self, output: str, *, run_id: UUID, **kwargs) -> None:
+    def on_tool_end(self, output, *, run_id: UUID, **kwargs) -> None:
         info = self._tool_runs.pop(str(run_id), {})
         elapsed = time.time() - info.get("start", time.time())
+        result_str = str(output.content if hasattr(output, "content") else output) or ""
         self._pending_logs.append({
             "tool": info.get("name", "unknown"),
             "parameters_json": info.get("input", ""),
-            "result_json": (str(output) or "")[:5000],
+            "result_json": result_str[:5000],
             "execution_time_ms": round(elapsed * 1000),
             "is_error": 0,
         })

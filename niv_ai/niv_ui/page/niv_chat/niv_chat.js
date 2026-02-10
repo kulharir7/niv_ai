@@ -8,6 +8,14 @@ frappe.pages["niv-chat"].on_page_load = function (wrapper) {
     // Hide Frappe page chrome
     $(wrapper).find(".page-head").hide();
 
+    // Restore Frappe chrome when leaving this page
+    frappe.pages["niv-chat"].on_page_hide = function () {
+        document.body.classList.remove("niv-chat-active");
+    };
+    frappe.pages["niv-chat"].on_page_show = function () {
+        document.body.classList.add("niv-chat-active");
+    };
+
     // Load marked.js + highlight.js
     const loadScript = (src) => new Promise((resolve) => {
         const s = document.createElement("script");
@@ -91,6 +99,11 @@ class NivChat {
 
     setup_page() {
         this.wrapper.html(frappe.render_template("niv_chat"));
+
+        // Full immersive mode — hide Frappe chrome
+        document.body.classList.add("niv-chat-active");
+
+        // (settings panel moved to body in setup_settings_panel)
 
         // Ensure viewport-fit=cover for iOS safe areas
         let vp = document.querySelector('meta[name="viewport"]');
@@ -460,11 +473,12 @@ class NivChat {
     // ─── Settings Panel ─────────────────────────────────────────────
 
     setup_settings_panel() {
-        this.$settingsPanel = this.wrapper.find(".niv-settings-panel");
-        this.$settingsOverlay = this.wrapper.find(".niv-settings-overlay");
+        // Move settings panel + overlay to body so they escape sidebar overflow
+        this.$settingsPanel = this.wrapper.find(".niv-settings-panel").detach().appendTo(document.body);
+        this.$settingsOverlay = this.wrapper.find(".niv-settings-overlay").detach().appendTo(document.body);
 
         this.wrapper.find(".btn-settings-toggle").on("click", () => this.toggle_settings_panel());
-        this.wrapper.find(".btn-settings-close").on("click", () => this.close_settings_panel());
+        this.$settingsPanel.find(".btn-settings-close").on("click", () => this.close_settings_panel());
         this.$settingsOverlay.on("click", () => this.close_settings_panel());
 
         // Load MCP servers into settings
@@ -3050,6 +3064,8 @@ class NivChat {
     }
 
     destroy() {
+        document.body.classList.remove("niv-chat-active");
+        $("body > .niv-settings-panel, body > .niv-settings-overlay").remove();
         $(document).off("keydown.nivchat");
         $(document).off("click.nivmodel");
         $(document).off("click.nivemoji");

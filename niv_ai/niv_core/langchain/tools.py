@@ -134,6 +134,7 @@ def get_langchain_tools() -> list:
             description=description,
             args_schema=args_schema,
             return_direct=False,
+            handle_tool_error=True,  # Return error as string instead of raising
         )
         lc_tools.append(tool)
 

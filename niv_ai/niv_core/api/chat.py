@@ -18,14 +18,9 @@ def send_message(conversation_id, message, model=None, provider=None):
 
     validate_conversation(conversation_id, user)
 
-    # Rate limit: max 60 messages per hour per user
-    from datetime import datetime, timedelta
-    one_hour_ago = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-    recent_count = frappe.db.count("Niv Message", {
-        "role": "user", "owner": user, "creation": [">", one_hour_ago],
-    })
-    if recent_count > 60:
-        frappe.throw(_("Rate limit exceeded. Please wait before sending more messages."))
+    # Rate limiting
+    from niv_ai.niv_core.api.stream import _check_rate_limit
+    _check_rate_limit(user)
 
     save_user_message(conversation_id, message)
 

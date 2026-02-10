@@ -8,6 +8,28 @@ from frappe import _
 from niv_ai.niv_core.api._helpers import validate_conversation, save_user_message, save_assistant_message, auto_title
 
 
+def _check_rate_limit(user):
+    """Check rate limits from Niv Settings. Throws if exceeded."""
+    settings = frappe.get_cached_doc("Niv Settings")
+    limit_hour = getattr(settings, "rate_limit_per_hour", 60) or 0
+    limit_day = getattr(settings, "rate_limit_per_day", 500) or 0
+    custom_msg = getattr(settings, "rate_limit_message", "") or "Rate limit exceeded. Please try again later."
+
+    if limit_hour > 0:
+        from datetime import datetime, timedelta
+        one_hour_ago = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
+        count = frappe.db.count("Niv Message", {"role": "user", "owner": user, "creation": [">", one_hour_ago]})
+        if count >= limit_hour:
+            frappe.throw(_(custom_msg))
+
+    if limit_day > 0:
+        from datetime import datetime, timedelta
+        today_start = datetime.now().strftime("%Y-%m-%d 00:00:00")
+        count = frappe.db.count("Niv Message", {"role": "user", "owner": user, "creation": [">", today_start]})
+        if count >= limit_day:
+            frappe.throw(_(custom_msg))
+
+
 @frappe.whitelist()
 def stream_chat(conversation_id, message, model=None, provider=None):
     """Stream chat via LangChain agent (SSE)."""
@@ -19,17 +41,8 @@ def stream_chat(conversation_id, message, model=None, provider=None):
 
     validate_conversation(conversation_id, user)
 
-    # Rate limit: max 60 messages per hour per user (even without billing)
-    from datetime import datetime, timedelta
-    one_hour_ago = (datetime.now() - timedelta(hours=1)).strftime("%Y-%m-%d %H:%M:%S")
-    recent_count = frappe.db.count("Niv Message", {
-        "conversation": ["like", "%"],
-        "role": "user",
-        "owner": user,
-        "creation": [">", one_hour_ago],
-    })
-    if recent_count > 60:
-        frappe.throw(_("Rate limit exceeded. Please wait a few minutes before sending more messages."))
+    # Rate limiting
+    _check_rate_limit(user)
 
     save_user_message(conversation_id, message, dedup=True)
 
