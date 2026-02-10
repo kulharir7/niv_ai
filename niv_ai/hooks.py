@@ -20,12 +20,12 @@ page_modules = {
     "niv-dashboard": "niv_ai.niv_ui.page.niv_dashboard",
 }
 
-# Fixtures
-fixtures = [
-    {"dt": "Niv Credit Plan"},
-    {"dt": "Niv System Prompt"},
-    {"dt": "Niv Tool", "filters": [["is_default", "=", 1]]},
-]
+# Fixtures — disabled, data is seeded via install.py instead
+# fixtures = [
+#     {"dt": "Niv Credit Plan"},
+#     {"dt": "Niv System Prompt"},
+#     {"dt": "Niv Tool", "filters": [["is_default", "=", 1]]},
+# ]
 
 # Installation
 after_install = "niv_ai.install.after_install"
