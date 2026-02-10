@@ -1834,6 +1834,11 @@ class NivChat {
         this.voiceAudio = null;
         this.voicePlaybackSource = null;
         this.voiceContinuous = true;
+        // Conversational mode: monitor mic during AI speech for auto-interrupt
+        this.voiceMonitorStream = null;
+        this.voiceMonitorAnalyser = null;
+        this.voiceMonitorTimer = null;
+        this.voiceSpeechDetectedAt = null;
 
         // Bind events
         this.wrapper.find(".btn-voice-mode").on("click", () => this.open_voice_mode());
@@ -1858,15 +1863,21 @@ class NivChat {
     close_voice_mode() {
         this.stop_voice_recording();
         this.stop_voice_playback();
+        this.stop_voice_monitor();
         this.cancel_voice_animation();
         if (this.voiceStream) {
             this.voiceStream.getTracks().forEach(t => t.stop());
             this.voiceStream = null;
         }
+        if (this.voiceMonitorStream) {
+            this.voiceMonitorStream.getTracks().forEach(t => t.stop());
+            this.voiceMonitorStream = null;
+        }
         if (this.voiceAudioCtx && this.voiceAudioCtx.state !== "closed") {
             this.voiceAudioCtx.close().catch(() => {});
             this.voiceAudioCtx = null;
             this.voiceAnalyser = null;
+            this.voiceMonitorAnalyser = null;
         }
         this.$voiceOverlay.fadeOut(200);
         this.voiceState = "idle";
@@ -2024,7 +2035,7 @@ class NivChat {
     voice_start_silence_detection() {
         this.voiceSilenceStart = null;
         const silenceThreshold = 10;
-        const silenceDuration = 2000; // 2 seconds
+        const silenceDuration = 1500; // 1.5 seconds for faster turn-taking
 
         this.voiceSilenceTimer = setInterval(() => {
             if (this.voiceState !== "listening" || !this.voiceAnalyser) return;
@@ -2204,6 +2215,8 @@ class NivChat {
         };
         utterance.onerror = () => this.set_voice_state("idle");
         window.speechSynthesis.speak(utterance);
+        // Start monitoring mic for user interruption during browser TTS
+        this.start_voice_monitor();
     }
 
     play_voice_response(audioUrl) {
@@ -2236,12 +2249,10 @@ class NivChat {
             }).catch(() => {});
 
             if (this.voiceContinuous && this.voiceState === "speaking") {
-                // Auto-start next recording
-                setTimeout(() => {
-                    if (this.$voiceOverlay.is(":visible")) {
-                        this.start_voice_recording();
-                    }
-                }, 500);
+                // Auto-start next recording immediately
+                if (this.$voiceOverlay.is(":visible")) {
+                    this.start_voice_recording();
+                }
             } else {
                 this.set_voice_state("idle");
             }
@@ -2251,7 +2262,10 @@ class NivChat {
             this.set_voice_state("error", "Audio playback failed");
         };
 
-        this.voiceAudio.play().catch((e) => {
+        this.voiceAudio.play().then(() => {
+            // Start monitoring mic for user interruption during playback
+            this.start_voice_monitor();
+        }).catch((e) => {
             console.error("Audio play error:", e);
             this.set_voice_state("error", "Could not play audio");
         });
@@ -2272,7 +2286,68 @@ class NivChat {
         draw();
     }
 
+    // ─── Voice Monitor: detect user speech during AI playback ──────
+    async start_voice_monitor() {
+        this.stop_voice_monitor();
+        try {
+            if (!this.voiceAudioCtx || this.voiceAudioCtx.state === "closed") {
+                this.voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (this.voiceAudioCtx.state === "suspended") {
+                await this.voiceAudioCtx.resume();
+            }
+            this.voiceMonitorStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const src = this.voiceAudioCtx.createMediaStreamSource(this.voiceMonitorStream);
+            this.voiceMonitorAnalyser = this.voiceAudioCtx.createAnalyser();
+            this.voiceMonitorAnalyser.fftSize = 256;
+            src.connect(this.voiceMonitorAnalyser);
+
+            const speechThreshold = 25; // voice level to detect speech
+            const speechConfirmMs = 350; // must speak for 350ms to trigger interrupt
+            this.voiceSpeechDetectedAt = null;
+
+            this.voiceMonitorTimer = setInterval(() => {
+                if (this.voiceState !== "speaking") {
+                    this.stop_voice_monitor();
+                    return;
+                }
+                const data = new Uint8Array(this.voiceMonitorAnalyser.frequencyBinCount);
+                this.voiceMonitorAnalyser.getByteFrequencyData(data);
+                const avg = data.reduce((a, b) => a + b, 0) / data.length;
+
+                if (avg >= speechThreshold) {
+                    if (!this.voiceSpeechDetectedAt) this.voiceSpeechDetectedAt = Date.now();
+                    if (Date.now() - this.voiceSpeechDetectedAt >= speechConfirmMs) {
+                        // User is speaking — interrupt AI and start listening
+                        console.log("Voice monitor: user speech detected, interrupting AI");
+                        this.stop_voice_playback();
+                        this.stop_voice_monitor();
+                        this.start_voice_recording();
+                    }
+                } else {
+                    this.voiceSpeechDetectedAt = null;
+                }
+            }, 100);
+        } catch (e) {
+            console.warn("Voice monitor failed:", e);
+        }
+    }
+
+    stop_voice_monitor() {
+        if (this.voiceMonitorTimer) {
+            clearInterval(this.voiceMonitorTimer);
+            this.voiceMonitorTimer = null;
+        }
+        if (this.voiceMonitorStream) {
+            this.voiceMonitorStream.getTracks().forEach(t => t.stop());
+            this.voiceMonitorStream = null;
+        }
+        this.voiceMonitorAnalyser = null;
+        this.voiceSpeechDetectedAt = null;
+    }
+
     stop_voice_playback() {
+        this.stop_voice_monitor();
         if (this.voiceAudio) {
             this.voiceAudio.pause();
             this.voiceAudio.currentTime = 0;
