@@ -21,7 +21,7 @@ except ImportError:
 
 setup(
     name="niv_ai",
-    version="0.1.0",
+    version="0.3.0",
     description="Niv AI - Complete AI Chat Assistant for ERPNext",
     author="Ravindra Kulhari",
     author_email="kulharir7@gmail.com",

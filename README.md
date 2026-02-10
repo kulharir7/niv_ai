@@ -34,8 +34,8 @@ bench --site your-site.com install-app niv_ai
 
 ### 💬 AI Chat
 - **Streaming responses** — Real-time token-by-token output via SSE
-- **Tool calling** — AI automatically queries your ERPNext data
-- **26 built-in tools** — Documents, search, reports, workflows, email, database
+- **Tool calling** — AI automatically queries your ERPNext data via MCP protocol
+- **MCP-only architecture** — Connect any MCP server, tools auto-discover (like ChatGPT)
 - **Multi-model support** — OpenAI, Mistral, Claude, Ollama, Gemini (any OpenAI-compatible API)
 - **Conversation history** — Full chat history with search
 - **Follow-up suggestions** — AI suggests next questions

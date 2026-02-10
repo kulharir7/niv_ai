@@ -1,5 +1,56 @@
 # Changelog
 
+## v0.3.0 (2026-02-11)
+### Breaking Changes
+- **LangChain/LangGraph engine** replaces all manual AI logic (no toggle, clean replacement)
+- **MCP-only architecture**: All 29 native Python tools removed. Tools come exclusively from MCP servers.
+- Old code deleted — use `git revert` if needed
+
+### Added
+- LangGraph ReAct agent with automatic tool calling loop (max 12 iterations)
+- Multi-provider auto-detection: OpenAI/Mistral/Ollama → ChatOpenAI, Claude → ChatAnthropic, Gemini → ChatGoogleGenerativeAI
+- MCP session init caching (10 min TTL) for faster tool calls
+- Token-aware memory truncation (~4 chars/token estimate)
+- RAG knowledge base with FAISS + HuggingFace embeddings
+- Configurable rate limiting: per-hour, per-day, custom message (Niv Settings)
+- `handle_tool_error=True` on all tools — prevents agent crash on bad tool args
+- Premium UI redesign (~2800 lines CSS): Claude/ChatGPT-level SaaS look
+- Settings panel as centered modal overlay
+- Conversational voice mode with browser-based interrupt detection
+- Frappe v14 compatibility (naming_rule removed, sync_fixtures disabled)
+- 20 DocTypes including Niv MCP Server, Niv MCP Tool, Niv Custom Instruction, Niv Knowledge Base
+
+### Fixed
+- SSE streaming: `werkzeug.wrappers.Response` instead of unsupported `frappe.response["type"] = "generator"`
+- ToolMessage callback crash: `'ToolMessage' object is not subscriptable` in callbacks
+- INVALID_CHAT_HISTORY: tool errors now return proper ToolMessage instead of crashing agent
+- Widget white line artifact: dark `#212121` background on panel and iframe
+- Navbar disappearing: `on_page_hide`/`on_page_show` Frappe page handlers for body class cleanup
+- Billing token estimation: fallback to `~4 chars/token` when streaming providers don't report usage
+- Tool Log `tool` field changed from Link to Data (MCP tools aren't Niv Tool records)
+- Duplicate user messages: 30-second dedup check before saving
+- Nginx SSE endpoint name: `stream_message` → `stream_chat`
+
+### Testing Results (v0.3.0)
+- ✅ Login + Auth
+- ✅ Create/List/Rename/Delete Conversations
+- ✅ Non-streaming chat (send_message)
+- ✅ SSE streaming (stream_chat) — token-by-token + tool_call + tool_result events
+- ✅ MCP tool calling (list_documents, count, search — 23 tools via FAC)
+- ✅ MCP Server management (list, toggle)
+- ✅ Voice/TTS (Piper engine — returns wav URL)
+- ✅ Rate limiting (configurable per-hour/per-day)
+- ✅ Billing (Shared Pool mode — balance deduction working)
+- ✅ 17/17 module imports pass
+- ✅ 20 DocTypes, 153 files, 25 critical paths verified
+
+## v0.2.0 (2026-02-10)
+### Added
+- MCP-only tool architecture (removed 29 native tools)
+- Conversational voice mode
+- Frappe v14 compatibility fixes
+- 85 features catalogued
+
 ## v0.1.1 (2026-02-10)
 ### Fixed
 - `@handle_errors` decorator removed from all whitelisted APIs (was breaking Frappe route resolution)
