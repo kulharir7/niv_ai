@@ -14,6 +14,23 @@ def execute_tool(tool_name, parameters, user, conversation_id=None):
     """
     start_time = time.time()
 
+    # ── Resolve common tool name aliases (AI hallucinations) ──
+    TOOL_ALIASES = {
+        "analyze_business_data": "analyze_data",
+        "analyse_data": "analyze_data",
+        "analyse_business_data": "analyze_data",
+        "search": "search_documents",
+        "find_documents": "search_documents",
+        "get_documents": "list_documents",
+        "query_database": "run_database_query",
+        "execute_query": "run_database_query",
+        "create_doc": "create_document",
+        "get_doc": "get_document",
+        "update_doc": "update_document",
+        "delete_doc": "delete_document",
+    }
+    tool_name = TOOL_ALIASES.get(tool_name, tool_name)
+
     # ── Try Niv Tool DocType first ──
     if frappe.db.exists("Niv Tool", tool_name):
         tool = frappe.get_doc("Niv Tool", tool_name)
