@@ -31,7 +31,6 @@
   "modified_by": "Administrator",
   "module": "Niv Core",
   "name": "Niv Conversation",
-  "naming_rule": "Random",
   "owner": "Administrator",
   "permissions": [
     {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},

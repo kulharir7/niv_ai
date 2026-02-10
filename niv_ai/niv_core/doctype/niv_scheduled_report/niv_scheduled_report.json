@@ -32,7 +32,6 @@
   "modified_by": "Administrator",
   "module": "Niv Core",
   "name": "Niv Scheduled Report",
-  "naming_rule": "Expression",
   "autoname": "format:NSR-{####}",
   "owner": "Administrator",
   "permissions": [

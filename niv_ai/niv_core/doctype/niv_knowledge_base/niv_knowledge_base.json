@@ -30,7 +30,6 @@
   "modified_by": "Administrator",
   "module": "Niv Core",
   "name": "Niv Knowledge Base",
-  "naming_rule": "By fieldname",
   "autoname": "field:title",
   "owner": "Administrator",
   "permissions": [

@@ -59,7 +59,6 @@
   "modified_by": "Administrator",
   "module": "Niv Core",
   "name": "Niv Custom Instruction",
-  "naming_rule": "Random",
   "owner": "Administrator",
   "permissions": [
     {

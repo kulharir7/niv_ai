@@ -51,7 +51,6 @@
   "modified_by": "Administrator",
   "module": "Niv Core",
   "name": "Niv MCP Server",
-  "naming_rule": "By fieldname",
   "owner": "Administrator",
   "permissions": [
     {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},

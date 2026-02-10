@@ -19,7 +19,6 @@
   "modified_by": "Administrator",
   "module": "Niv Billing",
   "name": "Niv Credit Plan",
-  "naming_rule": "By fieldname",
   "owner": "Administrator",
   "permissions": [
     {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},

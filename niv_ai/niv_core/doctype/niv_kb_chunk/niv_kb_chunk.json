@@ -22,7 +22,6 @@
   "modified_by": "Administrator",
   "module": "Niv Core",
   "name": "Niv KB Chunk",
-  "naming_rule": "Expression",
   "autoname": "format:KBC-{knowledge_base}-{chunk_index}",
   "owner": "Administrator",
   "permissions": [
