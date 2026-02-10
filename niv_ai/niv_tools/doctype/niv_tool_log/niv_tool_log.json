@@ -5,7 +5,7 @@
   "doctype": "DocType",
   "engine": "InnoDB",
   "fields": [
-    {"fieldname": "tool", "fieldtype": "Link", "label": "Tool", "options": "Niv Tool", "reqd": 1},
+    {"fieldname": "tool", "fieldtype": "Data", "label": "Tool", "reqd": 1},
     {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "reqd": 1},
     {"fieldname": "conversation", "fieldtype": "Link", "label": "Conversation", "options": "Niv Conversation"},
     {"fieldname": "parameters_json", "fieldtype": "Code", "label": "Parameters", "options": "JSON"},

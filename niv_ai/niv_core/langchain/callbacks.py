@@ -138,22 +138,23 @@ class NivLoggingCallback(BaseCallbackHandler):
         info = self._tool_runs.pop(str(run_id), {})
         elapsed = time.time() - info.get("start", time.time())
         self._pending_logs.append({
-            "tool_name": info.get("name", "unknown"),
-            "input_data": info.get("input", ""),
-            "output_data": (str(output) or "")[:5000],
-            "execution_time": round(elapsed, 3),
-            "status": "Success",
+            "tool": info.get("name", "unknown"),
+            "parameters_json": info.get("input", ""),
+            "result_json": (str(output) or "")[:5000],
+            "execution_time_ms": round(elapsed * 1000),
+            "is_error": 0,
         })
 
     def on_tool_error(self, error: BaseException, *, run_id: UUID, **kwargs) -> None:
         info = self._tool_runs.pop(str(run_id), {})
         elapsed = time.time() - info.get("start", time.time())
         self._pending_logs.append({
-            "tool_name": info.get("name", "unknown"),
-            "input_data": info.get("input", ""),
-            "output_data": str(error)[:5000],
-            "execution_time": round(elapsed, 3),
-            "status": "Error",
+            "tool": info.get("name", "unknown"),
+            "parameters_json": info.get("input", ""),
+            "result_json": str(error)[:5000],
+            "execution_time_ms": round(elapsed * 1000),
+            "is_error": 1,
+            "error_message": str(error)[:2000],
         })
 
     def finalize(self):
