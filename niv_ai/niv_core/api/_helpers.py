@@ -7,6 +7,53 @@ import frappe
 from datetime import datetime, timedelta
 
 
+# ─── Per-User API Key for MCP Permission Isolation ─────────────────
+
+def get_user_api_key(user: str = None) -> str:
+    """Get or auto-generate API key for a user.
+    
+    Returns 'api_key:api_secret' string for MCP auth.
+    Falls back to None if user is Guest or key generation fails.
+    
+    This enables per-user permission isolation:
+    - Each user's MCP tool calls use THEIR credentials
+    - ERPNext permission rules apply automatically
+    - No manual API key setup needed per user
+    """
+    user = user or frappe.session.user
+
+    # Guest/API users — no per-user key, fallback to admin
+    if user in ("Guest", "Administrator"):
+        return None
+
+    try:
+        user_doc = frappe.get_doc("User", user)
+        
+        # Auto-generate API key if missing
+        if not user_doc.api_key:
+            api_key = frappe.generate_hash(length=15)
+            api_secret = frappe.generate_hash(length=15)
+            user_doc.api_key = api_key
+            user_doc.api_secret = api_secret
+            user_doc.save(ignore_permissions=True)
+            frappe.db.commit()
+            frappe.logger().info(f"Niv AI: Auto-generated API key for user {user}")
+        
+        # Get decrypted secret
+        api_secret = frappe.utils.password.get_decrypted_password(
+            "User", user, fieldname="api_secret"
+        )
+        
+        if user_doc.api_key and api_secret:
+            return f"{user_doc.api_key}:{api_secret}"
+        
+        return None
+        
+    except Exception as e:
+        frappe.logger().warning(f"Niv AI: Could not get API key for {user}: {e}")
+        return None
+
+
 def validate_conversation(conversation_id: str, user: str):
     """Validate user owns the conversation (or is admin)."""
     if not conversation_id:

@@ -108,6 +108,34 @@ def create_niv_agent(
     return agent, config, system_prompt, callbacks_dict
 
 
+def _setup_user_api_key(user: str):
+    """Set per-user API key for MCP tool permission isolation."""
+    try:
+        from niv_ai.niv_core.api._helpers import get_user_api_key
+        from .tools import set_current_user_api_key
+        
+        # Check if per-user tool permissions is enabled
+        settings = frappe.get_cached_doc("Niv Settings")
+        if not getattr(settings, "per_user_tool_permissions", 0):
+            return  # Feature disabled — use admin key (default behavior)
+        
+        api_key = get_user_api_key(user)
+        if api_key:
+            set_current_user_api_key(api_key)
+    except Exception as e:
+        # Non-fatal — falls back to admin key
+        frappe.logger().warning(f"Niv AI: Per-user key setup failed for {user}: {e}")
+
+
+def _cleanup_user_api_key():
+    """Clear per-user API key after request."""
+    try:
+        from .tools import set_current_user_api_key
+        set_current_user_api_key(None)
+    except Exception:
+        pass
+
+
 def run_agent(
     message: str,
     conversation_id: str = None,
@@ -116,6 +144,8 @@ def run_agent(
     user: str = None,
 ) -> str:
     """Run agent synchronously — returns final response text."""
+    user = user or frappe.session.user
+    
     agent, config, system_prompt, cbs = create_niv_agent(
         provider_name=provider_name,
         model=model,
@@ -126,6 +156,7 @@ def run_agent(
 
     messages = _build_messages(message, conversation_id, system_prompt)
 
+    _setup_user_api_key(user)
     try:
         result = agent.invoke({"messages": messages}, config=config)
 
@@ -141,7 +172,7 @@ def run_agent(
         return _sanitize_error(e)
 
     finally:
-        # Always finalize billing + logging
+        _cleanup_user_api_key()
         cbs["billing"].finalize(stream_cb=cbs["stream"])
         cbs["logging"].finalize()
 
@@ -157,6 +188,8 @@ def stream_agent(
 
     Handles LangGraph stream_mode="messages" output format.
     """
+    user = user or frappe.session.user
+    
     agent, config, system_prompt, cbs = create_niv_agent(
         provider_name=provider_name,
         model=model,
@@ -167,6 +200,7 @@ def stream_agent(
 
     messages = _build_messages(message, conversation_id, system_prompt)
 
+    _setup_user_api_key(user)
     try:
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
             # LangGraph yields (message, metadata) tuples
@@ -217,5 +251,6 @@ def stream_agent(
         yield {"type": "error", "content": _sanitize_error(e)}
 
     finally:
+        _cleanup_user_api_key()
         cbs["billing"].finalize(stream_cb=cbs["stream"])
         cbs["logging"].finalize()

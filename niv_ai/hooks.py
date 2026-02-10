@@ -4,7 +4,7 @@ app_publisher = "Ravindra Kulhari"
 app_description = "Complete AI Chat Assistant for ERPNext"
 app_email = "kulharir7@gmail.com"
 app_license = "MIT"
-app_version = "0.3.0"
+app_version = "0.3.1"
 # Works with Frappe/ERPNext v14 and v15
 required_apps = ["frappe", "erpnext"]
 

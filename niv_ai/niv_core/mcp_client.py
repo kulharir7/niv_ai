@@ -375,16 +375,25 @@ def find_tool_server(tool_name: str) -> Optional[str]:
         return _tool_index.get(tool_name)
 
 
-def call_tool_fast(server_name: str, tool_name: str, arguments: Dict[str, Any]) -> Any:
-    """Execute a tool on an MCP server. Uses session reuse."""
+def call_tool_fast(server_name: str, tool_name: str, arguments: Dict[str, Any], user_api_key: str = None) -> Any:
+    """Execute a tool on an MCP server. Uses session reuse.
+    
+    Args:
+        user_api_key: If provided, overrides the server's admin key.
+            This enables per-user permission isolation — tool results
+            respect the user's ERPNext roles/permissions.
+    """
     doc = _get_server_config(server_name)
+
+    # Per-user key override for HTTP-based transports (stdio doesn't use API keys)
+    api_key = user_api_key or _get_api_key(doc)
 
     if doc.transport_type == "stdio":
         return stdio_call_tool(doc.command, doc.args, doc.env_vars, tool_name, arguments)
     elif doc.transport_type == "streamable-http":
-        return http_call_tool(doc.server_url, _get_api_key(doc), tool_name, arguments)
+        return http_call_tool(doc.server_url, api_key, tool_name, arguments)
     elif doc.transport_type == "sse":
-        return sse_call_tool(doc.server_url, _get_api_key(doc), tool_name, arguments)
+        return sse_call_tool(doc.server_url, api_key, tool_name, arguments)
     else:
         raise MCPError(f"Unknown transport: {doc.transport_type}")
 

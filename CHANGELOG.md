@@ -1,5 +1,24 @@
 # Changelog
 
+## v0.3.1 (2026-02-11)
+### Added
+- **Per-User Tool Permissions** — automatic permission isolation for AI tool calls
+  - When enabled, each user's MCP tool calls use their **own** ERPNext API credentials
+  - API keys are **auto-generated** on first chat — zero manual setup per user
+  - Tool results respect ERPNext role permissions (e.g., Sales User only sees their Sales Orders)
+  - Thread-safe via `threading.local()` — multiple concurrent users fully isolated
+  - Graceful fallback: if key generation fails, falls back to admin key (never breaks chat)
+  - New toggle in Niv Settings: **"Per-User Tool Permissions"** (default: OFF for backward compatibility)
+  - Guest and Administrator users are excluded (always use admin key)
+
+### Changed
+- `mcp_client.py`: `call_tool_fast()` accepts optional `user_api_key` override
+- `langchain/tools.py`: Thread-local API key storage for per-request user context
+- `langchain/agent.py`: Auto-setup/cleanup of user API key in `run_agent()` and `stream_agent()`
+- `_helpers.py`: New `get_user_api_key(user)` helper with auto-generation
+
+---
+
 ## v0.3.0 (2026-02-11)
 ### Breaking Changes
 - **LangChain/LangGraph engine** replaces all manual AI logic (no toggle, clean replacement)

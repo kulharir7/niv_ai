@@ -1,8 +1,15 @@
 """
 MCP Tools → LangChain Tools wrapper.
 Reuses existing mcp_client.py — no changes to MCP layer.
+
+Per-user permission isolation:
+  When user_api_key is set via set_current_user_api_key(),
+  all MCP tool calls use the user's own ERPNext API credentials.
+  This means tool results respect the user's roles/permissions —
+  e.g., a Sales User only sees their own Sales Orders.
 """
 import json
+import threading
 import frappe
 from langchain_core.tools import StructuredTool
 from pydantic import create_model, Field
@@ -27,6 +34,21 @@ _TYPE_MAP = {
 
 # Pydantic model cache (avoid re-creating per call)
 _schema_cache = {}
+
+# ─── Per-User API Key (thread-local) ──────────────────────────────
+# Set before agent run, cleared after. Thread-safe via threading.local.
+_thread_local = threading.local()
+
+
+def set_current_user_api_key(api_key: str = None):
+    """Set the API key for the current request's user.
+    Called before agent.invoke/stream, cleared in finally block."""
+    _thread_local.user_api_key = api_key
+
+
+def get_current_user_api_key() -> Optional[str]:
+    """Get the current request user's API key (if set)."""
+    return getattr(_thread_local, "user_api_key", None)
 
 
 def _build_pydantic_model(name: str, parameters: dict):
@@ -59,7 +81,8 @@ def _build_pydantic_model(name: str, parameters: dict):
 def _make_mcp_executor(tool_name: str):
     """Create a closure that calls MCP tool by name.
 
-    Uses find_tool_server → call_tool_fast (returns server_name string).
+    Uses find_tool_server → call_tool_fast.
+    Automatically uses per-user API key if set (thread-local).
     """
     def execute(**kwargs):
         # Remove None values — MCP servers don't expect them
@@ -70,10 +93,14 @@ def _make_mcp_executor(tool_name: str):
             return json.dumps({"error": f"No MCP server found for tool: {tool_name}"})
 
         try:
+            # Use per-user API key if available (permission isolation)
+            user_key = get_current_user_api_key()
+
             result = call_tool_fast(
                 server_name=server_name,
                 tool_name=tool_name,
                 arguments=clean_args,
+                user_api_key=user_key,
             )
 
             # MCP returns {"content": [{"type": "text", "text": "..."}]}
