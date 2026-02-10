@@ -1,5 +1,10 @@
 openai
 tiktoken
+langchain>=0.3.0
+langchain-openai>=0.3.0
+langgraph>=0.3.0
+langchain-community>=0.3.0
+faiss-cpu
 pytesseract
 pdfplumber
 python-docx
