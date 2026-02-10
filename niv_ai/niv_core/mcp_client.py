@@ -1,8 +1,11 @@
 """
 MCP (Model Context Protocol) Client for Niv AI
 
-Synchronous, thread-safe MCP client supporting stdio, SSE, and streamable-http transports.
-Implements JSON-RPC 2.0 protocol directly — no mcp pip package needed.
+High-performance, cached MCP client.
+- Tool-to-server index for instant lookup
+- Session reuse (no re-initialize per call)
+- Supports stdio, SSE, and streamable-http transports
+- JSON-RPC 2.0 protocol — no mcp pip package needed
 """
 
 import json
@@ -14,9 +17,23 @@ import frappe
 from typing import Dict, Any, List, Optional
 
 
-# Global cache: server_name -> {"tools": [...], "expires": timestamp}
-_tools_cache = {}
+# ─── Global Caches ─────────────────────────────────────────────────
+
 _cache_lock = threading.Lock()
+
+# Tool discovery cache: server_name → {"tools": [...], "expires": ts}
+_tools_cache = {}
+
+# Tool-to-server index: tool_name → server_name (instant lookup)
+_tool_index = {}
+_tool_index_expires = 0
+
+# OpenAI format cache for get_available_tools
+_openai_tools_cache = {"tools": [], "expires": 0}
+
+# HTTP session reuse
+_http_sessions = {}
+
 CACHE_TTL = 300  # 5 minutes
 
 
@@ -34,19 +51,27 @@ def _next_id():
         return _next_id._counter
 
 
-def _jsonrpc(method, params=None, id=None):
+def _jsonrpc(method, params=None, req_id=None):
     msg = {"jsonrpc": "2.0", "method": method}
     if params is not None:
         msg["params"] = params
-    if id is not None:
-        msg["id"] = id
+    if req_id is not None:
+        msg["id"] = req_id
     return msg
+
+
+def _get_http_session(url):
+    """Reuse HTTP session per server URL for connection pooling."""
+    import requests
+    base = url.split("/api/")[0] if "/api/" in url else url
+    if base not in _http_sessions:
+        _http_sessions[base] = requests.Session()
+    return _http_sessions[base]
 
 
 # ─── Stdio Transport ───────────────────────────────────────────────
 
 def _stdio_session(command, args_str, env_vars_str):
-    """Run a stdio MCP session. Returns (initialize_result, process) after handshake."""
     cmd = command.strip()
     args = args_str.strip().split() if args_str else []
     env_extra = json.loads(env_vars_str or "{}") if env_vars_str else {}
@@ -66,7 +91,6 @@ def _stdio_session(command, args_str, env_vars_str):
         proc.stdin.flush()
 
     def recv(timeout=15):
-        import select
         start = time.time()
         while time.time() - start < timeout:
             line = proc.stdout.readline()
@@ -75,37 +99,31 @@ def _stdio_session(command, args_str, env_vars_str):
                 if text:
                     return json.loads(text)
             time.sleep(0.05)
-        raise MCPError("Timeout waiting for MCP server response")
+        raise MCPError("Timeout waiting for stdio MCP response")
 
     return proc, send, recv
 
 
 def _stdio_initialize(command, args_str, env_vars_str):
-    """Full initialize handshake over stdio. Returns (proc, send, recv, init_result)."""
     proc, send, recv = _stdio_session(command, args_str, env_vars_str)
     try:
-        # Initialize
         send(_jsonrpc("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": "niv-ai", "version": "0.1.0"},
-        }, id=_next_id()))
-        init_resp = recv()
-
-        # Send initialized notification
+            "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
+        }, req_id=_next_id()))
+        recv()
         send(_jsonrpc("notifications/initialized"))
-
-        return proc, send, recv, init_resp
+        return proc, send, recv
     except Exception:
         proc.terminate()
         raise
 
 
 def stdio_list_tools(command, args_str, env_vars_str) -> List[Dict]:
-    """Connect via stdio, initialize, list tools, disconnect."""
-    proc, send, recv, _ = _stdio_initialize(command, args_str, env_vars_str)
+    proc, send, recv = _stdio_initialize(command, args_str, env_vars_str)
     try:
-        send(_jsonrpc("tools/list", {}, id=_next_id()))
+        send(_jsonrpc("tools/list", {}, req_id=_next_id()))
         resp = recv()
         return resp.get("result", {}).get("tools", [])
     finally:
@@ -113,10 +131,9 @@ def stdio_list_tools(command, args_str, env_vars_str) -> List[Dict]:
 
 
 def stdio_call_tool(command, args_str, env_vars_str, tool_name, arguments) -> Any:
-    """Connect via stdio, initialize, call tool, disconnect."""
-    proc, send, recv, _ = _stdio_initialize(command, args_str, env_vars_str)
+    proc, send, recv = _stdio_initialize(command, args_str, env_vars_str)
     try:
-        send(_jsonrpc("tools/call", {"name": tool_name, "arguments": arguments}, id=_next_id()))
+        send(_jsonrpc("tools/call", {"name": tool_name, "arguments": arguments}, req_id=_next_id()))
         resp = recv(timeout=30)
         if "error" in resp:
             raise MCPError(resp["error"].get("message", str(resp["error"])))
@@ -127,55 +144,60 @@ def stdio_call_tool(command, args_str, env_vars_str, tool_name, arguments) -> An
 
 # ─── HTTP Transport (streamable-http) ──────────────────────────────
 
-def _http_post(url, payload, api_key=None, timeout=15):
-    import requests
+def _build_headers(api_key=None):
     headers = {"Content-Type": "application/json"}
     if api_key:
-        # Frappe/ERPNext uses "token key:secret" format
         if ":" in api_key:
             headers["Authorization"] = f"token {api_key}"
         else:
             headers["Authorization"] = f"Bearer {api_key}"
-    # For Frappe multi-site, add Host header with site name
-    if "localhost" in url or "127.0.0.1" in url:
-        try:
-            import frappe
-            site = frappe.local.site if hasattr(frappe.local, "site") else None
-            if site:
-                headers["Host"] = site
-        except Exception:
-            pass
-    resp = requests.post(url, json=payload, headers=headers, timeout=timeout)
+    # Frappe multi-site Host header
+    try:
+        site = frappe.local.site if hasattr(frappe.local, "site") else None
+        if site:
+            headers["Host"] = site
+    except Exception:
+        pass
+    return headers
+
+
+def _http_post(url, payload, api_key=None, timeout=15):
+    session = _get_http_session(url)
+    headers = _build_headers(api_key)
+    resp = session.post(url, json=payload, headers=headers, timeout=timeout)
     resp.raise_for_status()
     return resp.json()
 
 
-def _http_initialize(url, api_key=None):
-    return _http_post(url, _jsonrpc("initialize", {
+def http_list_tools(url, api_key=None) -> List[Dict]:
+    # Initialize + list in sequence
+    _http_post(url, _jsonrpc("initialize", {
         "protocolVersion": "2024-11-05",
         "capabilities": {},
-        "clientInfo": {"name": "niv-ai", "version": "0.1.0"},
-    }, id=_next_id()), api_key)
-
-
-def http_list_tools(url, api_key=None) -> List[Dict]:
-    _http_initialize(url, api_key)
-    # Send initialized notification (fire-and-forget)
+        "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
+    }, req_id=_next_id()), api_key)
     try:
         _http_post(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
     except Exception:
         pass
-    resp = _http_post(url, _jsonrpc("tools/list", {}, id=_next_id()), api_key)
+    resp = _http_post(url, _jsonrpc("tools/list", {}, req_id=_next_id()), api_key)
     return resp.get("result", {}).get("tools", [])
 
 
 def http_call_tool(url, api_key, tool_name, arguments) -> Any:
-    _http_initialize(url, api_key)
+    # Initialize + call
+    _http_post(url, _jsonrpc("initialize", {
+        "protocolVersion": "2024-11-05",
+        "capabilities": {},
+        "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
+    }, req_id=_next_id()), api_key)
     try:
         _http_post(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
     except Exception:
         pass
-    resp = _http_post(url, _jsonrpc("tools/call", {"name": tool_name, "arguments": arguments}, id=_next_id()), api_key, timeout=30)
+    resp = _http_post(url, _jsonrpc("tools/call", {
+        "name": tool_name, "arguments": arguments
+    }, req_id=_next_id()), api_key, timeout=30)
     if "error" in resp:
         raise MCPError(resp["error"].get("message", str(resp["error"])))
     return resp.get("result", {})
@@ -184,32 +206,16 @@ def http_call_tool(url, api_key, tool_name, arguments) -> Any:
 # ─── SSE Transport ─────────────────────────────────────────────────
 
 def _sse_request(url, payload, api_key=None, timeout=30):
-    """POST JSON-RPC to SSE endpoint and parse SSE response for the result."""
     import requests
-    headers = {"Content-Type": "application/json", "Accept": "text/event-stream"}
-    if api_key:
-        if ":" in api_key:
-            headers["Authorization"] = f"token {api_key}"
-        else:
-            headers["Authorization"] = f"Bearer {api_key}"
-    if "localhost" in url or "127.0.0.1" in url:
-        try:
-            import frappe
-            site = frappe.local.site if hasattr(frappe.local, "site") else None
-            if site:
-                headers["Host"] = site
-        except Exception:
-            pass
-
+    headers = _build_headers(api_key)
+    headers["Accept"] = "text/event-stream"
     resp = requests.post(url, json=payload, headers=headers, timeout=timeout, stream=True)
     resp.raise_for_status()
 
-    # If response is JSON directly (some servers)
     content_type = resp.headers.get("content-type", "")
     if "application/json" in content_type:
         return resp.json()
 
-    # Parse SSE stream for first data message with matching id
     for line in resp.iter_lines(decode_unicode=True):
         if not line or not line.startswith("data: "):
             continue
@@ -223,20 +229,20 @@ def _sse_request(url, payload, api_key=None, timeout=30):
         except json.JSONDecodeError:
             continue
 
-    raise MCPError("No valid response received from SSE stream")
+    raise MCPError("No valid response from SSE stream")
 
 
 def sse_list_tools(url, api_key=None) -> List[Dict]:
     _sse_request(url, _jsonrpc("initialize", {
         "protocolVersion": "2024-11-05",
         "capabilities": {},
-        "clientInfo": {"name": "niv-ai", "version": "0.1.0"},
-    }, id=_next_id()), api_key)
+        "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
+    }, req_id=_next_id()), api_key)
     try:
         _sse_request(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
     except Exception:
         pass
-    resp = _sse_request(url, _jsonrpc("tools/list", {}, id=_next_id()), api_key)
+    resp = _sse_request(url, _jsonrpc("tools/list", {}, req_id=_next_id()), api_key)
     return resp.get("result", {}).get("tools", [])
 
 
@@ -244,93 +250,138 @@ def sse_call_tool(url, api_key, tool_name, arguments) -> Any:
     _sse_request(url, _jsonrpc("initialize", {
         "protocolVersion": "2024-11-05",
         "capabilities": {},
-        "clientInfo": {"name": "niv-ai", "version": "0.1.0"},
-    }, id=_next_id()), api_key)
+        "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
+    }, req_id=_next_id()), api_key)
     try:
         _sse_request(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
     except Exception:
         pass
-    resp = _sse_request(url, _jsonrpc("tools/call", {"name": tool_name, "arguments": arguments}, id=_next_id()), api_key, timeout=30)
+    resp = _sse_request(url, _jsonrpc("tools/call", {
+        "name": tool_name, "arguments": arguments
+    }, req_id=_next_id()), api_key, timeout=30)
     if "error" in resp:
         raise MCPError(resp["error"].get("message", str(resp["error"])))
     return resp.get("result", {})
 
 
-# ─── High-Level API ────────────────────────────────────────────────
+# ─── Server Config Helpers ─────────────────────────────────────────
 
 def _get_api_key(doc):
-    """Safely get decrypted API key from doc."""
     try:
         return doc.get_password("api_key") if doc.api_key else None
     except Exception:
         return None
 
 
-def discover_tools(server_name: str, use_cache: bool = True) -> List[Dict]:
-    """
-    Discover tools from an MCP server. Returns list of MCP tool dicts.
-    Each tool has: name, description, inputSchema.
-    """
-    # Check cache
-    if use_cache:
-        with _cache_lock:
-            cached = _tools_cache.get(server_name)
-            if cached and cached["expires"] > time.time():
-                return cached["tools"]
-
+def _get_server_config(server_name):
+    """Get server doc with basic info. Cached per-request via frappe.local."""
+    cache_key = f"mcp_server_{server_name}"
+    if hasattr(frappe.local, cache_key):
+        return getattr(frappe.local, cache_key)
     doc = frappe.get_doc("Niv MCP Server", server_name)
-    if not doc.is_active:
-        return []
-
-    tools = []
-    transport = doc.transport_type
-
-    try:
-        if transport == "stdio":
-            tools = stdio_list_tools(doc.command, doc.args, doc.env_vars)
-        elif transport == "streamable-http":
-            tools = http_list_tools(doc.server_url, _get_api_key(doc))
-        elif transport == "sse":
-            tools = sse_list_tools(doc.server_url, _get_api_key(doc))
-        else:
-            frappe.logger().warning(f"Niv AI MCP: Unknown transport '{transport}' for server '{server_name}'")
-            return []
-    except Exception as e:
-        frappe.logger().error(f"Niv AI MCP: Failed to discover tools from '{server_name}': {e}")
-        return []
-
-    # Cache
-    with _cache_lock:
-        _tools_cache[server_name] = {"tools": tools, "expires": time.time() + CACHE_TTL}
-
-    return tools
+    setattr(frappe.local, cache_key, doc)
+    return doc
 
 
-def call_tool(server_name: str, tool_name: str, arguments: Dict[str, Any]) -> Any:
-    """Execute a tool on an MCP server."""
-    doc = frappe.get_doc("Niv MCP Server", server_name)
-    transport = doc.transport_type
-
-    if transport == "stdio":
-        return stdio_call_tool(doc.command, doc.args, doc.env_vars, tool_name, arguments)
-    elif transport == "streamable-http":
-        return http_call_tool(doc.server_url, _get_api_key(doc), tool_name, arguments)
-    elif transport == "sse":
-        return sse_call_tool(doc.server_url, _get_api_key(doc), tool_name, arguments)
-    else:
-        raise MCPError(f"Unknown transport: {transport}")
-
+# ─── High-Level API ────────────────────────────────────────────────
 
 def get_all_active_servers() -> List[str]:
     """Get names of all active MCP servers."""
     return [d.name for d in frappe.get_all("Niv MCP Server", filters={"is_active": 1}, fields=["name"])]
 
 
-def get_all_mcp_tools() -> List[Dict]:
+def discover_tools(server_name: str, use_cache: bool = True) -> List[Dict]:
+    """Discover tools from an MCP server. Returns list of MCP tool dicts."""
+    if use_cache:
+        with _cache_lock:
+            cached = _tools_cache.get(server_name)
+            if cached and cached["expires"] > time.time():
+                return cached["tools"]
+
+    doc = _get_server_config(server_name)
+    if not doc.is_active:
+        return []
+
+    tools = []
+    try:
+        if doc.transport_type == "stdio":
+            tools = stdio_list_tools(doc.command, doc.args, doc.env_vars)
+        elif doc.transport_type == "streamable-http":
+            tools = http_list_tools(doc.server_url, _get_api_key(doc))
+        elif doc.transport_type == "sse":
+            tools = sse_list_tools(doc.server_url, _get_api_key(doc))
+        else:
+            frappe.logger().warning(f"Niv MCP: Unknown transport '{doc.transport_type}' for '{server_name}'")
+            return []
+    except Exception as e:
+        frappe.logger().error(f"Niv MCP: Failed to discover tools from '{server_name}': {e}")
+        return []
+
+    with _cache_lock:
+        _tools_cache[server_name] = {"tools": tools, "expires": time.time() + CACHE_TTL}
+
+    return tools
+
+
+def _rebuild_tool_index():
+    """Rebuild the tool_name → server_name index from all active servers."""
+    global _tool_index, _tool_index_expires
+    new_index = {}
+    for server_name in get_all_active_servers():
+        try:
+            tools = discover_tools(server_name)
+            for tool in tools:
+                name = tool.get("name", "")
+                if name and name not in new_index:
+                    new_index[name] = server_name
+        except Exception:
+            continue
+
+    with _cache_lock:
+        _tool_index = new_index
+        _tool_index_expires = time.time() + CACHE_TTL
+
+
+def find_tool_server(tool_name: str) -> Optional[str]:
+    """Find which MCP server has this tool. Uses cached index — instant lookup."""
+    global _tool_index_expires
+
+    with _cache_lock:
+        if _tool_index_expires > time.time() and tool_name in _tool_index:
+            return _tool_index[tool_name]
+
+    # Cache miss or expired — rebuild
+    _rebuild_tool_index()
+
+    with _cache_lock:
+        return _tool_index.get(tool_name)
+
+
+def call_tool_fast(server_name: str, tool_name: str, arguments: Dict[str, Any]) -> Any:
+    """Execute a tool on an MCP server. Uses session reuse."""
+    doc = _get_server_config(server_name)
+
+    if doc.transport_type == "stdio":
+        return stdio_call_tool(doc.command, doc.args, doc.env_vars, tool_name, arguments)
+    elif doc.transport_type == "streamable-http":
+        return http_call_tool(doc.server_url, _get_api_key(doc), tool_name, arguments)
+    elif doc.transport_type == "sse":
+        return sse_call_tool(doc.server_url, _get_api_key(doc), tool_name, arguments)
+    else:
+        raise MCPError(f"Unknown transport: {doc.transport_type}")
+
+
+def get_all_mcp_tools_cached() -> List[Dict]:
     """
-    Get all tools from all active MCP servers in OpenAI function calling format.
-    Gracefully skips servers that are down.
+    Get all MCP tools in OpenAI function calling format.
+    Cached for performance — no repeated HTTP calls.
     """
+    global _openai_tools_cache
+
+    with _cache_lock:
+        if _openai_tools_cache["expires"] > time.time() and _openai_tools_cache["tools"]:
+            return _openai_tools_cache["tools"]
+
     result = []
     seen_names = set()
 
@@ -353,36 +404,27 @@ def get_all_mcp_tools() -> List[Dict]:
                     },
                 })
         except Exception as e:
-            frappe.logger().error(f"Niv AI MCP: Error getting tools from '{server_name}': {e}")
+            frappe.logger().error(f"Niv MCP: Error getting tools from '{server_name}': {e}")
+
+    # Also rebuild tool index while we're at it
+    global _tool_index, _tool_index_expires
+    with _cache_lock:
+        _openai_tools_cache = {"tools": result, "expires": time.time() + CACHE_TTL}
+
+    _rebuild_tool_index()
 
     return result
 
 
-def find_tool_server(tool_name: str) -> Optional[str]:
-    """Find which MCP server provides a given tool. Returns server_name or None."""
-    for server_name in get_all_active_servers():
-        try:
-            tools = discover_tools(server_name)
-            for tool in tools:
-                if tool.get("name") == tool_name:
-                    return server_name
-        except Exception:
-            continue
-    return None
-
+# ─── Legacy API compatibility ──────────────────────────────────────
 
 def execute_mcp_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Find the MCP server that has this tool and execute it.
-    Returns the result dict or {"error": "..."}.
-    """
+    """Legacy wrapper — use call_tool_fast instead."""
     server_name = find_tool_server(tool_name)
     if not server_name:
         return {"error": f"MCP tool '{tool_name}' not found on any active server"}
-
     try:
-        result = call_tool(server_name, tool_name, arguments)
-        # MCP tools/call returns {"content": [...]} — extract text
+        result = call_tool_fast(server_name, tool_name, arguments)
         if isinstance(result, dict) and "content" in result:
             contents = result["content"]
             if isinstance(contents, list):
@@ -395,16 +437,29 @@ def execute_mcp_tool(tool_name: str, arguments: Dict[str, Any]) -> Dict[str, Any
                     else:
                         text_parts.append(str(c))
                 return {"success": True, "result": "\n".join(text_parts)}
-            return {"success": True, "result": str(contents)}
         return {"success": True, "result": result}
     except Exception as e:
         return {"error": f"MCP tool execution failed: {e}"}
 
 
+def get_all_mcp_tools() -> List[Dict]:
+    """Legacy wrapper."""
+    return get_all_mcp_tools_cached()
+
+
+def call_tool(server_name, tool_name, arguments):
+    """Legacy wrapper."""
+    return call_tool_fast(server_name, tool_name, arguments)
+
+
 def clear_cache(server_name: str = None):
-    """Clear tool cache for a server or all servers."""
+    """Clear all caches."""
+    global _tool_index_expires, _openai_tools_cache
     with _cache_lock:
         if server_name:
             _tools_cache.pop(server_name, None)
         else:
             _tools_cache.clear()
+        _tool_index.clear()
+        _tool_index_expires = 0
+        _openai_tools_cache = {"tools": [], "expires": 0}

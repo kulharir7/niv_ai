@@ -185,55 +185,25 @@ def _inject_tool_guidance(messages, available_tools):
     if not messages or not available_tools:
         return
 
-    # Categorize tools
-    tool_categories = {}
-    for t in available_tools:
-        source = getattr(t, "source", "") or ""
-        cat = getattr(t, "category", "General") or "General"
-        if source.startswith("mcp:"):
-            cat = "MCP/" + cat
-        if cat not in tool_categories:
-            tool_categories[cat] = []
-        tool_categories[cat].append(t)
+    # Build concise tool guide — MCP tool descriptions are already rich
+    tool_names = [t.tool_name for t in available_tools]
 
-    # Build concise tool guide
     guide_parts = [
         "\n\n--- TOOL USAGE GUIDE ---",
-        "You have powerful tools to access and manipulate the ERPNext database. ALWAYS use tools for data queries - never guess or make up data.",
+        "You have access to powerful tools via MCP (Model Context Protocol) that can query and manipulate the ERPNext/Frappe database.",
         "",
         "CRITICAL RULES:",
-        "1. For ANY data question, use tools. Do NOT say you dont have tools or make up data.",
-        "2. If you dont know the DocType name, use search_doctype or get_doctype_info first to discover it.",
-        "3. For complex analysis, use run_python_code or run_database_query.",
-        "4. For reports, use report_list to find reports, then generate_report to run them.",
-        "5. Chain tools: search_doctype -> get_doctype_info -> list_documents -> analyze.",
-        "6. Show results in formatted tables with proper currency formatting.",
-        "7. If a tool returns an error, try an alternative approach (different DocType name, SQL query, etc).",
+        "1. ALWAYS use tools for ANY data question. NEVER guess, assume, or make up data.",
+        "2. If you dont know the exact DocType name, use search_doctype first to discover it.",
+        "3. If a tool returns an error, try alternative approaches: different DocType name, SQL query via run_database_query, or search_doctype to find correct names.",
+        "4. Chain tools when needed: search_doctype -> get_doctype_info -> list_documents -> analyze results.",
+        "5. For complex analysis, prefer run_database_query (SQL) or run_python_code.",
+        "6. Format results in clean tables with proper currency/date formatting.",
+        "7. For reports, use report_list to discover available reports, then generate_report to run them.",
         "",
-        "AVAILABLE TOOLS BY CATEGORY:",
-    ]
-
-    for cat, tools in sorted(tool_categories.items()):
-        tool_names = [t.tool_name for t in tools]
-        guide_parts.append(f"  {cat}: {', '.join(tool_names)}")
-
-    # Add specific guidance for common query patterns
-    guide_parts.extend([
-        "",
-        "QUERY PATTERNS:",
-        "- List/Show X -> list_documents(doctype=X)",
-        "- How many X -> run_database_query(SELECT COUNT(*) FROM tabX)",
-        "- Details of X -> get_document(doctype, name)",
-        "- Create/Add X -> create_document(doctype, values)",
-        "- Calculate/Analyze -> run_python_code or run_database_query",
-        "- What DocTypes exist -> search_doctype(query)",
-        "- What reports -> report_list(module)",
-        "- Run report -> report_requirements(name) then generate_report(name, filters)",
-        "- Outstanding/Balance -> run_database_query with SUM/GROUP BY",
-        "- Branch-wise/Month-wise -> run_database_query with GROUP BY",
-        "- IRR/EMI calculation -> run_python_code with numpy/scipy",
+        f"AVAILABLE TOOLS ({len(tool_names)}): {', '.join(tool_names)}",
         "--- END TOOL GUIDE ---",
-    ])
+    ]
 
     tool_guidance = "\n".join(guide_parts)
 
