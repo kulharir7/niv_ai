@@ -8,6 +8,10 @@ APP_DIR="/home/frappe/frappe-bench/apps/niv_ai"
 if [ -d "$APP_DIR" ]; then
     echo "[niv_ai] Installing dependencies..."
     /home/frappe/frappe-bench/env/bin/pip install --quiet openai tiktoken pytesseract pdfplumber python-docx Pillow pandas openpyxl 2>&1 | tail -1
+    echo "[niv_ai] Installing LangChain dependencies..."
+    /home/frappe/frappe-bench/env/bin/pip install --quiet langchain langchain-openai langgraph langchain-community faiss-cpu 2>&1 | tail -1
+    echo "[niv_ai] Installing Piper TTS..."
+    /home/frappe/frappe-bench/env/bin/pip install --quiet piper-tts 2>&1 | tail -1
     echo "[niv_ai] Installing app in editable mode..."
     /home/frappe/frappe-bench/env/bin/pip install --quiet -e "$APP_DIR" 2>&1 | tail -1
     echo "[niv_ai] Setup complete."

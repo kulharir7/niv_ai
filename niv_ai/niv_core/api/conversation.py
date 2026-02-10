@@ -42,7 +42,7 @@ def create_conversation(title=None, system_prompt=None, model=None, provider=Non
 def get_conversations(limit=20, offset=0, archived=False):
     """List user's conversations"""
     user = frappe.session.user
-    filters = {"user": user, "is_archived": 1 if archived else 0}
+    filters = {"user": user, "is_archived": 1 if archived else 0, "title": ["!=", ""]}
 
     conversations = frappe.get_all(
         "Niv Conversation",

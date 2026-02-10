@@ -30,8 +30,13 @@ envsubst '${BACKEND}
 # Inject SSE location block before the closing brace of the server block
 SSE_BLOCK='
     # Niv AI SSE streaming
-    location /api/method/niv_ai.niv_core.api.stream.stream_message {
+    location /api/method/niv_ai.niv_core.api.stream.stream_chat {
         proxy_pass http://backend-server;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Frappe-Site-Name frontend;
         proxy_buffering off;
         proxy_cache off;
         proxy_set_header Connection '"'"''"'"';
