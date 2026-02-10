@@ -1,0 +1,12 @@
+include MANIFEST.in
+include requirements.txt
+include *.md
+include *.txt
+include license.txt
+recursive-include niv_ai *.py
+recursive-include niv_ai *.json
+recursive-include niv_ai *.js
+recursive-include niv_ai *.css
+recursive-include niv_ai *.html
+recursive-include niv_ai *.txt
+recursive-include niv_ai *.md

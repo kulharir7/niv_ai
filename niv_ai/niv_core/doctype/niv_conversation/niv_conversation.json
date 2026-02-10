@@ -1,0 +1,43 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "user", "title", "column_break_1",
+    "provider", "model", "system_prompt",
+    "stats_section",
+    "total_tokens_used", "message_count",
+    "column_break_stats",
+    "is_archived", "last_message_at"
+  ],
+  "fields": [
+    {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "reqd": 1, "default": "__user"},
+    {"fieldname": "title", "fieldtype": "Data", "label": "Title", "default": "New Chat"},
+    {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+    {"fieldname": "provider", "fieldtype": "Link", "label": "Provider", "options": "Niv AI Provider"},
+    {"fieldname": "model", "fieldtype": "Data", "label": "Model"},
+    {"fieldname": "system_prompt", "fieldtype": "Text", "label": "System Prompt"},
+    {"fieldname": "stats_section", "fieldtype": "Section Break", "label": "Statistics"},
+    {"fieldname": "total_tokens_used", "fieldtype": "Int", "label": "Total Tokens Used", "default": "0", "read_only": 1},
+    {"fieldname": "message_count", "fieldtype": "Int", "label": "Message Count", "default": "0", "read_only": 1},
+    {"fieldname": "column_break_stats", "fieldtype": "Column Break"},
+    {"fieldname": "is_archived", "fieldtype": "Check", "label": "Archived", "default": "0"},
+    {"fieldname": "last_message_at", "fieldtype": "Datetime", "label": "Last Message At", "read_only": 1}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Core",
+  "name": "Niv Conversation",
+  "naming_rule": "Random",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "All", "read": 1, "write": 1, "create": 1, "delete": 1, "if_owner": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "title_field": "title"
+}

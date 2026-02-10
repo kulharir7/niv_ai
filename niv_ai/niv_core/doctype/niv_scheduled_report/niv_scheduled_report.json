@@ -1,0 +1,44 @@
+{
+  "actions": [],
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "user",
+    "is_active",
+    "schedule",
+    "day_of_week",
+    "time",
+    "column_break_1",
+    "conversation",
+    "last_run",
+    "report_section",
+    "report_prompt"
+  ],
+  "fields": [
+    {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "is_active", "fieldtype": "Check", "label": "Is Active", "default": "1", "in_list_view": 1},
+    {"fieldname": "schedule", "fieldtype": "Select", "label": "Schedule", "options": "Daily\nWeekly\nMonthly", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "day_of_week", "fieldtype": "Select", "label": "Day of Week", "options": "\nMonday\nTuesday\nWednesday\nThursday\nFriday\nSaturday\nSunday", "depends_on": "eval:doc.schedule=='Weekly'"},
+    {"fieldname": "time", "fieldtype": "Time", "label": "Time", "default": "08:00:00"},
+    {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+    {"fieldname": "conversation", "fieldtype": "Link", "label": "Conversation", "options": "Niv Conversation", "read_only": 1},
+    {"fieldname": "last_run", "fieldtype": "Datetime", "label": "Last Run", "read_only": 1},
+    {"fieldname": "report_section", "fieldtype": "Section Break", "label": "Report Prompt"},
+    {"fieldname": "report_prompt", "fieldtype": "Text", "label": "Report Prompt", "reqd": 1, "in_list_view": 1}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Core",
+  "name": "Niv Scheduled Report",
+  "naming_rule": "Expression",
+  "autoname": "format:NSR-{####}",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "All", "read": 1, "write": 1, "create": 1, "if_owner": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

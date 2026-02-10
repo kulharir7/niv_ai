@@ -1,0 +1,42 @@
+{
+  "actions": [],
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "title",
+    "category",
+    "tags",
+    "is_active",
+    "column_break_1",
+    "source_file",
+    "chunk_size",
+    "content_section",
+    "content"
+  ],
+  "fields": [
+    {"fieldname": "title", "fieldtype": "Data", "label": "Title", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "category", "fieldtype": "Data", "label": "Category", "in_list_view": 1},
+    {"fieldname": "tags", "fieldtype": "Small Text", "label": "Tags", "description": "Comma-separated tags"},
+    {"fieldname": "is_active", "fieldtype": "Check", "label": "Is Active", "default": "1", "in_list_view": 1},
+    {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+    {"fieldname": "source_file", "fieldtype": "Attach", "label": "Source File"},
+    {"fieldname": "chunk_size", "fieldtype": "Int", "label": "Chunk Size (words)", "default": "500"},
+    {"fieldname": "content_section", "fieldtype": "Section Break", "label": "Content"},
+    {"fieldname": "content", "fieldtype": "Long Text", "label": "Content"}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Core",
+  "name": "Niv Knowledge Base",
+  "naming_rule": "By fieldname",
+  "autoname": "field:title",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "title_field": "title"
+}

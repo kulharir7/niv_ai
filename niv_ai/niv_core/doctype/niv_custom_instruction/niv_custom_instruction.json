@@ -1,0 +1,83 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "user",
+    "scope",
+    "is_active",
+    "priority",
+    "column_break_1",
+    "instruction"
+  ],
+  "fields": [
+    {
+      "fieldname": "user",
+      "fieldtype": "Link",
+      "label": "User",
+      "options": "User",
+      "depends_on": "eval:doc.scope=='Per User'"
+    },
+    {
+      "fieldname": "scope",
+      "fieldtype": "Select",
+      "label": "Scope",
+      "options": "Global\nPer User",
+      "default": "Per User",
+      "reqd": 1
+    },
+    {
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "label": "Active",
+      "default": "1"
+    },
+    {
+      "fieldname": "priority",
+      "fieldtype": "Int",
+      "label": "Priority",
+      "default": "0",
+      "description": "Higher priority instructions appear first in the prompt."
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Section Break",
+      "label": "Instruction"
+    },
+    {
+      "fieldname": "instruction",
+      "fieldtype": "Long Text",
+      "label": "Instruction",
+      "reqd": 1,
+      "description": "Custom instruction for the AI. E.g., 'Always respond in Hindi when asked in Hindi' or 'I work in Accounts department, focus on financial data.'"
+    }
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Core",
+  "name": "Niv Custom Instruction",
+  "naming_rule": "Random",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    },
+    {
+      "role": "All",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1,
+      "if_owner": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

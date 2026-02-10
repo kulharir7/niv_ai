@@ -1,0 +1,33 @@
+{
+  "actions": [],
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "knowledge_base",
+    "chunk_index",
+    "word_count",
+    "content_section",
+    "content"
+  ],
+  "fields": [
+    {"fieldname": "knowledge_base", "fieldtype": "Link", "label": "Knowledge Base", "options": "Niv Knowledge Base", "reqd": 1, "in_list_view": 1},
+    {"fieldname": "chunk_index", "fieldtype": "Int", "label": "Chunk Index", "in_list_view": 1},
+    {"fieldname": "word_count", "fieldtype": "Int", "label": "Word Count", "in_list_view": 1},
+    {"fieldname": "content_section", "fieldtype": "Section Break", "label": "Content"},
+    {"fieldname": "content", "fieldtype": "Long Text", "label": "Content"}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Core",
+  "name": "Niv KB Chunk",
+  "naming_rule": "Expression",
+  "autoname": "format:KBC-{knowledge_base}-{chunk_index}",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

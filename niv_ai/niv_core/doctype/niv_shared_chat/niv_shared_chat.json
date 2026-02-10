@@ -1,0 +1,30 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "conversation", "share_hash", "shared_by", "expires_at", "is_active"
+  ],
+  "fields": [
+    {"fieldname": "conversation", "fieldtype": "Link", "label": "Conversation", "options": "Niv Conversation", "reqd": 1},
+    {"fieldname": "share_hash", "fieldtype": "Data", "label": "Share Hash", "reqd": 1, "unique": 1},
+    {"fieldname": "shared_by", "fieldtype": "Link", "label": "Shared By", "options": "User", "reqd": 1},
+    {"fieldname": "expires_at", "fieldtype": "Datetime", "label": "Expires At"},
+    {"fieldname": "is_active", "fieldtype": "Check", "label": "Active", "default": "1"}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Core",
+  "name": "Niv Shared Chat",
+  "naming_rule": "Random",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "All", "read": 1, "write": 1, "create": 1, "delete": 1, "if_owner": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

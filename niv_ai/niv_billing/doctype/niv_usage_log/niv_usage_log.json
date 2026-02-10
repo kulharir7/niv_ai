@@ -1,0 +1,33 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "fields": [
+    {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "reqd": 1},
+    {"fieldname": "conversation", "fieldtype": "Link", "label": "Conversation", "options": "Niv Conversation"},
+    {"fieldname": "message", "fieldtype": "Link", "label": "Message", "options": "Niv Message"},
+    {"fieldname": "model", "fieldtype": "Data", "label": "Model"},
+    {"fieldname": "input_tokens", "fieldtype": "Int", "label": "Input Tokens", "default": "0"},
+    {"fieldname": "output_tokens", "fieldtype": "Int", "label": "Output Tokens", "default": "0"},
+    {"fieldname": "total_tokens", "fieldtype": "Int", "label": "Total Tokens", "default": "0"},
+    {"fieldname": "token_cost", "fieldtype": "Currency", "label": "Token Cost"},
+    {"fieldname": "tool_name", "fieldtype": "Data", "label": "Tool Name"},
+    {"fieldname": "tool_success", "fieldtype": "Check", "label": "Tool Success", "default": "1"},
+    {"fieldname": "cost", "fieldtype": "Currency", "label": "Cost"}
+  ],
+  "links": [],
+  "modified": "2026-02-09 12:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Billing",
+  "name": "Niv Usage Log",
+  "naming_rule": "Random",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "All", "read": 1, "if_owner": 1}
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

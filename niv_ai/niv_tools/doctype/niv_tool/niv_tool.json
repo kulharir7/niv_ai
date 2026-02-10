@@ -1,0 +1,35 @@
+{
+  "actions": [],
+  "autoname": "field:tool_name",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "fields": [
+    {"fieldname": "tool_name", "fieldtype": "Data", "label": "Tool Name", "reqd": 1, "unique": 1},
+    {"fieldname": "display_name", "fieldtype": "Data", "label": "Display Name"},
+    {"fieldname": "description", "fieldtype": "Text", "label": "Description", "reqd": 1},
+    {"fieldname": "category", "fieldtype": "Select", "label": "Category", "options": "document\nsearch\nreport\nworkflow\ndatabase\nutility\ncustom", "reqd": 1},
+    {"fieldname": "function_path", "fieldtype": "Data", "label": "Function Path", "reqd": 1},
+    {"fieldname": "parameters_json", "fieldtype": "Code", "label": "Parameters (JSON Schema)", "options": "JSON", "reqd": 1},
+    {"fieldname": "column_break_1", "fieldtype": "Column Break"},
+    {"fieldname": "is_active", "fieldtype": "Check", "label": "Active", "default": "1"},
+    {"fieldname": "requires_admin", "fieldtype": "Check", "label": "Requires Admin", "default": "0"},
+    {"fieldname": "log_execution", "fieldtype": "Check", "label": "Log Execution", "default": "1"},
+    {"fieldname": "allowed_roles", "fieldtype": "Table", "label": "Allowed Roles", "options": "Has Role"},
+    {"fieldname": "is_default", "fieldtype": "Check", "label": "Default Tool", "default": "0", "read_only": 1}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Tools",
+  "name": "Niv Tool",
+  "naming_rule": "By fieldname",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "All", "read": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "title_field": "display_name"
+}

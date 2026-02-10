@@ -1,0 +1,29 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "fields": [
+    {"fieldname": "tool", "fieldtype": "Link", "label": "Tool", "options": "Niv Tool", "reqd": 1},
+    {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "reqd": 1},
+    {"fieldname": "conversation", "fieldtype": "Link", "label": "Conversation", "options": "Niv Conversation"},
+    {"fieldname": "parameters_json", "fieldtype": "Code", "label": "Parameters", "options": "JSON"},
+    {"fieldname": "result_json", "fieldtype": "Code", "label": "Result", "options": "JSON"},
+    {"fieldname": "execution_time_ms", "fieldtype": "Int", "label": "Execution Time (ms)", "default": "0"},
+    {"fieldname": "is_error", "fieldtype": "Check", "label": "Error", "default": "0"},
+    {"fieldname": "error_message", "fieldtype": "Text", "label": "Error Message"}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Tools",
+  "name": "Niv Tool Log",
+  "naming_rule": "Random",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1}
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

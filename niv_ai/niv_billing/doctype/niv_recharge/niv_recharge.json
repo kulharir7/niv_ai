@@ -1,0 +1,35 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "fields": [
+    {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "reqd": 1},
+    {"fieldname": "tokens", "fieldtype": "Int", "label": "Tokens", "reqd": 1},
+    {"fieldname": "transaction_type", "fieldtype": "Select", "label": "Type", "options": "allocation\ndeduction\nrecharge\nrazorpay\nexpiry\nadjustment", "reqd": 1},
+    {"fieldname": "plan", "fieldtype": "Link", "label": "Plan", "options": "Niv Credit Plan"},
+    {"fieldname": "amount", "fieldtype": "Currency", "label": "Amount Paid"},
+    {"fieldname": "currency", "fieldtype": "Data", "label": "Currency", "default": "INR"},
+    {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "\nPending\nCompleted\nFailed\nRefunded", "default": "Completed"},
+    {"fieldname": "payment_id", "fieldtype": "Data", "label": "Payment ID"},
+    {"fieldname": "razorpay_order_id", "fieldtype": "Data", "label": "Razorpay Order ID"},
+    {"fieldname": "razorpay_payment_id", "fieldtype": "Data", "label": "Razorpay Payment ID"},
+    {"fieldname": "razorpay_signature", "fieldtype": "Data", "label": "Razorpay Signature", "hidden": 1},
+    {"fieldname": "remarks", "fieldtype": "Small Text", "label": "Remarks"},
+    {"fieldname": "balance_after", "fieldtype": "Int", "label": "Balance After", "read_only": 1}
+  ],
+  "links": [],
+  "modified": "2026-02-09 12:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Billing",
+  "name": "Niv Recharge",
+  "naming_rule": "Random",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "All", "read": 1, "if_owner": 1}
+  ],
+  "sort_field": "creation",
+  "sort_order": "DESC"
+}

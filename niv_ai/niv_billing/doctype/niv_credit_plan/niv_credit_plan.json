@@ -1,0 +1,31 @@
+{
+  "actions": [],
+  "autoname": "field:plan_name",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "fields": [
+    {"fieldname": "plan_name", "fieldtype": "Data", "label": "Plan Name", "reqd": 1, "unique": 1},
+    {"fieldname": "tokens", "fieldtype": "Int", "label": "Tokens", "reqd": 1},
+    {"fieldname": "price", "fieldtype": "Currency", "label": "Price", "default": "0"},
+    {"fieldname": "currency", "fieldtype": "Data", "label": "Currency", "default": "INR"},
+    {"fieldname": "description", "fieldtype": "Small Text", "label": "Description"},
+    {"fieldname": "is_default", "fieldtype": "Check", "label": "Default Plan", "default": "0"},
+    {"fieldname": "is_active", "fieldtype": "Check", "label": "Active", "default": "1"},
+    {"fieldname": "validity_days", "fieldtype": "Int", "label": "Validity (Days)", "default": "30"}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Billing",
+  "name": "Niv Credit Plan",
+  "naming_rule": "By fieldname",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "All", "read": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "title_field": "plan_name"
+}

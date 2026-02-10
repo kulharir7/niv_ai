@@ -1,0 +1,107 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "field_order": [
+    "title",
+    "is_active",
+    "column_break_1",
+    "trigger_doctype",
+    "trigger_event",
+    "section_condition",
+    "condition",
+    "section_action",
+    "ai_prompt",
+    "column_break_action",
+    "notification_user"
+  ],
+  "fields": [
+    {
+      "fieldname": "title",
+      "fieldtype": "Data",
+      "label": "Title",
+      "reqd": 1
+    },
+    {
+      "fieldname": "is_active",
+      "fieldtype": "Check",
+      "label": "Active",
+      "default": "1"
+    },
+    {
+      "fieldname": "column_break_1",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "trigger_doctype",
+      "fieldtype": "Link",
+      "label": "Trigger DocType",
+      "options": "DocType",
+      "reqd": 1
+    },
+    {
+      "fieldname": "trigger_event",
+      "fieldtype": "Select",
+      "label": "Trigger Event",
+      "options": "on_submit\non_update\non_cancel\nafter_insert\ndaily",
+      "reqd": 1,
+      "default": "on_submit"
+    },
+    {
+      "fieldname": "section_condition",
+      "fieldtype": "Section Break",
+      "label": "Condition"
+    },
+    {
+      "fieldname": "condition",
+      "fieldtype": "Code",
+      "label": "Condition (Python Expression)",
+      "description": "Python expression that must evaluate to True. Use 'doc' to access document fields. Example: doc.grand_total > 100000",
+      "options": "Python"
+    },
+    {
+      "fieldname": "section_action",
+      "fieldtype": "Section Break",
+      "label": "Action"
+    },
+    {
+      "fieldname": "ai_prompt",
+      "fieldtype": "Text",
+      "label": "AI Prompt",
+      "description": "Prompt to send to AI with document context. Use {doctype} and {name} as placeholders.",
+      "reqd": 1
+    },
+    {
+      "fieldname": "column_break_action",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "notification_user",
+      "fieldtype": "Link",
+      "label": "Notify User",
+      "options": "User",
+      "description": "User to receive the AI notification. Defaults to Administrator."
+    }
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Core",
+  "name": "Niv Auto Action",
+  "naming_rule": "Random",
+  "owner": "Administrator",
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "write": 1,
+      "create": 1,
+      "delete": 1
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "title_field": "title"
+}

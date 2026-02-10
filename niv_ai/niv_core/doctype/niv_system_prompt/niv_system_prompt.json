@@ -1,0 +1,29 @@
+{
+  "actions": [],
+  "autoname": "field:prompt_name",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "fields": [
+    {"fieldname": "prompt_name", "fieldtype": "Data", "label": "Prompt Name", "reqd": 1, "unique": 1},
+    {"fieldname": "prompt", "fieldtype": "Long Text", "label": "System Prompt", "reqd": 1},
+    {"fieldname": "description", "fieldtype": "Small Text", "label": "Description"},
+    {"fieldname": "category", "fieldtype": "Select", "label": "Category", "options": "general\ncoding\nwriting\nanalysis\nerp", "default": "general"},
+    {"fieldname": "is_default", "fieldtype": "Check", "label": "Is Default", "default": "0"},
+    {"fieldname": "allowed_roles", "fieldtype": "Table", "label": "Allowed Roles", "options": "Has Role"}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Core",
+  "name": "Niv System Prompt",
+  "naming_rule": "By fieldname",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "All", "read": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC",
+  "title_field": "prompt_name"
+}

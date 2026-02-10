@@ -1,0 +1,29 @@
+{
+  "actions": [],
+  "autoname": "field:user",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "fields": [
+    {"fieldname": "user", "fieldtype": "Link", "label": "User", "options": "User", "reqd": 1, "unique": 1},
+    {"fieldname": "balance", "fieldtype": "Int", "label": "Token Balance", "default": "0"},
+    {"fieldname": "total_allocated", "fieldtype": "Int", "label": "Total Allocated", "default": "0", "read_only": 1},
+    {"fieldname": "total_used", "fieldtype": "Int", "label": "Total Used", "default": "0", "read_only": 1},
+    {"fieldname": "current_plan", "fieldtype": "Link", "label": "Current Plan", "options": "Niv Credit Plan"},
+    {"fieldname": "plan_expiry", "fieldtype": "Date", "label": "Plan Expiry"},
+    {"fieldname": "last_recharged", "fieldtype": "Datetime", "label": "Last Recharged", "read_only": 1}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Billing",
+  "name": "Niv Wallet",
+  "naming_rule": "By fieldname",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "All", "read": 1, "if_owner": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

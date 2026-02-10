@@ -1,0 +1,147 @@
+<div class="niv-recharge-page">
+    <div class="niv-recharge-bg"></div>
+    <div class="niv-recharge-container">
+        <div class="niv-recharge-nav">
+            <a href="/app/niv-chat" class="niv-back-link">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M10 12L6 8L10 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Back to Chat
+            </a>
+            <div class="niv-demo-badge" style="display:none;">
+                <span class="demo-dot"></span> Demo Mode
+            </div>
+        </div>
+
+        <div class="niv-balance-section">
+            <div class="niv-balance-card">
+                <div class="niv-balance-card-bg"></div>
+                <div class="niv-balance-content">
+                    <div class="niv-balance-top">
+                        <div class="niv-balance-label">Current Balance</div>
+                        <div class="niv-balance-mode-tag"></div>
+                    </div>
+                    <div class="niv-balance-amount">
+                        <span class="niv-balance-icon">&#x1F48E;</span>
+                        <span class="balance-value">&mdash;</span>
+                        <span class="balance-unit">tokens</span>
+                    </div>
+                    <div class="niv-balance-stats">
+                        <div class="niv-stat">
+                            <span class="niv-stat-label">Used this month</span>
+                            <span class="niv-stat-value monthly-used">0</span>
+                        </div>
+                        <div class="niv-stat">
+                            <span class="niv-stat-label">Daily usage</span>
+                            <span class="niv-stat-value daily-used">0</span>
+                        </div>
+                    </div>
+                    <div class="niv-usage-bar-wrapper">
+                        <div class="niv-usage-bar">
+                            <div class="niv-usage-bar-fill"></div>
+                        </div>
+                        <div class="niv-usage-bar-labels">
+                            <span class="usage-used-label">0 used</span>
+                            <span class="usage-total-label">0 total</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="niv-plans-section">
+            <div class="niv-section-header">
+                <h2>Choose a Plan</h2>
+                <p>Select a credit pack to power your AI assistant</p>
+            </div>
+            <div class="niv-plans-grid"></div>
+        </div>
+
+        <div class="niv-history-section">
+            <div class="niv-section-header">
+                <h2>Transaction History</h2>
+                <p>Your recent recharges</p>
+            </div>
+            <div class="niv-history-card">
+                <div class="niv-history-table-wrapper">
+                    <table class="niv-history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Plan</th>
+                                <th>Tokens</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Payment ID</th>
+                            </tr>
+                        </thead>
+                        <tbody class="niv-history-body"></tbody>
+                    </table>
+                </div>
+                <div class="niv-history-empty" style="display:none;">
+                    <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                        <circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="2" opacity="0.3"/>
+                        <path d="M16 24h16M24 16v16" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
+                    </svg>
+                    <p>No transactions yet. Buy a plan to get started!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="niv-demo-modal" style="display:none;">
+    <div class="niv-demo-modal-backdrop"></div>
+    <div class="niv-demo-modal-content">
+        <div class="demo-modal-header">
+            <span class="demo-modal-badge">&#x1F9EA; Demo Payment</span>
+            <button class="demo-modal-close">&times;</button>
+        </div>
+        <div class="demo-modal-body">
+            <div class="demo-plan-info">
+                <div class="demo-plan-name"></div>
+                <div class="demo-plan-price"></div>
+            </div>
+            <div class="demo-card-form">
+                <div class="demo-field">
+                    <label>Card Number</label>
+                    <input type="text" value="4111 1111 1111 1111" readonly class="demo-input" />
+                </div>
+                <div class="demo-field-row">
+                    <div class="demo-field">
+                        <label>Expiry</label>
+                        <input type="text" value="12/28" readonly class="demo-input" />
+                    </div>
+                    <div class="demo-field">
+                        <label>CVV</label>
+                        <input type="text" value="123" readonly class="demo-input" />
+                    </div>
+                </div>
+                <div class="demo-note">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1a7 7 0 100 14A7 7 0 008 1zm0 11a1 1 0 110-2 1 1 0 010 2zm1-3.5a.5.5 0 01-1 0v-4a.5.5 0 011 0v4z"/></svg>
+                    Simulated payment. No real money is charged.
+                </div>
+                <button class="demo-pay-btn">
+                    <span class="demo-pay-text">Pay Now (Demo)</span>
+                    <span class="demo-pay-spinner" style="display:none;">Processing...</span>
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="niv-success-overlay" style="display:none;">
+    <div class="niv-success-box">
+        <div class="success-confetti"></div>
+        <div class="success-checkmark">
+            <svg viewBox="0 0 52 52" class="checkmark-svg">
+                <circle cx="26" cy="26" r="25" fill="none" class="checkmark-circle"/>
+                <path fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8" class="checkmark-check"/>
+            </svg>
+        </div>
+        <h2>Payment Successful!</h2>
+        <p class="success-tokens"><strong class="tokens-added">0</strong> tokens added</p>
+        <p class="success-balance">New balance: <strong class="new-balance">0</strong> tokens</p>
+        <button class="dismiss-btn">Continue</button>
+    </div>
+</div>

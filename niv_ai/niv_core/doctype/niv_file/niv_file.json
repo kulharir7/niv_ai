@@ -1,0 +1,30 @@
+{
+  "actions": [],
+  "autoname": "hash",
+  "creation": "2026-02-09 00:00:00",
+  "doctype": "DocType",
+  "engine": "InnoDB",
+  "fields": [
+    {"fieldname": "conversation", "fieldtype": "Link", "label": "Conversation", "options": "Niv Conversation"},
+    {"fieldname": "message", "fieldtype": "Link", "label": "Message", "options": "Niv Message"},
+    {"fieldname": "file", "fieldtype": "Attach", "label": "File"},
+    {"fieldname": "file_type", "fieldtype": "Select", "label": "File Type", "options": "image\npdf\nexcel\nword\ntext\nother"},
+    {"fieldname": "extracted_text", "fieldtype": "Long Text", "label": "Extracted Text"},
+    {"fieldname": "ocr_engine", "fieldtype": "Select", "label": "OCR Engine", "options": "\ntesseract\npaddleocr\nnone"},
+    {"fieldname": "ocr_confidence", "fieldtype": "Float", "label": "OCR Confidence"},
+    {"fieldname": "file_size", "fieldtype": "Int", "label": "File Size (bytes)"}
+  ],
+  "links": [],
+  "modified": "2026-02-09 00:00:00",
+  "modified_by": "Administrator",
+  "module": "Niv Core",
+  "name": "Niv File",
+  "naming_rule": "Random",
+  "owner": "Administrator",
+  "permissions": [
+    {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1},
+    {"role": "All", "read": 1, "write": 1, "create": 1, "if_owner": 1}
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

@@ -1,0 +1,42 @@
+[
+    {
+        "doctype": "Niv Credit Plan",
+        "name": "Free",
+        "plan_name": "Free",
+        "tokens": 1000,
+        "price": 0.0,
+        "description": "Free tier with 1,000 tokens per month",
+        "is_default": 1,
+        "validity_days": 30
+    },
+    {
+        "doctype": "Niv Credit Plan",
+        "name": "Starter",
+        "plan_name": "Starter",
+        "tokens": 10000,
+        "price": 499,
+        "description": "10,000 tokens for small teams",
+        "is_default": 0,
+        "validity_days": 30
+    },
+    {
+        "doctype": "Niv Credit Plan",
+        "name": "Professional",
+        "plan_name": "Professional",
+        "tokens": 50000,
+        "price": 1499,
+        "description": "50,000 tokens for growing businesses",
+        "is_default": 0,
+        "validity_days": 30
+    },
+    {
+        "doctype": "Niv Credit Plan",
+        "name": "Enterprise",
+        "plan_name": "Enterprise",
+        "tokens": 200000,
+        "price": 4999,
+        "description": "200,000 tokens for enterprise use",
+        "is_default": 0,
+        "validity_days": 30
+    }
+]
