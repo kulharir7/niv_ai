@@ -142,7 +142,7 @@ def run_agent(
 
     finally:
         # Always finalize billing + logging
-        cbs["billing"].finalize()
+        cbs["billing"].finalize(stream_cb=cbs["stream"])
         cbs["logging"].finalize()
 
 
@@ -205,5 +205,5 @@ def stream_agent(
         yield {"type": "error", "content": _sanitize_error(e)}
 
     finally:
-        cbs["billing"].finalize()
+        cbs["billing"].finalize(stream_cb=cbs["stream"])
         cbs["logging"].finalize()

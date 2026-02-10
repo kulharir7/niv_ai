@@ -84,11 +84,22 @@ class NivBillingCallback(BaseCallbackHandler):
         except Exception as e:
             frappe.log_error(f"Billing callback accumulate error: {e}", "Niv AI Billing")
 
-    def finalize(self):
-        """Commit all accumulated token usage. Call once after agent completes."""
+    def finalize(self, stream_cb=None):
+        """Commit all accumulated token usage. Call once after agent completes.
+        
+        If provider didn't report usage (common in streaming), estimate from collected tokens.
+        """
         if self._finalized:
             return
         self._finalized = True
+
+        # If no usage reported by provider, estimate from stream tokens
+        if self.total_prompt_tokens == 0 and self.total_completion_tokens == 0 and stream_cb:
+            response_text = stream_cb.get_full_response()
+            if response_text:
+                # Rough estimate: ~4 chars per token
+                self.total_completion_tokens = max(1, len(response_text) // 4)
+                self.total_prompt_tokens = self.total_completion_tokens  # rough prompt estimate
 
         total = self.total_prompt_tokens + self.total_completion_tokens
         if total <= 0:
@@ -102,10 +113,9 @@ class NivBillingCallback(BaseCallbackHandler):
             from niv_ai.niv_billing.api.billing import deduct_tokens
             deduct_tokens(
                 user=self.user,
-                tokens_used=total,
-                prompt_tokens=self.total_prompt_tokens,
-                completion_tokens=self.total_completion_tokens,
-                conversation_id=self.conversation_id,
+                input_tokens=self.total_prompt_tokens,
+                output_tokens=self.total_completion_tokens,
+                conversation=self.conversation_id,
             )
         except Exception as e:
             frappe.log_error(f"Token deduction failed: {e}", "Niv AI Billing")
