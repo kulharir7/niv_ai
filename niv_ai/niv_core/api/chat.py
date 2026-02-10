@@ -76,14 +76,23 @@ def send_message(conversation_id, message, model=None, attachments=None, context
     provider = _get_provider(conv.provider or settings.default_provider)
     active_model = model or conv.model or settings.default_model or provider.default_model
 
-    # Save user message
-    user_msg = frappe.get_doc({
-        "doctype": "Niv Message",
+    # Save user message (skip if already saved by stream.py fallback)
+    existing_user_msg = frappe.db.exists("Niv Message", {
         "conversation": conversation_id,
         "role": "user",
         "content": message,
+        "creation": (">", frappe.utils.add_to_date(frappe.utils.now(), seconds=-30)),
     })
-    user_msg.insert(ignore_permissions=True)
+    if existing_user_msg:
+        user_msg = frappe.get_doc("Niv Message", existing_user_msg)
+    else:
+        user_msg = frappe.get_doc({
+            "doctype": "Niv Message",
+            "conversation": conversation_id,
+            "role": "user",
+            "content": message,
+        })
+        user_msg.insert(ignore_permissions=True)
 
     # Handle file attachments
     file_context = ""
