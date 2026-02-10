@@ -327,8 +327,6 @@ class NivChat {
             this.$modelDropdown.empty();
             this.$modelDropdown.append(`<option value="">Default</option>`);
 
-            this.use_langchain = s.use_langchain ? true : false;
-
             const displayName = s.widget_title || "Niv AI";
             this.models_list = [{ name: displayName, value: "", provider: providerName || "" }];
 
@@ -1034,16 +1032,13 @@ class NivChat {
                 };
                 if (this.selected_model) args.model = this.selected_model;
 
-                const chatEndpoint = this.use_langchain
-                    ? "niv_ai.niv_core.api.chat_v2.send_message"
-                    : "niv_ai.niv_core.api.chat.send_message";
                 const r = await frappe.call({
-                    method: chatEndpoint,
+                    method: "niv_ai.niv_core.api.chat.send_message",
                     args,
                 });
                 this.hide_typing();
                 const data = r.message;
-                this.append_message("assistant", data.message || data.response, {
+                this.append_message("assistant", data.response || data.message, {
                     total_tokens: data.total_tokens,
                     input_tokens: data.input_tokens,
                     output_tokens: data.output_tokens,
@@ -1116,10 +1111,7 @@ class NivChat {
             };
             if (this.selected_model) params.model = this.selected_model;
 
-            const streamEndpoint = this.use_langchain
-                ? "niv_ai.niv_core.api.stream_v2.stream_chat"
-                : "niv_ai.niv_core.api.stream.stream_message";
-            const url = "/api/method/" + streamEndpoint + "?" +
+            const url = "/api/method/niv_ai.niv_core.api.stream.stream_chat?" +
                 new URLSearchParams(params).toString();
 
             const evtSource = new EventSource(url, { withCredentials: true });
@@ -2128,11 +2120,8 @@ class NivChat {
 
                 // Send to regular chat API
                 if (!this.current_conversation) await this.new_conversation();
-                const voiceChatEndpoint = this.use_langchain
-                    ? "niv_ai.niv_core.api.chat_v2.send_message"
-                    : "niv_ai.niv_core.api.chat.send_message";
                 const chatResp = await frappe.call({
-                    method: voiceChatEndpoint,
+                    method: "niv_ai.niv_core.api.chat.send_message",
                     args: {
                         conversation_id: this.current_conversation,
                         message: transcript,

@@ -377,7 +377,7 @@ def voice_chat(conversation_id, audio_file, voice=None):
     # Step 2: Send to chat
     from niv_ai.niv_core.api.chat import send_message
     chat_result = send_message(conversation_id=conversation_id, message=user_text)
-    response_text = chat_result.get("message", "")
+    response_text = chat_result.get("response", "") or chat_result.get("message", "")
 
     # Step 3: TTS on response (text_to_speech already cleans)
     audio_url = None

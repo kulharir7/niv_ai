@@ -5,9 +5,9 @@ import json
 @frappe.whitelist()
 def get_tools():
     """Get all available tools for the current user"""
-    from niv_ai.niv_tools.api.tool_executor import get_available_tools
-    tools = get_available_tools(frappe.session.user)
-    return tools
+    from niv_ai.niv_core.langchain.tools import get_langchain_tools
+    lc_tools = get_langchain_tools()
+    return [{"name": t.name, "description": t.description} for t in lc_tools]
 
 
 @frappe.whitelist()
