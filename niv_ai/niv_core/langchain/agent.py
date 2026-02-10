@@ -179,15 +179,27 @@ def stream_agent(
                 continue
 
             # AI message chunks (streaming tokens)
-            if msg.type == "ai":
-                # Tool call chunks
-                if hasattr(msg, "tool_calls") and msg.tool_calls:
-                    for tc in msg.tool_calls:
+            if msg.type == "ai" or msg.type == "AIMessageChunk":
+                # Tool call chunks (streaming sends tool_call_chunks, not tool_calls)
+                tool_calls = getattr(msg, "tool_calls", None) or []
+                tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
+                
+                if tool_calls:
+                    for tc in tool_calls:
                         yield {
                             "type": "tool_call",
                             "tool": tc.get("name", ""),
                             "arguments": tc.get("args", {}),
                         }
+                elif tool_call_chunks:
+                    for tc in tool_call_chunks:
+                        name = tc.get("name", "")
+                        if name:  # Only yield when we have the tool name (first chunk)
+                            yield {
+                                "type": "tool_call",
+                                "tool": name,
+                                "arguments": tc.get("args", ""),
+                            }
                 # Text content
                 elif msg.content:
                     yield {"type": "token", "content": msg.content}
@@ -197,7 +209,7 @@ def stream_agent(
                 yield {
                     "type": "tool_result",
                     "tool": getattr(msg, "name", "unknown"),
-                    "result": (msg.content or "")[:2000],
+                    "result": (str(msg.content) or "")[:2000],
                 }
 
     except Exception as e:

@@ -68,9 +68,17 @@ def stream_chat(conversation_id, message, model=None, provider=None):
 
         yield _sse({"type": "done", "content": full_response})
 
-    frappe.response["type"] = "generator"
-    frappe.response["content_type"] = "text/event-stream"
-    frappe.response["result"] = generate()
+    # Return Werkzeug Response directly — Frappe handler.py checks isinstance(data, Response)
+    from werkzeug.wrappers import Response
+    return Response(
+        generate(),
+        content_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        },
+    )
 
 
 def _sse(data: dict) -> bytes:
