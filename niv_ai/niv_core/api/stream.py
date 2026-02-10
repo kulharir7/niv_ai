@@ -95,7 +95,7 @@ def stream_message(conversation_id=None, message=None, model=None, context=None)
     frappe.db.commit()
 
     # Build messages
-    from niv_ai.niv_core.api.chat import _build_messages
+    from niv_ai.niv_core.api.chat import _build_messages, _inject_tool_guidance
     messages = _build_messages(conv, settings, message, context=context)
 
     # Get tools
@@ -105,6 +105,8 @@ def stream_message(conversation_id=None, message=None, model=None, context=None)
         available_tools = get_available_tools(user)
         if available_tools:
             tools_payload = tools_to_openai_format(available_tools)
+            # Inject tool guidance into system prompt for better tool selection
+            _inject_tool_guidance(messages, available_tools)
 
     # Stream response
     def sse_event(data_dict, **kwargs):

@@ -101,6 +101,7 @@ def send_message(conversation_id, message, model=None, attachments=None, context
         available_tools = get_available_tools(user)
         if available_tools:
             tools_payload = tools_to_openai_format(available_tools)
+            _inject_tool_guidance(messages, available_tools)
 
     # Call AI with tool loop
     start_time = time.time()
@@ -177,6 +178,70 @@ def _get_provider(provider_name):
     if not provider_name:
         frappe.throw("No AI provider configured. Go to Niv Settings.")
     return frappe.get_doc("Niv AI Provider", provider_name)
+
+
+def _inject_tool_guidance(messages, available_tools):
+    """Inject tool usage guidance into system prompt for better tool selection."""
+    if not messages or not available_tools:
+        return
+
+    # Categorize tools
+    tool_categories = {}
+    for t in available_tools:
+        source = getattr(t, "source", "") or ""
+        cat = getattr(t, "category", "General") or "General"
+        if source.startswith("mcp:"):
+            cat = "MCP/" + cat
+        if cat not in tool_categories:
+            tool_categories[cat] = []
+        tool_categories[cat].append(t)
+
+    # Build concise tool guide
+    guide_parts = [
+        "\n\n--- TOOL USAGE GUIDE ---",
+        "You have powerful tools to access and manipulate the ERPNext database. ALWAYS use tools for data queries - never guess or make up data.",
+        "",
+        "CRITICAL RULES:",
+        "1. For ANY data question, use tools. Do NOT say you dont have tools or make up data.",
+        "2. If you dont know the DocType name, use search_doctype or get_doctype_info first to discover it.",
+        "3. For complex analysis, use run_python_code or run_database_query.",
+        "4. For reports, use report_list to find reports, then generate_report to run them.",
+        "5. Chain tools: search_doctype -> get_doctype_info -> list_documents -> analyze.",
+        "6. Show results in formatted tables with proper currency formatting.",
+        "7. If a tool returns an error, try an alternative approach (different DocType name, SQL query, etc).",
+        "",
+        "AVAILABLE TOOLS BY CATEGORY:",
+    ]
+
+    for cat, tools in sorted(tool_categories.items()):
+        tool_names = [t.tool_name for t in tools]
+        guide_parts.append(f"  {cat}: {', '.join(tool_names)}")
+
+    # Add specific guidance for common query patterns
+    guide_parts.extend([
+        "",
+        "QUERY PATTERNS:",
+        "- List/Show X -> list_documents(doctype=X)",
+        "- How many X -> run_database_query(SELECT COUNT(*) FROM tabX)",
+        "- Details of X -> get_document(doctype, name)",
+        "- Create/Add X -> create_document(doctype, values)",
+        "- Calculate/Analyze -> run_python_code or run_database_query",
+        "- What DocTypes exist -> search_doctype(query)",
+        "- What reports -> report_list(module)",
+        "- Run report -> report_requirements(name) then generate_report(name, filters)",
+        "- Outstanding/Balance -> run_database_query with SUM/GROUP BY",
+        "- Branch-wise/Month-wise -> run_database_query with GROUP BY",
+        "- IRR/EMI calculation -> run_python_code with numpy/scipy",
+        "--- END TOOL GUIDE ---",
+    ])
+
+    tool_guidance = "\n".join(guide_parts)
+
+    # Inject into system message
+    if messages and messages[0].get("role") == "system":
+        messages[0]["content"] += tool_guidance
+    else:
+        messages.insert(0, {"role": "system", "content": tool_guidance})
 
 
 def _build_messages(conv, settings, current_message, file_context="", context=None):
