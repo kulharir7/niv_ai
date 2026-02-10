@@ -47,7 +47,7 @@ def save_assistant_message(conversation_id: str, content: str, tool_calls: list 
             "content": content or "",
         }
         if tool_calls:
-            msg_data["tool_calls"] = json.dumps(tool_calls, default=str)
+            msg_data["tool_calls_json"] = json.dumps(tool_calls, default=str)
 
         frappe.get_doc(msg_data).insert(ignore_permissions=True)
         frappe.db.commit()

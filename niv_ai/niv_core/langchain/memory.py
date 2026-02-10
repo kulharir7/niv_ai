@@ -35,7 +35,7 @@ def get_chat_history(conversation_id: str, limit: int = 50, max_tokens: int = No
     messages = frappe.get_all(
         "Niv Message",
         filters={"conversation": conversation_id},
-        fields=["role", "content", "tool_calls", "tool_call_id"],
+        fields=["role", "content", "tool_calls_json", "tool_results_json"],
         order_by="creation asc",
         limit_page_length=limit,
     )
@@ -64,7 +64,7 @@ def _convert_to_langchain(messages: list) -> list:
             lc_messages.append(HumanMessage(content=content))
 
         elif role == "assistant":
-            tool_calls_raw = msg.get("tool_calls")
+            tool_calls_raw = msg.get("tool_calls_json")
             if tool_calls_raw:
                 lc_tool_calls = _parse_tool_calls(tool_calls_raw)
                 if lc_tool_calls:
@@ -75,9 +75,9 @@ def _convert_to_langchain(messages: list) -> list:
                 lc_messages.append(AIMessage(content=content))
 
         elif role == "tool":
-            tool_call_id = msg.get("tool_call_id", "")
-            if tool_call_id:  # ToolMessage requires tool_call_id
-                lc_messages.append(ToolMessage(content=content, tool_call_id=tool_call_id))
+            # Tool results stored inline — skip as separate messages
+            # (tool_results_json is on assistant messages, not separate rows)
+            pass
 
     return lc_messages
 
@@ -152,10 +152,11 @@ def get_system_prompt(conversation_id: str = None) -> str:
     if conversation_id:
         try:
             conv = frappe.get_doc("Niv Conversation", conversation_id)
-            if conv.system_prompt:
-                prompt_doc = frappe.get_doc("Niv System Prompt", conv.system_prompt)
-                if prompt_doc.content:
-                    return prompt_doc.content
+            if hasattr(conv, "system_prompt") and conv.system_prompt:
+                if frappe.db.exists("Niv System Prompt", conv.system_prompt):
+                    prompt_doc = frappe.get_doc("Niv System Prompt", conv.system_prompt)
+                    if prompt_doc.content:
+                        return prompt_doc.content
         except Exception:
             pass
 

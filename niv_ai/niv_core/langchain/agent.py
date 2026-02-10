@@ -88,11 +88,10 @@ def create_niv_agent(
     # System prompt
     system_prompt = get_system_prompt(conversation_id)
 
-    # Create agent with system prompt built-in
+    # Create agent
     agent = create_react_agent(
         model=llm,
         tools=tools,
-        prompt=SystemMessage(content=system_prompt) if system_prompt else None,
     )
 
     config = {
