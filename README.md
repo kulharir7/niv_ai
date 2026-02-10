@@ -1,247 +1,460 @@
-# 🤖 Niv AI — Complete AI Assistant for ERPNext
+<div align="center">
 
-> **ChatGPT-level AI, built natively into ERPNext.** One command install. No external services required.
+<img src="https://img.icons8.com/3d-fluency/94/bot.png" width="80" alt="Niv AI Logo"/>
 
-[![Frappe](https://img.shields.io/badge/Frappe-v14%20%7C%20v15-blue)](https://frappeframework.com)
-[![ERPNext](https://img.shields.io/badge/ERPNext-Compatible-green)](https://erpnext.com)
-[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-0.3.0-purple)](CHANGELOG.md)
+# Niv AI
+
+### 🤖 The Complete AI Assistant for ERPNext
+
+*ChatGPT-level AI, built natively into ERPNext. One command install.*
+
+[![Version](https://img.shields.io/badge/version-0.3.1-blueviolet?style=for-the-badge)](CHANGELOG.md)
+[![Frappe](https://img.shields.io/badge/Frappe-v14%20|%20v15-0089FF?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAiIGhlaWdodD0iMjAiIHZpZXdCb3g9IjAgMCAyMCAyMCIgZmlsbD0id2hpdGUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMTAiIGN5PSIxMCIgcj0iOCIvPjwvc3ZnPg==)](https://frappeframework.com)
+[![ERPNext](https://img.shields.io/badge/ERPNext-Compatible-00A651?style=for-the-badge)](https://erpnext.com)
+[![License](https://img.shields.io/badge/license-MIT-orange?style=for-the-badge)](LICENSE)
+[![LangChain](https://img.shields.io/badge/LangChain-Powered-1C3C3C?style=for-the-badge)](https://langchain.com)
+[![MCP](https://img.shields.io/badge/MCP-Protocol-FF6B6B?style=for-the-badge)](https://modelcontextprotocol.io)
+
+<br/>
+
+**No MongoDB** · **No Docker Dependency** · **No Separate Login** · **Just `bench install-app niv_ai`**
+
+<br/>
+
+[📦 Install](#-quick-install) · [✨ Features](#-features) · [🔌 MCP Setup](#-connecting-mcp-servers) · [📋 Roadmap](NIV_AI_ROADMAP.md) · [🐛 Issues](https://github.com/kulharir7/niv_ai/issues)
 
 ---
 
-## ✨ What is Niv AI?
+</div>
 
-Niv AI is a **full-featured AI chat assistant** that lives inside your ERPNext. Ask questions about your business data, create documents, run reports, and automate workflows — all through natural conversation.
+## 🎬 What Can Niv AI Do?
 
-**No MongoDB. No Docker dependency. No separate login. Just `bench install-app niv_ai`.**
+<table>
+<tr>
+<td width="50%">
 
-### 📸 Screenshots
+### 💬 Natural Language Queries
+> *"Show me all pending Sales Orders from last month"*
+> 
+> *"Kitne customers hain mere paas?"*
+> 
+> *"Create a Sales Order for Demo Customer with 5 units of Widget A"*
 
-| Welcome Screen | Chat with Tool Calling |
-|:-:|:-:|
-| ![Welcome](docs/screenshots/welcome-screen.png) | ![Chat](docs/screenshots/chat-with-tools.png) |
+AI understands Hindi, English, Hinglish — queries your ERPNext data using tools.
+
+</td>
+<td width="50%">
+
+### 🔧 Automatic Tool Calling
+> AI automatically picks the right tool, calls it, reads the result, and explains it in plain language.
+
+```
+You: "Total revenue from all invoices?"
+
+🔧 Using: run_database_query
+📊 Result: ₹4,52,380.00 across 5 invoices
+
+AI: "Your total revenue is ₹4,52,380 from 5 Sales Invoices..."
+```
+
+</td>
+</tr>
+<tr>
+<td width="50%">
+
+### 🎤 Voice Conversations
+> Speak to your ERPNext. AI responds with voice.
+> 
+> Works **free** with browser APIs — no API key needed.
+> Premium voice with Piper TTS (local, fast, CPU-friendly).
+
+</td>
+<td width="50%">
+
+### 💰 Token Billing Built-in
+> **Shared Pool**: Admin buys credits → all users consume
+> 
+> **Per User**: Individual wallets with Razorpay recharge
+> 
+> Demo mode when keys empty → real payments when keys filled. Zero code change.
+
+</td>
+</tr>
+</table>
 
 ---
 
 ## 🚀 Quick Install
 
 ```bash
-# 1. Get the app
+# Get the app
 bench get-app https://github.com/kulharir7/niv_ai.git
 
-# 2. Install on your site
+# Install on your site
 bench --site your-site.com install-app niv_ai
 
-# 3. Run migrations
+# Migrate & restart
 bench --site your-site.com migrate
-
-# 4. Clear cache
 bench --site your-site.com clear-cache
-
-# 5. Restart
 bench restart
-
-# Done! Visit /app/niv-chat
 ```
 
-### First-Time Setup
+**That's it!** Visit `/app/niv-chat` ✨
 
-After install, configure your AI provider:
+<details>
+<summary><b>⚙️ First-Time Setup (click to expand)</b></summary>
+<br/>
 
-1. Go to **Niv Settings** (`/app/niv-settings`)
-2. Set **Default Provider** → Add your AI provider (Mistral, OpenAI, Claude, etc.)
-3. Set **Default Model** → e.g., `mistral-medium-2508`, `gpt-4o`, `claude-3-sonnet`
-4. Save
+1. Go to **Niv Settings** → `/app/niv-settings`
+2. Add your AI provider:
+   - **Niv AI Provider** → `+ Add`
+   - Provider Name: `Mistral` (or OpenAI, Claude, Ollama...)
+   - Base URL: `https://api.mistral.ai/v1`
+   - API Key: Your key
+   - Default Model: `mistral-medium-2508`
+3. In Niv Settings → set Default Provider & Default Model
+4. Save → Start chatting!
 
-> 💡 Niv AI works with **any OpenAI-compatible API** — Mistral, OpenAI, Claude, Ollama, Groq, Together AI, Gemini, and more.
+> 💡 Works with **any OpenAI-compatible API**: Mistral, OpenAI, Claude, Ollama, Groq, Together AI, Gemini, and more.
+
+</details>
+
+<details>
+<summary><b>🐳 Docker Setup (click to expand)</b></summary>
+<br/>
+
+```bash
+# After container start, install in ALL containers:
+docker exec <backend> pip install -e apps/niv_ai
+docker exec <worker-short> pip install -e apps/niv_ai
+docker exec <worker-long> pip install -e apps/niv_ai
+docker exec <worker-default> pip install -e apps/niv_ai
+
+# Migrate
+docker exec <backend> bench --site your-site migrate
+
+# Add nginx SSE config (see docker/nginx-patch.sh)
+docker cp docker/nginx-patch.sh <frontend>:/tmp/
+docker exec <frontend> bash /tmp/nginx-patch.sh
+
+# Restart
+docker restart <backend> <frontend>
+```
+
+See `docker/` folder for persistence scripts.
+
+</details>
 
 ---
 
-## 🎯 Features (85+)
+## ✨ Features
 
-### 💬 AI Chat Engine
-- **LangChain/LangGraph powered** — ReAct agent with automatic tool calling loops
-- **Streaming responses** — Real-time token-by-token output via SSE
-- **MCP Protocol** — Connect any MCP server, tools auto-discover (like ChatGPT)
-- **Multi-model support** — OpenAI, Mistral, Claude, Ollama, Gemini, Groq, Together AI
-- **Auto-detection** — Provider type auto-detected from URL/name (no manual config)
-- **Conversation memory** — Token-aware context with automatic truncation
-- **Follow-up suggestions** — AI suggests next questions
+<table>
+<tr>
+<td align="center" width="25%">
+<br/>
+<img src="https://img.icons8.com/3d-fluency/50/chat.png" width="40"/><br/>
+<b>AI Chat</b><br/>
+<sub>LangChain/LangGraph ReAct agent with streaming SSE</sub>
+</td>
+<td align="center" width="25%">
+<br/>
+<img src="https://img.icons8.com/3d-fluency/50/connection-status-on.png" width="40"/><br/>
+<b>MCP Protocol</b><br/>
+<sub>Add URL → tools auto-discover. Like ChatGPT plugins.</sub>
+</td>
+<td align="center" width="25%">
+<br/>
+<img src="https://img.icons8.com/3d-fluency/50/microphone.png" width="40"/><br/>
+<b>Voice Mode</b><br/>
+<sub>Speak ↔ AI responds with voice. Free browser APIs.</sub>
+</td>
+<td align="center" width="25%">
+<br/>
+<img src="https://img.icons8.com/3d-fluency/50/money-bag.png" width="40"/><br/>
+<b>Billing</b><br/>
+<sub>Shared Pool or Per-User. Razorpay payments.</sub>
+</td>
+</tr>
+<tr>
+<td align="center" width="25%">
+<br/>
+<img src="https://img.icons8.com/3d-fluency/50/shield.png" width="40"/><br/>
+<b>Per-User Permissions</b><br/>
+<sub>AI respects ERPNext roles. Auto API key generation.</sub>
+</td>
+<td align="center" width="25%">
+<br/>
+<img src="https://img.icons8.com/3d-fluency/50/artificial-intelligence.png" width="40"/><br/>
+<b>Multi-Provider</b><br/>
+<sub>OpenAI, Mistral, Claude, Ollama, Gemini, Groq</sub>
+</td>
+<td align="center" width="25%">
+<br/>
+<img src="https://img.icons8.com/3d-fluency/50/paint-palette.png" width="40"/><br/>
+<b>Premium UI</b><br/>
+<sub>Dark mode, themes, mobile responsive, widget</sub>
+</td>
+<td align="center" width="25%">
+<br/>
+<img src="https://img.icons8.com/3d-fluency/50/bar-chart.png" width="40"/><br/>
+<b>Analytics</b><br/>
+<sub>Usage dashboard, cost tracking, tool stats</sub>
+</td>
+</tr>
+</table>
 
-### 🔧 MCP Tool Ecosystem
-- **MCP-only architecture** — All tools come from external MCP servers
-- **Auto-discovery** — Add server URL → tools appear automatically
-- **3 transports** — stdio, SSE, HTTP streamable
-- **Session caching** — 10-min init cache for fast subsequent calls
-- **Frappe Assistant Core** — 23 ERPNext tools out of the box (documents, search, reports, DB queries)
-- **Error handling** — Tool errors return friendly messages, never crash the agent
+<details>
+<summary><b>📋 Full Feature List (85+ features — click to expand)</b></summary>
+<br/>
 
-### 🎤 Voice Mode
-- **Voice-to-voice conversation** — Speak → AI responds with voice
-- **Interrupt support** — Tap to interrupt AI mid-speech
-- **Piper TTS** — Free, local, fast text-to-speech (no API key needed)
-- **Browser fallback** — Works without any TTS setup via Web Speech API
-- **Silence detection** — Auto-stops recording after 2s silence
+#### 💬 AI Chat Engine
+- LangChain/LangGraph ReAct agent with automatic tool calling loops (max 12 iterations)
+- Streaming responses via SSE (token-by-token)
+- Multi-model support — switch models mid-conversation
+- Auto-detection — provider type detected from URL/name
+- Token-aware conversation memory with auto-truncation
+- RAG knowledge base (FAISS + HuggingFace embeddings)
+- Follow-up suggestions
 
-### 💰 Token Billing
-- **Shared Pool mode** — Admin buys credits, all users consume from one pool
-- **Per-User Wallets** — Individual credit balances per user
-- **Razorpay integration** — Real payments with zero-code switch from demo mode
-- **Usage tracking** — Per-user, per-model token consumption logs
-- **Rate limiting** — Configurable per-hour and per-day limits per user
+#### 🔧 MCP Tool Ecosystem
+- MCP-only architecture — all tools from external MCP servers
+- Auto-discovery — add server URL → tools appear
+- 3 transport types: stdio, SSE, HTTP streamable
+- Session caching (10-min TTL) for performance
+- Frappe Assistant Core — 23 ERPNext tools out of the box
+- `handle_tool_error=True` — tools never crash the agent
 
-### 📊 Admin Dashboard
-- **Usage analytics** — Charts, time series, top users, model usage
-- **Tool usage stats** — See which tools are used most
-- **CSV export** — Download usage data
+#### 🎤 Voice Mode
+- Voice-to-voice conversations
+- Interrupt support (tap to stop AI mid-speech)
+- Piper TTS (free, local, fast, CPU-friendly)
+- Browser fallback via Web Speech API
+- Silence detection (auto-stop after 2s)
 
-### 🎨 UI & UX
-- **Premium SaaS interface** — Dark sidebar, clean chat area, Claude/ChatGPT-level design
-- **6 color themes** — Purple, Blue, Green, Orange, Pink, Slate
-- **Dark mode** — System-aware with manual toggle
-- **Mobile responsive** — Touch-friendly, swipe gestures
-- **Embedded widget** — Floating chat button on every ERPNext page
-- **Full-screen mode** — Dedicated `/app/niv-chat` page
-- **Markdown rendering** — Tables, code blocks with syntax highlighting
-- **Tool call accordions** — Expandable tool call/result display
+#### 💰 Billing
+- Shared Pool mode (admin buys, all consume)
+- Per-User Wallets (individual balances)
+- Razorpay integration (demo ↔ real, zero code change)
+- Usage tracking per-user, per-model
+- Configurable rate limits (per-hour, per-day)
 
-### 🔧 Advanced Features
-- **Knowledge Base (RAG)** — FAISS + HuggingFace embeddings for document search
-- **Custom Instructions** — Per-user system prompts
-- **Auto-actions** — Trigger AI workflows on document events
-- **Scheduled Reports** — Automated report generation
-- **Shared Chats** — Share conversations via link
-- **Pin Messages** — Bookmark important responses
-- **Slash Commands** — `/clear`, `/export`, `/model`, `/help`, etc.
-- **File Upload** — Attach documents for AI to analyze
-- **Keyboard Shortcuts** — Ctrl+Enter send, Ctrl+G search, Ctrl+F find
+#### 🔐 Security & Access
+- Per-user tool permissions (auto API key generation)
+- Role-based conversation isolation
+- Encrypted API key storage (Frappe Password fields)
+- Rate limiting with custom messages
+- Error sanitization (no raw Python errors to users)
+- Tool execution audit log
+
+#### 🎨 UI/UX
+- Premium SaaS interface (Claude/ChatGPT-level)
+- 6 color themes
+- Dark mode with system-aware toggle
+- Mobile responsive with touch gestures
+- Embedded floating widget on every page
+- Full-screen dedicated chat page
+- Markdown rendering (tables, code blocks, syntax highlighting)
+- Tool call accordions (expandable)
+- Copy, regenerate, edit messages
+- Search conversations (Ctrl+F)
+- Keyboard shortcuts
+- Pin messages, shared chats, export
+
+</details>
 
 ---
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────────────────────────────────────┐
-│                  Frontend                     │
-│  niv_chat.js (3079 lines) + niv_chat.css     │
-│  EventSource SSE │ frappe.call fallback       │
-└──────────┬────────────────────┬──────────────┘
-           │                    │
-    SSE stream_chat      non-stream send_message
-           │                    │
-┌──────────▼────────────────────▼──────────────┐
-│              Frappe API Layer                  │
-│  stream.py (werkzeug Response + SSE)          │
-│  chat.py (sync fallback)                      │
-│  Rate limiting │ Auth │ Conversation CRUD      │
-└──────────────────┬───────────────────────────┘
-                   │
-┌──────────────────▼───────────────────────────┐
-│           LangChain/LangGraph Engine          │
-│  agent.py   → create_react_agent()            │
-│  llm.py     → auto-detect provider type       │
-│  tools.py   → MCP tools → StructuredTool      │
-│  memory.py  → token-aware history loading      │
-│  callbacks.py → streaming, billing, logging    │
-│  rag.py     → FAISS vectorstore                │
-└──────────────────┬───────────────────────────┘
-                   │
-┌──────────────────▼───────────────────────────┐
-│              MCP Client Layer                  │
-│  mcp_client.py — JSON-RPC 2.0                 │
-│  HTTP streamable │ SSE │ stdio transports      │
-│  Session caching │ Tool index │ Auto-discover  │
-└──────────────────┬───────────────────────────┘
-                   │
-┌──────────────────▼───────────────────────────┐
-│          External MCP Servers                  │
-│  Frappe Assistant Core (23 tools)              │
-│  Any MCP-compatible server                     │
-│  Your custom MCP servers                       │
-└──────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────┐
+│                    Frontend                        │
+│        niv_chat.js  ·  niv_chat.css               │
+│        EventSource (SSE)  |  frappe.call           │
+└────────────────────┬─────────────────────────────┘
+                     │
+┌────────────────────▼─────────────────────────────┐
+│              Frappe API Layer                      │
+│    stream.py (werkzeug SSE)  ·  chat.py (sync)    │
+│    Rate Limit  ·  Auth  ·  Billing  ·  CRUD       │
+└────────────────────┬─────────────────────────────┘
+                     │
+┌────────────────────▼─────────────────────────────┐
+│          LangChain / LangGraph Engine             │
+│                                                    │
+│  🤖 agent.py    → create_react_agent()            │
+│  🧠 llm.py      → auto-detect provider            │
+│  🔧 tools.py    → MCP → StructuredTool            │
+│  💾 memory.py   → token-aware history              │
+│  📡 callbacks   → streaming + billing + logging    │
+│  📚 rag.py      → FAISS vectorstore               │
+└────────────────────┬─────────────────────────────┘
+                     │
+┌────────────────────▼─────────────────────────────┐
+│              MCP Client (JSON-RPC 2.0)            │
+│     HTTP Streamable  ·  SSE  ·  stdio             │
+│     Session Cache  ·  Tool Index  ·  Auto-Discover │
+└────────────────────┬─────────────────────────────┘
+                     │
+┌────────────────────▼─────────────────────────────┐
+│           External MCP Servers                     │
+│  ┌─────────────────────────────────────────────┐  │
+│  │  Frappe Assistant Core (23 tools)           │  │
+│  │  Custom MCP servers · Any MCP-compatible    │  │
+│  └─────────────────────────────────────────────┘  │
+└──────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 🔌 Connecting MCP Servers (Tool Sources)
+## 🔌 Connecting MCP Servers
 
-Niv AI uses the **MCP (Model Context Protocol)** to discover tools — just like ChatGPT.
+Niv AI uses **MCP (Model Context Protocol)** — add a URL, tools auto-discover. Like ChatGPT plugins.
 
-### Add a Server
+```
+Step 1:  Niv MCP Server → + Add
+Step 2:  Paste URL + API key
+Step 3:  Save → Tools appear ✨
+```
 
-1. Go to **Niv MCP Server** list → **+ Add**
-2. Enter:
-   - **Server Name**: e.g., "Frappe Assistant Core"
-   - **Transport**: `streamable-http` (recommended), `sse`, or `stdio`
-   - **Server URL**: e.g., `http://your-erpnext:8000/api/method/frappe_assistant_core.api.fac_endpoint.handle_mcp`
-   - **API Key**: Your Frappe API key (format: `key:secret`)
-3. Save → Tools auto-discover
+<details>
+<summary><b>📖 Detailed MCP Setup Guide</b></summary>
+<br/>
 
-### Recommended: Frappe Assistant Core (FAC)
-
-Install [FAC](https://github.com/frappe-assistant/frappe_assistant_core) on your ERPNext for 23 built-in tools:
+#### Recommended: Frappe Assistant Core (FAC)
 
 ```bash
 bench get-app https://github.com/frappe-assistant/frappe_assistant_core.git
 bench --site your-site.com install-app frappe_assistant_core
 ```
 
-Then connect via MCP — tools like `list_documents`, `search_documents`, `run_database_query`, `create_document`, etc. become available instantly.
+Then in Niv AI:
+1. **Niv MCP Server** → `+ Add`
+2. Server Name: `Frappe Assistant Core`
+3. Transport: `streamable-http`
+4. URL: `http://your-site:8000/api/method/frappe_assistant_core.api.fac_endpoint.handle_mcp`
+5. API Key: `your_api_key:your_api_secret`
+6. Save → 23 tools discovered!
+
+#### Available FAC Tools
+`list_documents` · `get_document` · `create_document` · `update_document` · `delete_document` · `search_documents` · `run_database_query` · `get_report` · `count_documents` · `get_metadata` · and 13 more...
+
+#### Remote MCP Servers
+FAC can be on a **different server** — just point the URL to any server running FAC. This is the ChatGPT model: paste URL → get tools.
+
+</details>
 
 ---
 
-## ⚙️ Configuration
+## 📊 What's Included
 
-### Niv Settings (`/app/niv-settings`)
+<details>
+<summary><b>📦 20 DocTypes</b></summary>
+<br/>
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| Default Provider | AI provider (Link to Niv AI Provider) | — |
-| Default Model | Model name | — |
-| System Prompt | Default system prompt for all chats | Built-in |
-| Max Tokens Per Message | Context window limit | 4096 |
-| Enable Tools | Allow AI to use MCP tools | ✅ |
-| Enable Billing | Token billing system | ❌ |
-| Enable Widget | Floating chat widget | ✅ |
-| Rate Limit Per Hour | Max messages/user/hour (0=unlimited) | 60 |
-| Rate Limit Per Day | Max messages/user/day (0=unlimited) | 500 |
-| Billing Mode | "Shared Pool" or "Per User" | Shared Pool |
+| DocType | Purpose |
+|---------|---------|
+| **Niv Settings** | Global configuration (Single) |
+| **Niv AI Provider** | AI provider configs (API keys, URLs, models) |
+| **Niv Conversation** | Chat conversations (per-user isolated) |
+| **Niv Message** | Individual messages with role, content, tool_calls |
+| **Niv System Prompt** | Reusable system prompt templates |
+| **Niv MCP Server** | MCP server connections & credentials |
+| **Niv MCP Tool** | Discovered MCP tools (child table) |
+| **Niv Custom Instruction** | Per-user custom AI instructions |
+| **Niv Auto Action** | Document event → AI action triggers |
+| **Niv Scheduled Report** | Automated report generation configs |
+| **Niv Knowledge Base** | RAG knowledge sources |
+| **Niv KB Chunk** | RAG document chunks (vectorized) |
+| **Niv Shared Chat** | Shared conversation links |
+| **Niv File** | Uploaded file references |
+| **Niv Tool** | Custom tool definitions (future use) |
+| **Niv Tool Log** | Tool execution audit log |
+| **Niv Wallet** | Per-user token wallet balances |
+| **Niv Credit Plan** | Recharge plan definitions |
+| **Niv Recharge** | Payment transaction records |
+| **Niv Usage Log** | Token usage records per message |
 
-### Adding an AI Provider
+</details>
 
-1. Go to **Niv AI Provider** → **+ Add**
-2. Fill in:
-   - **Provider Name**: e.g., "Mistral"
-   - **Base URL**: e.g., `https://api.mistral.ai/v1`
-   - **API Key**: Your provider API key
-   - **Default Model**: e.g., `mistral-medium-2508`
-3. Save
+<details>
+<summary><b>🔗 14 API Endpoints</b></summary>
+<br/>
 
-> Works with: OpenAI, Mistral, Claude, Ollama (`http://localhost:11434/v1`), Groq, Together AI, Google Gemini, any OpenAI-compatible endpoint.
+| Endpoint | Description |
+|----------|-------------|
+| `stream.stream_chat` | SSE streaming chat (primary) |
+| `chat.send_message` | Non-streaming fallback |
+| `conversation.create_conversation` | Create new conversation |
+| `conversation.list_conversations` | List user's conversations |
+| `conversation.get_messages` | Load message history |
+| `conversation.delete_conversation` | Delete conversation |
+| `conversation.rename_conversation` | Rename conversation |
+| `mcp.get_mcp_servers` | List MCP servers + tools |
+| `mcp.test_connection` | Test MCP server connection |
+| `billing.check_balance` | Get billing status |
+| `billing.get_usage_stats` | Usage analytics data |
+| `voice.text_to_speech` | TTS (Piper/OpenAI/Browser) |
+| `voice.voice_chat` | Voice-to-voice conversation |
+| `instructions.get_instructions` | Get/save custom instructions |
+
+</details>
+
+<details>
+<summary><b>📁 Project Structure</b></summary>
+<br/>
+
+```
+niv_ai/
+├── niv_ai/
+│   ├── niv_core/              # Core AI engine
+│   │   ├── api/               # stream, chat, conversation, voice, mcp
+│   │   ├── langchain/         # agent, llm, tools, memory, callbacks, rag
+│   │   ├── doctype/           # 14 DocTypes
+│   │   └── mcp_client.py      # MCP JSON-RPC 2.0 client
+│   ├── niv_billing/           # Token billing system
+│   │   ├── api/               # billing, payment APIs
+│   │   └── doctype/           # wallet, plans, recharge, usage
+│   ├── niv_tools/             # Tool framework
+│   │   ├── tools/             # email_tools, image_tools
+│   │   └── doctype/           # tool, tool_log
+│   ├── niv_ui/                # Frontend
+│   │   └── page/niv_chat/     # 3079 lines JS + 2990 lines CSS
+│   └── public/                # Widget (css + js)
+├── docker/                    # Docker scripts
+├── scripts/                   # Validation utilities
+├── CHANGELOG.md               # Version history
+├── DEVELOPER.md               # Dev setup guide
+├── KNOWN_ISSUES.md            # Bug tracker
+├── NIV_AI_ROADMAP.md          # Roadmap to v1.0.0
+└── requirements.txt           # Python dependencies
+```
+
+</details>
 
 ---
 
 ## 🛠️ Troubleshooting
 
-### Common Issues & Fixes
+<details>
+<summary><b>"Error: Something went wrong"</b></summary>
 
-#### "Error: Something went wrong"
-**Cause**: Old conversations may have corrupted tool call history from before v0.3.0.
-**Fix**: Start a **New Chat**. Old conversations with the error are from a previous version bug that's now fixed.
+Old conversations may have corrupted history. **Start a New Chat.**
 
 ```bash
-# If errors persist, clear caches:
 bench --site your-site.com clear-cache
 bench restart
 ```
+</details>
 
-#### SSE Streaming Not Working (responses appear all at once)
-**Cause**: Nginx not configured for SSE proxy.
-**Fix**: Add SSE location block to your nginx config:
+<details>
+<summary><b>SSE Streaming Not Working</b></summary>
 
+Add nginx SSE block:
 ```nginx
 location /api/method/niv_ai.niv_core.api.stream.stream_chat {
-    proxy_pass http://your-backend:8000;
+    proxy_pass http://backend:8000;
     proxy_buffering off;
     proxy_cache off;
     proxy_set_header Host $host;
@@ -251,223 +464,78 @@ location /api/method/niv_ai.niv_core.api.stream.stream_chat {
     chunked_transfer_encoding off;
 }
 ```
+</details>
 
-#### Docker: Features Lost After Container Restart
-**Cause**: pip packages and nginx config are not persisted in Docker.
-**Fix**: Use the provided Docker override:
+<details>
+<summary><b>MCP Tools Not Found</b></summary>
 
 ```bash
-# Copy startup scripts
-cp docker/startup.sh /path/to/frappe_docker/
-cp docker/nginx-patch.sh /path/to/frappe_docker/
-
-# Add to your docker-compose override
-# See docker/niv_ai_override.yml for reference
-```
-
-#### MCP Tools Not Discovered
-**Cause**: Server URL, API key, or transport type misconfigured.
-**Fix**:
-```bash
-# Test MCP connection from bench console
 bench --site your-site.com console
 >>> from niv_ai.niv_core.mcp_client import discover_tools
 >>> tools = discover_tools("Your Server Name", use_cache=False)
 >>> print(len(tools), "tools found")
 ```
+</details>
 
-#### Rate Limit Exceeded
-**Cause**: User sent too many messages.
-**Fix**: Adjust in **Niv Settings** → Rate Limiting section. Set to `0` for unlimited.
+<details>
+<summary><b>Docker: Features Lost After Restart</b></summary>
 
-#### Billing Not Deducting
-**Cause**: Provider doesn't report token usage in streaming mode.
-**Fix**: Already handled — Niv AI estimates tokens at ~4 chars/token as fallback. Check Niv Settings → Enable Billing is checked.
-
----
-
-## 📋 Useful Commands
-
-```bash
-# Install
-bench get-app https://github.com/kulharir7/niv_ai.git
-bench --site your-site.com install-app niv_ai
-bench --site your-site.com migrate
-
-# Update to latest
-bench get-app --overwrite https://github.com/kulharir7/niv_ai.git
-bench --site your-site.com migrate
-bench --site your-site.com clear-cache
-bench restart
-
-# Check installed version
-bench --site your-site.com console
->>> import niv_ai; print(niv_ai.__version__ if hasattr(niv_ai,'__version__') else 'check hooks.py')
-
-# List MCP tools
-bench --site your-site.com console
->>> from niv_ai.niv_core.mcp_client import get_all_mcp_tools_cached
->>> tools = get_all_mcp_tools_cached()
->>> print(f"{len(tools)} tools available")
->>> for t in tools: print(f"  - {t['function']['name']}")
-
-# Check billing status
-bench --site your-site.com console
->>> import frappe
->>> s = frappe.get_doc("Niv Settings")
->>> print(f"Billing: {s.enable_billing}, Mode: {s.billing_mode}, Pool: {s.shared_pool_balance}")
-
-# Clear MCP cache (after adding/changing servers)
-bench --site your-site.com console
->>> from niv_ai.niv_core.mcp_client import clear_cache
->>> clear_cache()
-
-# Test a specific tool
-bench --site your-site.com console
->>> from niv_ai.niv_core.mcp_client import execute_mcp_tool
->>> result = execute_mcp_tool("list_documents", {"doctype": "Customer", "limit": 5})
->>> print(result)
-```
+Use `docker/startup.sh` via compose override. See `docker/niv_ai_override.yml`.
+</details>
 
 ---
 
-## 🔄 Update Workflow
+## 🗺️ Roadmap
 
-```bash
-# 1. Backup first
-bench --site your-site.com backup
+We're building towards **v1.0.0** with **160+ features** across 7 versions:
 
-# 2. Get latest code
-bench get-app --overwrite https://github.com/kulharir7/niv_ai.git
+| Version | Codename | Focus |
+|---------|----------|-------|
+| ~~v0.3.1~~ ✅ | Permission Isolation | Per-user tool permissions |
+| **v0.4.0** 🏗️ | Rock Solid 🪨 | Bug fixes, roles, sidebar |
+| **v0.5.0** | See & Read 👁️ | Image vision, file upload, PDF/Excel |
+| **v0.6.0** | Big Brain 🧠 | Memory, web search, intelligence |
+| **v0.7.0** | Power Tools ⚡ | Templates, automation, tool builder |
+| **v0.8.0** | Beautiful 🎨 | Themes, PWA, artifacts panel |
+| **v0.9.0** | Dashboard 📊 | Analytics, billing v2, WhatsApp bot |
+| **v1.0.0** | Enterprise 🏢 | Security, compliance, CI/CD |
 
-# 3. Run migrations (adds new fields/DocTypes)
-bench --site your-site.com migrate
-
-# 4. Clear all caches
-bench --site your-site.com clear-cache
-
-# 5. Restart workers
-bench restart
-
-# 6. (Docker only) Re-install pip deps if container was restarted
-pip install -e apps/niv_ai
-# Also on worker containers if using Docker
-```
-
----
-
-## 📦 What's Included
-
-### DocTypes (20)
-
-| DocType | Module | Purpose |
-|---------|--------|---------|
-| Niv Settings | Niv Core | Global configuration (Single) |
-| Niv AI Provider | Niv Core | AI provider configs (API keys, URLs) |
-| Niv Conversation | Niv Core | Chat conversations |
-| Niv Message | Niv Core | Individual messages |
-| Niv System Prompt | Niv Core | Reusable system prompts |
-| Niv MCP Server | Niv Core | MCP server connections |
-| Niv MCP Tool | Niv Core | Discovered MCP tools (child table) |
-| Niv Custom Instruction | Niv Core | Per-user custom instructions |
-| Niv Auto Action | Niv Core | Document event triggers |
-| Niv Scheduled Report | Niv Core | Automated report configs |
-| Niv Knowledge Base | Niv Core | RAG knowledge sources |
-| Niv KB Chunk | Niv Core | RAG document chunks |
-| Niv Shared Chat | Niv Core | Shared conversation links |
-| Niv File | Niv Core | Uploaded file references |
-| Niv Tool | Niv Tools | Custom tool definitions (for future use) |
-| Niv Tool Log | Niv Tools | Tool execution logs |
-| Niv Wallet | Niv Billing | Per-user token wallets |
-| Niv Credit Plan | Niv Billing | Recharge plans |
-| Niv Recharge | Niv Billing | Payment transactions |
-| Niv Usage Log | Niv Billing | Token usage records |
-
-### API Endpoints
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `stream.stream_chat` | POST | SSE streaming chat (primary) |
-| `chat.send_message` | POST | Non-streaming fallback |
-| `conversation.create_conversation` | POST | New conversation |
-| `conversation.list_conversations` | POST | List all conversations |
-| `conversation.get_messages` | POST | Load message history |
-| `conversation.delete_conversation` | POST | Delete conversation |
-| `conversation.rename_conversation` | POST | Rename conversation |
-| `mcp.get_mcp_servers` | POST | List MCP servers |
-| `mcp.test_connection` | POST | Test MCP server connection |
-| `billing.check_balance` | POST | Get user's billing status |
-| `billing.get_usage_stats` | POST | Usage analytics |
-| `voice.text_to_speech` | POST | TTS (Piper/OpenAI/Browser) |
-| `voice.voice_chat` | POST | Voice-to-voice conversation |
-| `instructions.get_instructions` | POST | Get custom instructions |
-
-### File Structure
-
-```
-niv_ai/
-├── niv_ai/
-│   ├── niv_core/           # Core AI engine
-│   │   ├── api/            # Frappe API endpoints (stream, chat, conversation, voice, mcp, instructions)
-│   │   ├── langchain/      # LangChain/LangGraph engine (agent, llm, tools, memory, callbacks, rag)
-│   │   ├── doctype/        # Core DocTypes (settings, provider, conversation, message, mcp_server, etc.)
-│   │   └── mcp_client.py   # MCP protocol client (JSON-RPC 2.0)
-│   ├── niv_billing/        # Token billing system
-│   │   ├── api/            # Billing APIs (balance, deduct, usage, recharge)
-│   │   └── doctype/        # Billing DocTypes (wallet, credit_plan, recharge, usage_log)
-│   ├── niv_tools/          # Tool framework
-│   │   ├── api/            # Tool executor
-│   │   ├── tools/          # Native tools (email, image)
-│   │   └── doctype/        # Tool DocTypes (niv_tool, niv_tool_log)
-│   ├── niv_ui/             # Frontend
-│   │   └── page/niv_chat/  # Main chat page (JS: 3079 lines, CSS: 2990 lines)
-│   └── public/             # Widget assets (css + js)
-├── docs/screenshots/       # UI screenshots
-├── docker/                 # Docker persistence scripts
-├── scripts/                # Validation & utility scripts
-├── CHANGELOG.md
-├── DEVELOPER.md
-├── KNOWN_ISSUES.md
-└── requirements.txt        # Python deps (langchain, langgraph, etc.)
-```
-
----
-
-## 🔒 Security
-
-- All API endpoints require Frappe authentication
-- MCP API keys stored as Frappe Password fields (encrypted)
-- Rate limiting prevents abuse (configurable per-hour/per-day)
-- Conversation ownership enforced — users can only access their own chats
-- Tool execution logged in Niv Tool Log for audit
-- Error messages sanitized — no raw Python errors exposed to users
-
----
-
-## 📄 License
-
-MIT License — see [LICENSE](LICENSE) file.
+👉 **[Full Roadmap →](NIV_AI_ROADMAP.md)**
 
 ---
 
 ## 🤝 Contributing
 
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+```bash
+# Fork → Clone → Branch → Code → Push → PR
 
-See [DEVELOPER.md](DEVELOPER.md) for development setup and code architecture details.
+git clone https://github.com/YOUR_USERNAME/niv_ai.git
+cd niv_ai
+git checkout -b feature/amazing-feature
+
+# Make changes...
+
+git commit -m "feat: amazing feature"
+git push origin feature/amazing-feature
+# Open PR on GitHub
+```
+
+See **[DEVELOPER.md](DEVELOPER.md)** for architecture details and dev setup.
 
 ---
 
-## 📞 Support
+## 📄 License
 
-- **Issues**: [GitHub Issues](https://github.com/kulharir7/niv_ai/issues)
-- **Known Issues**: [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
-- **Changelog**: [CHANGELOG.md](CHANGELOG.md)
+MIT License — use it, modify it, sell it. See [LICENSE](LICENSE).
 
 ---
+
+<div align="center">
 
 **Made with ❤️ for the ERPNext community**
+
+[⭐ Star this repo](https://github.com/kulharir7/niv_ai) · [🐛 Report Bug](https://github.com/kulharir7/niv_ai/issues) · [💡 Request Feature](https://github.com/kulharir7/niv_ai/issues)
+
+<sub>Built by <a href="https://github.com/kulharir7">@kulharir7</a></sub>
+
+</div>
