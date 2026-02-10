@@ -80,6 +80,12 @@ def run_agent(
     messages = []
     messages.append(SystemMessage(content=system_prompt))
     
+    # RAG context
+    from .rag import get_rag_context
+    rag_ctx = get_rag_context(message)
+    if rag_ctx:
+        messages.append(SystemMessage(content=rag_ctx))
+    
     # Load history
     if conversation_id:
         history = get_chat_history(conversation_id)
@@ -121,6 +127,12 @@ def stream_agent(
     # Build messages
     messages = []
     messages.append(SystemMessage(content=system_prompt))
+    
+    # RAG context
+    from .rag import get_rag_context
+    rag_ctx = get_rag_context(message)
+    if rag_ctx:
+        messages.append(SystemMessage(content=rag_ctx))
     
     if conversation_id:
         history = get_chat_history(conversation_id)
