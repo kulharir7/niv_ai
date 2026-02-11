@@ -78,15 +78,57 @@ def _build_pydantic_model(name: str, parameters: dict):
     return model
 
 
-def _make_mcp_executor(tool_name: str):
+def _validate_arguments(tool_name: str, arguments: dict, input_schema: dict) -> Optional[str]:
+    """Validate arguments against inputSchema. Returns error message or None if valid."""
+    if not input_schema or input_schema.get("type") != "object":
+        return None
+
+    properties = input_schema.get("properties", {})
+    required = set(input_schema.get("required", []))
+
+    # Check required fields
+    for field in required:
+        if field not in arguments or arguments[field] is None:
+            return f"Error: '{field}' field zaroori hai (required) for tool '{tool_name}'"
+
+    # Check types
+    _schema_type_map = {
+        "string": str, "integer": int, "number": (int, float),
+        "boolean": bool, "array": list, "object": dict,
+    }
+    for field, value in arguments.items():
+        if value is None:
+            continue
+        field_schema = properties.get(field)
+        if not field_schema:
+            continue
+        expected_type = field_schema.get("type")
+        if not expected_type:
+            continue
+        py_type = _schema_type_map.get(expected_type)
+        if py_type and not isinstance(value, py_type):
+            return (f"Error: '{field}' ka type galat hai — expected {expected_type}, "
+                    f"got {type(value).__name__} for tool '{tool_name}'")
+
+    return None
+
+
+def _make_mcp_executor(tool_name: str, input_schema: dict = None):
     """Create a closure that calls MCP tool by name.
 
     Uses find_tool_server → call_tool_fast.
     Automatically uses per-user API key if set (thread-local).
+    Validates arguments against inputSchema before calling.
     """
     def execute(**kwargs):
         # Remove None values — MCP servers don't expect them
         clean_args = {k: v for k, v in kwargs.items() if v is not None}
+
+        # Validate arguments against schema
+        if input_schema:
+            validation_error = _validate_arguments(tool_name, clean_args, input_schema)
+            if validation_error:
+                return json.dumps({"error": validation_error})
 
         server_name = find_tool_server(tool_name)
         if not server_name:
@@ -157,7 +199,7 @@ def get_langchain_tools() -> list:
         parameters = func_def.get("parameters", {})
 
         args_schema = _build_pydantic_model(name, parameters)
-        executor = _make_mcp_executor(name)
+        executor = _make_mcp_executor(name, input_schema=parameters)
 
         tool = StructuredTool.from_function(
             func=executor,

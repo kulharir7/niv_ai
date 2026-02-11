@@ -7,6 +7,8 @@ Bulletproof, multi-worker safe MCP client.
 - Per-worker memory cache — fast path (no Redis hit on every call)
 - Self-referencing deadlock protection — detects same-server and uses internal call
 - JSON-RPC 2.0 protocol — no mcp pip package needed
+- Circuit breaker — auto-skip failing servers, self-heal after 60s
+- Retry with exponential backoff — transient error resilience
 """
 
 import json
@@ -21,6 +23,86 @@ from typing import Dict, Any, List, Optional
 # ─── Global Caches (per-worker memory, fast path) ─────────────────
 
 _cache_lock = threading.Lock()
+
+
+# ─── Circuit Breaker (per server) ─────────────────────────────────
+# States: CLOSED (normal), OPEN (skip HTTP), HALF_OPEN (testing one call)
+
+CIRCUIT_CLOSED = "CLOSED"
+CIRCUIT_OPEN = "OPEN"
+CIRCUIT_HALF_OPEN = "HALF_OPEN"
+
+CIRCUIT_FAILURE_THRESHOLD = 3   # consecutive failures before opening
+CIRCUIT_RECOVERY_TIMEOUT = 60   # seconds before trying again (half-open)
+
+# server_name → {"state": str, "failures": int, "opened_at": float}
+_circuit_breaker = {}
+
+
+def _circuit_check(server_name):
+    """Check if circuit is open (should skip HTTP). Returns True if should skip."""
+    with _cache_lock:
+        cb = _circuit_breaker.get(server_name)
+        if not cb or cb["state"] == CIRCUIT_CLOSED:
+            return False
+        if cb["state"] == CIRCUIT_OPEN:
+            # Check if recovery timeout has elapsed → transition to HALF_OPEN
+            if time.time() - cb["opened_at"] >= CIRCUIT_RECOVERY_TIMEOUT:
+                cb["state"] = CIRCUIT_HALF_OPEN
+                frappe.logger().info(f"Niv MCP: Circuit half-open for '{server_name}', testing one call")
+                return False  # Allow one test call
+            return True  # Still open, skip
+        # HALF_OPEN — allow the test call
+        return False
+
+
+def _circuit_record_success(server_name):
+    """Record a successful call — close the circuit."""
+    with _cache_lock:
+        cb = _circuit_breaker.get(server_name)
+        if cb and cb["state"] != CIRCUIT_CLOSED:
+            frappe.logger().info(f"Niv MCP: Circuit closed for '{server_name}' (recovered)")
+        _circuit_breaker[server_name] = {"state": CIRCUIT_CLOSED, "failures": 0, "opened_at": 0}
+
+
+def _circuit_record_failure(server_name):
+    """Record a failed call — may open the circuit."""
+    with _cache_lock:
+        cb = _circuit_breaker.get(server_name, {"state": CIRCUIT_CLOSED, "failures": 0, "opened_at": 0})
+        cb["failures"] += 1
+        if cb["state"] == CIRCUIT_HALF_OPEN:
+            # Test call failed — re-open
+            cb["state"] = CIRCUIT_OPEN
+            cb["opened_at"] = time.time()
+            frappe.logger().warning(f"Niv MCP: Circuit re-opened for '{server_name}' (half-open test failed)")
+        elif cb["failures"] >= CIRCUIT_FAILURE_THRESHOLD:
+            cb["state"] = CIRCUIT_OPEN
+            cb["opened_at"] = time.time()
+            frappe.logger().warning(f"Niv MCP: Circuit opened for '{server_name}' after {cb['failures']} failures")
+        _circuit_breaker[server_name] = cb
+
+
+# ─── Retry with Exponential Backoff ───────────────────────────────
+
+_RETRY_MAX = 2          # max retries (total 3 attempts)
+_RETRY_BACKOFFS = [0.5, 1.5]  # seconds between retries
+_RETRYABLE_STATUS_CODES = {500, 502, 503, 504}
+
+
+def _is_retryable_error(exc):
+    """Check if an exception is transient and worth retrying."""
+    import requests
+    if isinstance(exc, (ConnectionError, TimeoutError)):
+        return True
+    if isinstance(exc, requests.exceptions.ConnectionError):
+        return True
+    if isinstance(exc, requests.exceptions.Timeout):
+        return True
+    if isinstance(exc, requests.exceptions.HTTPError):
+        resp = getattr(exc, 'response', None)
+        if resp is not None and resp.status_code in _RETRYABLE_STATUS_CODES:
+            return True
+    return False
 
 # Per-worker tool cache: server_name → {"tools": [...], "expires": ts}
 _tools_cache = {}
@@ -349,15 +431,31 @@ def _build_headers(api_key=None):
     return headers
 
 
-def _http_post(url, payload, api_key=None, timeout=15):
+def _http_post(url, payload, api_key=None, timeout=15, server_name=None):
+    """HTTP POST with retry + circuit breaker integration."""
     session = _get_http_session(url)
     headers = _build_headers(api_key)
-    resp = session.post(url, json=payload, headers=headers, timeout=timeout)
-    resp.raise_for_status()
-    return resp.json()
+    last_exc = None
+    for attempt in range(_RETRY_MAX + 1):
+        try:
+            resp = session.post(url, json=payload, headers=headers, timeout=timeout)
+            resp.raise_for_status()
+            result = resp.json()
+            if server_name:
+                _circuit_record_success(server_name)
+            return result
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _RETRY_MAX and _is_retryable_error(exc):
+                time.sleep(_RETRY_BACKOFFS[attempt])
+                continue
+            if server_name:
+                _circuit_record_failure(server_name)
+            raise
+    raise last_exc  # should not reach here
 
 
-def _ensure_initialized(url, api_key=None):
+def _ensure_initialized(url, api_key=None, server_name=None):
     """Initialize MCP session only if not already done (cached)."""
     cache_key = url
     cached = _mcp_init_cache.get(cache_key)
@@ -369,9 +467,9 @@ def _ensure_initialized(url, api_key=None):
             "protocolVersion": "2024-11-05",
             "capabilities": {},
             "clientInfo": {"name": "niv-ai", "version": "0.4.0"},
-        }, req_id=_next_id()), api_key)
+        }, req_id=_next_id()), api_key, server_name=server_name)
         try:
-            _http_post(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
+            _http_post(url, _jsonrpc("notifications/initialized"), api_key, timeout=5, server_name=server_name)
         except Exception:
             pass
         _mcp_init_cache[cache_key] = {"initialized": True, "expires": time.time() + _MCP_INIT_TTL}
@@ -380,17 +478,17 @@ def _ensure_initialized(url, api_key=None):
         raise
 
 
-def http_list_tools(url, api_key=None) -> List[Dict]:
-    _ensure_initialized(url, api_key)
-    resp = _http_post(url, _jsonrpc("tools/list", {}, req_id=_next_id()), api_key)
+def http_list_tools(url, api_key=None, server_name=None) -> List[Dict]:
+    _ensure_initialized(url, api_key, server_name=server_name)
+    resp = _http_post(url, _jsonrpc("tools/list", {}, req_id=_next_id()), api_key, server_name=server_name)
     return resp.get("result", {}).get("tools", [])
 
 
-def http_call_tool(url, api_key, tool_name, arguments) -> Any:
-    _ensure_initialized(url, api_key)
+def http_call_tool(url, api_key, tool_name, arguments, server_name=None) -> Any:
+    _ensure_initialized(url, api_key, server_name=server_name)
     resp = _http_post(url, _jsonrpc("tools/call", {
         "name": tool_name, "arguments": arguments
-    }, req_id=_next_id()), api_key, timeout=30)
+    }, req_id=_next_id()), api_key, timeout=30, server_name=server_name)
     if "error" in resp:
         raise MCPError(resp["error"].get("message", str(resp["error"])))
     return resp.get("result", {})
@@ -398,34 +496,52 @@ def http_call_tool(url, api_key, tool_name, arguments) -> Any:
 
 # ─── SSE Transport ─────────────────────────────────────────────────
 
-def _sse_request(url, payload, api_key=None, timeout=30):
+def _sse_request(url, payload, api_key=None, timeout=30, server_name=None):
+    """SSE request with retry + circuit breaker integration."""
     import requests
-    headers = _build_headers(api_key)
-    headers["Accept"] = "text/event-stream"
-    resp = requests.post(url, json=payload, headers=headers, timeout=timeout, stream=True)
-    resp.raise_for_status()
-
-    content_type = resp.headers.get("content-type", "")
-    if "application/json" in content_type:
-        return resp.json()
-
-    for line in resp.iter_lines(decode_unicode=True):
-        if not line or not line.startswith("data: "):
-            continue
-        data_str = line[6:].strip()
-        if not data_str:
-            continue
+    last_exc = None
+    for attempt in range(_RETRY_MAX + 1):
         try:
-            data = json.loads(data_str)
-            if isinstance(data, dict) and ("result" in data or "error" in data):
-                return data
-        except json.JSONDecodeError:
-            continue
+            headers = _build_headers(api_key)
+            headers["Accept"] = "text/event-stream"
+            resp = requests.post(url, json=payload, headers=headers, timeout=timeout, stream=True)
+            resp.raise_for_status()
 
-    raise MCPError("No valid response from SSE stream")
+            content_type = resp.headers.get("content-type", "")
+            if "application/json" in content_type:
+                result = resp.json()
+                if server_name:
+                    _circuit_record_success(server_name)
+                return result
+
+            for line in resp.iter_lines(decode_unicode=True):
+                if not line or not line.startswith("data: "):
+                    continue
+                data_str = line[6:].strip()
+                if not data_str:
+                    continue
+                try:
+                    data = json.loads(data_str)
+                    if isinstance(data, dict) and ("result" in data or "error" in data):
+                        if server_name:
+                            _circuit_record_success(server_name)
+                        return data
+                except json.JSONDecodeError:
+                    continue
+
+            raise MCPError("No valid response from SSE stream")
+        except Exception as exc:
+            last_exc = exc
+            if attempt < _RETRY_MAX and _is_retryable_error(exc):
+                time.sleep(_RETRY_BACKOFFS[attempt])
+                continue
+            if server_name:
+                _circuit_record_failure(server_name)
+            raise
+    raise last_exc
 
 
-def _ensure_sse_initialized(url, api_key=None):
+def _ensure_sse_initialized(url, api_key=None, server_name=None):
     cache_key = f"sse_{url}"
     cached = _mcp_init_cache.get(cache_key)
     if cached and cached["expires"] > time.time():
@@ -436,9 +552,9 @@ def _ensure_sse_initialized(url, api_key=None):
             "protocolVersion": "2024-11-05",
             "capabilities": {},
             "clientInfo": {"name": "niv-ai", "version": "0.4.0"},
-        }, req_id=_next_id()), api_key)
+        }, req_id=_next_id()), api_key, server_name=server_name)
         try:
-            _sse_request(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
+            _sse_request(url, _jsonrpc("notifications/initialized"), api_key, timeout=5, server_name=server_name)
         except Exception:
             pass
         _mcp_init_cache[cache_key] = {"initialized": True, "expires": time.time() + _MCP_INIT_TTL}
@@ -447,17 +563,17 @@ def _ensure_sse_initialized(url, api_key=None):
         raise
 
 
-def sse_list_tools(url, api_key=None) -> List[Dict]:
-    _ensure_sse_initialized(url, api_key)
-    resp = _sse_request(url, _jsonrpc("tools/list", {}, req_id=_next_id()), api_key)
+def sse_list_tools(url, api_key=None, server_name=None) -> List[Dict]:
+    _ensure_sse_initialized(url, api_key, server_name=server_name)
+    resp = _sse_request(url, _jsonrpc("tools/list", {}, req_id=_next_id()), api_key, server_name=server_name)
     return resp.get("result", {}).get("tools", [])
 
 
-def sse_call_tool(url, api_key, tool_name, arguments) -> Any:
-    _ensure_sse_initialized(url, api_key)
+def sse_call_tool(url, api_key, tool_name, arguments, server_name=None) -> Any:
+    _ensure_sse_initialized(url, api_key, server_name=server_name)
     resp = _sse_request(url, _jsonrpc("tools/call", {
         "name": tool_name, "arguments": arguments
-    }, req_id=_next_id()), api_key, timeout=30)
+    }, req_id=_next_id()), api_key, timeout=30, server_name=server_name)
     if "error" in resp:
         raise MCPError(resp["error"].get("message", str(resp["error"])))
     return resp.get("result", {})
@@ -526,18 +642,21 @@ def discover_tools(server_name: str, use_cache: bool = True) -> List[Dict]:
         tools = _direct_fac_list_tools() or []
 
     # 4. HTTP/SSE/stdio MCP call (only if not same-server or direct call failed)
-    if not tools:
+    #    Circuit breaker: skip HTTP if circuit is open for this server
+    if not tools and not _circuit_check(server_name):
         try:
             if doc.transport_type == "stdio":
                 tools = stdio_list_tools(doc.command, doc.args, doc.env_vars)
             elif doc.transport_type == "streamable-http":
-                tools = http_list_tools(doc.server_url, _get_api_key(doc))
+                tools = http_list_tools(doc.server_url, _get_api_key(doc), server_name=server_name)
             elif doc.transport_type == "sse":
-                tools = sse_list_tools(doc.server_url, _get_api_key(doc))
+                tools = sse_list_tools(doc.server_url, _get_api_key(doc), server_name=server_name)
             else:
                 frappe.logger().warning(f"Niv MCP: Unknown transport '{doc.transport_type}' for '{server_name}'")
         except Exception as e:
             frappe.logger().error(f"Niv MCP: HTTP discovery failed for '{server_name}': {e}")
+    elif not tools:
+        frappe.logger().info(f"Niv MCP: Circuit open for '{server_name}', skipping HTTP discovery")
 
     # 5. DB fallback — NEVER return empty if we have stored tools
     if not tools:
@@ -614,12 +733,16 @@ def call_tool_fast(server_name: str, tool_name: str, arguments: Dict[str, Any], 
             return result
         # Direct call failed, fall through to HTTP
 
+    # Circuit breaker: if open, raise immediately so caller gets fallback
+    if _circuit_check(server_name):
+        raise MCPError(f"Circuit breaker open for '{server_name}' — server temporarily unavailable")
+
     if doc.transport_type == "stdio":
         return stdio_call_tool(doc.command, doc.args, doc.env_vars, tool_name, arguments)
     elif doc.transport_type == "streamable-http":
-        return http_call_tool(doc.server_url, api_key, tool_name, arguments)
+        return http_call_tool(doc.server_url, api_key, tool_name, arguments, server_name=server_name)
     elif doc.transport_type == "sse":
-        return sse_call_tool(doc.server_url, api_key, tool_name, arguments)
+        return sse_call_tool(doc.server_url, api_key, tool_name, arguments, server_name=server_name)
     else:
         raise MCPError(f"Unknown transport: {doc.transport_type}")
 
