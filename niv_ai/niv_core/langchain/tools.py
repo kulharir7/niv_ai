@@ -141,6 +141,10 @@ def get_langchain_tools() -> list:
         return _lc_tools_cache["tools"]
 
     mcp_tools = get_all_mcp_tools_cached()
+    
+    if not mcp_tools:
+        frappe.logger().error("Niv AI: 0 MCP tools loaded! Agent will have no tools. Check MCP server connection.")
+    
     lc_tools = []
 
     for tool_def in mcp_tools:

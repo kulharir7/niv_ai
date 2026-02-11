@@ -1,10 +1,11 @@
 """
 MCP (Model Context Protocol) Client for Niv AI
 
-High-performance, cached MCP client.
-- Tool-to-server index for instant lookup
-- Session reuse (no re-initialize per call)
-- Supports stdio, SSE, and streamable-http transports
+Bulletproof, multi-worker safe MCP client.
+- Redis shared cache — all gunicorn workers share tool definitions
+- DB fallback — tools stored in Niv MCP Server child table (never lost)
+- Per-worker memory cache — fast path (no Redis hit on every call)
+- Self-referencing deadlock protection — detects same-server and uses internal call
 - JSON-RPC 2.0 protocol — no mcp pip package needed
 """
 
@@ -17,24 +18,30 @@ import frappe
 from typing import Dict, Any, List, Optional
 
 
-# ─── Global Caches ─────────────────────────────────────────────────
+# ─── Global Caches (per-worker memory, fast path) ─────────────────
 
 _cache_lock = threading.Lock()
 
-# Tool discovery cache: server_name → {"tools": [...], "expires": ts}
+# Per-worker tool cache: server_name → {"tools": [...], "expires": ts}
 _tools_cache = {}
 
-# Tool-to-server index: tool_name → server_name (instant lookup)
+# Tool-to-server index: tool_name → server_name
 _tool_index = {}
 _tool_index_expires = 0
 
-# OpenAI format cache for get_available_tools
+# OpenAI format cache
 _openai_tools_cache = {"tools": [], "expires": 0}
 
 # HTTP session reuse
 _http_sessions = {}
 
+# MCP session init cache
+_mcp_init_cache = {}
+_MCP_INIT_TTL = 600  # 10 min
+
 CACHE_TTL = 300  # 5 minutes
+REDIS_CACHE_TTL = 600  # 10 minutes — Redis cache lives longer than worker cache
+REDIS_KEY_PREFIX = "niv_mcp_tools:"
 
 
 class MCPError(Exception):
@@ -67,6 +74,187 @@ def _get_http_session(url):
     if base not in _http_sessions:
         _http_sessions[base] = requests.Session()
     return _http_sessions[base]
+
+
+# ─── Redis Shared Cache ───────────────────────────────────────────
+
+def _redis_get(key):
+    """Get from Redis cache. Returns None on miss or error."""
+    try:
+        data = frappe.cache().get_value(f"{REDIS_KEY_PREFIX}{key}")
+        if data:
+            return json.loads(data) if isinstance(data, str) else data
+    except Exception:
+        pass
+    return None
+
+
+def _redis_set(key, value, ttl=REDIS_CACHE_TTL):
+    """Set in Redis cache."""
+    try:
+        frappe.cache().set_value(
+            f"{REDIS_KEY_PREFIX}{key}",
+            json.dumps(value) if not isinstance(value, str) else value,
+            expires_in_sec=ttl,
+        )
+    except Exception:
+        pass
+
+
+def _redis_get_tools(server_name):
+    """Get tool definitions from Redis. Returns list or None."""
+    return _redis_get(f"tools:{server_name}")
+
+
+def _redis_set_tools(server_name, tools):
+    """Store tool definitions in Redis."""
+    _redis_set(f"tools:{server_name}", tools)
+
+
+def _redis_get_openai_tools():
+    """Get OpenAI-format tools from Redis."""
+    return _redis_get("openai_tools")
+
+
+def _redis_set_openai_tools(tools):
+    """Store OpenAI-format tools in Redis."""
+    _redis_set("openai_tools", tools)
+
+
+def _redis_get_tool_index():
+    """Get tool→server index from Redis."""
+    return _redis_get("tool_index")
+
+
+def _redis_set_tool_index(index):
+    """Store tool→server index in Redis."""
+    _redis_set("tool_index", index)
+
+
+# ─── DB Fallback (last resort — tools stored in DocType) ──────────
+
+def _db_get_tools(server_name):
+    """Get tools from Niv MCP Server child table. Always works, never deadlocks."""
+    try:
+        doc = frappe.get_doc("Niv MCP Server", server_name)
+        raw = doc.get("tools_discovered")
+        if raw:
+            return json.loads(raw)
+        # Fallback: reconstruct from child table
+        tools = []
+        for row in (doc.get("tools") or []):
+            tool = {"name": row.tool_name}
+            if hasattr(row, "description") and row.description:
+                tool["description"] = row.description
+            if hasattr(row, "input_schema") and row.input_schema:
+                try:
+                    tool["inputSchema"] = json.loads(row.input_schema)
+                except Exception:
+                    tool["inputSchema"] = {"type": "object", "properties": {}}
+            else:
+                tool["inputSchema"] = {"type": "object", "properties": {}}
+            tools.append(tool)
+        return tools if tools else None
+    except Exception as e:
+        frappe.logger().warning(f"Niv MCP: DB fallback failed for '{server_name}': {e}")
+        return None
+
+
+# ─── Self-Reference Detection ─────────────────────────────────────
+
+def _is_same_server(url):
+    """Detect if MCP server URL points to the same Frappe instance.
+    This causes deadlocks when gunicorn workers are limited."""
+    if not url:
+        return False
+    try:
+        site = frappe.local.site if hasattr(frappe.local, "site") else None
+        if not site:
+            return False
+        # Check if URL contains the site name or is localhost
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        if host in ("localhost", "127.0.0.1", "0.0.0.0"):
+            return True
+        if site in host or host in site:
+            return True
+        # Check site_config for host_name
+        try:
+            site_host = frappe.get_conf().get("host_name", "")
+            if site_host and site_host.replace("https://", "").replace("http://", "").split("/")[0] == host:
+                return True
+        except Exception:
+            pass
+    except Exception:
+        pass
+    return False
+
+
+def _direct_fac_list_tools():
+    """Try to list tools via direct Python import (no HTTP, no deadlock)."""
+    try:
+        from frappe_assistant_core.api.fac_endpoint import handle_mcp
+        # Simulate MCP tools/list request internally
+        payload = _jsonrpc("tools/list", {}, req_id=1)
+        
+        # Save and set up frappe context for internal call
+        import io
+        old_request_data = getattr(frappe.local, 'request_data', None)
+        
+        frappe.local.request_data = json.dumps(payload).encode("utf-8")
+        
+        # We need to call the handler differently — let's try the internal route
+        response = handle_mcp()
+        
+        frappe.local.request_data = old_request_data
+        
+        if hasattr(response, 'data'):
+            data = json.loads(response.data)
+        elif isinstance(response, dict):
+            data = response
+        else:
+            data = json.loads(str(response))
+        
+        return data.get("result", {}).get("tools", [])
+    except ImportError:
+        return None  # FAC not installed
+    except Exception as e:
+        frappe.logger().warning(f"Niv MCP: Direct FAC call failed: {e}")
+        return None
+
+
+def _direct_fac_call_tool(tool_name, arguments, api_key=None):
+    """Try to call a tool via direct Python import (no HTTP, no deadlock)."""
+    try:
+        from frappe_assistant_core.api.fac_endpoint import handle_mcp
+        
+        payload = _jsonrpc("tools/call", {"name": tool_name, "arguments": arguments}, req_id=1)
+        
+        old_request_data = getattr(frappe.local, 'request_data', None)
+        frappe.local.request_data = json.dumps(payload).encode("utf-8")
+        
+        response = handle_mcp()
+        
+        frappe.local.request_data = old_request_data
+        
+        if hasattr(response, 'data'):
+            data = json.loads(response.data)
+        elif isinstance(response, dict):
+            data = response
+        else:
+            data = json.loads(str(response))
+        
+        if "error" in data:
+            raise MCPError(data["error"].get("message", str(data["error"])))
+        return data.get("result", {})
+    except ImportError:
+        return None
+    except MCPError:
+        raise
+    except Exception as e:
+        frappe.logger().warning(f"Niv MCP: Direct FAC tool call failed: {e}")
+        return None
 
 
 # ─── Stdio Transport ───────────────────────────────────────────────
@@ -110,7 +298,7 @@ def _stdio_initialize(command, args_str, env_vars_str):
         send(_jsonrpc("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
+            "clientInfo": {"name": "niv-ai", "version": "0.4.0"},
         }, req_id=_next_id()))
         recv()
         send(_jsonrpc("notifications/initialized"))
@@ -151,11 +339,11 @@ def _build_headers(api_key=None):
             headers["Authorization"] = f"token {api_key}"
         else:
             headers["Authorization"] = f"Bearer {api_key}"
-    # Frappe multi-site Host header
     try:
         site = frappe.local.site if hasattr(frappe.local, "site") else None
         if site:
             headers["Host"] = site
+            headers["X-Frappe-Site-Name"] = site
     except Exception:
         pass
     return headers
@@ -169,23 +357,18 @@ def _http_post(url, payload, api_key=None, timeout=15):
     return resp.json()
 
 
-# MCP session init cache: url → {"initialized": True, "expires": ts}
-_mcp_init_cache = {}
-_MCP_INIT_TTL = 600  # 10 min — sessions usually persist
-
-
 def _ensure_initialized(url, api_key=None):
     """Initialize MCP session only if not already done (cached)."""
     cache_key = url
     cached = _mcp_init_cache.get(cache_key)
     if cached and cached["expires"] > time.time():
-        return  # Already initialized
+        return
 
     try:
         _http_post(url, _jsonrpc("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
+            "clientInfo": {"name": "niv-ai", "version": "0.4.0"},
         }, req_id=_next_id()), api_key)
         try:
             _http_post(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
@@ -193,7 +376,6 @@ def _ensure_initialized(url, api_key=None):
             pass
         _mcp_init_cache[cache_key] = {"initialized": True, "expires": time.time() + _MCP_INIT_TTL}
     except Exception:
-        # Init failed — remove stale cache, let caller handle
         _mcp_init_cache.pop(cache_key, None)
         raise
 
@@ -244,7 +426,6 @@ def _sse_request(url, payload, api_key=None, timeout=30):
 
 
 def _ensure_sse_initialized(url, api_key=None):
-    """Initialize MCP SSE session (cached like HTTP)."""
     cache_key = f"sse_{url}"
     cached = _mcp_init_cache.get(cache_key)
     if cached and cached["expires"] > time.time():
@@ -254,7 +435,7 @@ def _ensure_sse_initialized(url, api_key=None):
         _sse_request(url, _jsonrpc("initialize", {
             "protocolVersion": "2024-11-05",
             "capabilities": {},
-            "clientInfo": {"name": "niv-ai", "version": "0.2.0"},
+            "clientInfo": {"name": "niv-ai", "version": "0.4.0"},
         }, req_id=_next_id()), api_key)
         try:
             _sse_request(url, _jsonrpc("notifications/initialized"), api_key, timeout=5)
@@ -292,7 +473,6 @@ def _get_api_key(doc):
 
 
 def _get_server_config(server_name):
-    """Get server doc with basic info. Cached per-request via frappe.local."""
     cache_key = f"mcp_server_{server_name}"
     if hasattr(frappe.local, cache_key):
         return getattr(frappe.local, cache_key)
@@ -301,7 +481,7 @@ def _get_server_config(server_name):
     return doc
 
 
-# ─── High-Level API ────────────────────────────────────────────────
+# ─── High-Level API (Bulletproof) ──────────────────────────────────
 
 def get_all_active_servers() -> List[str]:
     """Get names of all active MCP servers."""
@@ -309,34 +489,66 @@ def get_all_active_servers() -> List[str]:
 
 
 def discover_tools(server_name: str, use_cache: bool = True) -> List[Dict]:
-    """Discover tools from an MCP server. Returns list of MCP tool dicts."""
+    """Discover tools from an MCP server.
+    
+    Resolution order:
+    1. Worker memory cache (fastest, per-process)
+    2. Redis shared cache (shared across all workers)
+    3. HTTP/SSE MCP call (real discovery)
+    4. Direct Python import for same-server FAC (deadlock-safe)
+    5. DB fallback — tools_discovered JSON from Niv MCP Server doc
+    
+    NEVER returns empty if tools were ever discovered.
+    """
+    # 1. Worker memory cache
     if use_cache:
         with _cache_lock:
             cached = _tools_cache.get(server_name)
             if cached and cached["expires"] > time.time():
                 return cached["tools"]
 
+    # 2. Redis shared cache
+    redis_tools = _redis_get_tools(server_name)
+    if redis_tools:
+        with _cache_lock:
+            _tools_cache[server_name] = {"tools": redis_tools, "expires": time.time() + CACHE_TTL}
+        return redis_tools
+
     doc = _get_server_config(server_name)
     if not doc.is_active:
         return []
 
     tools = []
-    try:
-        if doc.transport_type == "stdio":
-            tools = stdio_list_tools(doc.command, doc.args, doc.env_vars)
-        elif doc.transport_type == "streamable-http":
-            tools = http_list_tools(doc.server_url, _get_api_key(doc))
-        elif doc.transport_type == "sse":
-            tools = sse_list_tools(doc.server_url, _get_api_key(doc))
-        else:
-            frappe.logger().warning(f"Niv MCP: Unknown transport '{doc.transport_type}' for '{server_name}'")
-            return []
-    except Exception as e:
-        frappe.logger().error(f"Niv MCP: Failed to discover tools from '{server_name}': {e}")
-        return []
+    same_server = _is_same_server(doc.server_url) if doc.transport_type != "stdio" else False
 
-    with _cache_lock:
-        _tools_cache[server_name] = {"tools": tools, "expires": time.time() + CACHE_TTL}
+    # 3. Try direct Python call for same-server (avoids HTTP deadlock)
+    if same_server:
+        tools = _direct_fac_list_tools() or []
+
+    # 4. HTTP/SSE/stdio MCP call (only if not same-server or direct call failed)
+    if not tools:
+        try:
+            if doc.transport_type == "stdio":
+                tools = stdio_list_tools(doc.command, doc.args, doc.env_vars)
+            elif doc.transport_type == "streamable-http":
+                tools = http_list_tools(doc.server_url, _get_api_key(doc))
+            elif doc.transport_type == "sse":
+                tools = sse_list_tools(doc.server_url, _get_api_key(doc))
+            else:
+                frappe.logger().warning(f"Niv MCP: Unknown transport '{doc.transport_type}' for '{server_name}'")
+        except Exception as e:
+            frappe.logger().error(f"Niv MCP: HTTP discovery failed for '{server_name}': {e}")
+
+    # 5. DB fallback — NEVER return empty if we have stored tools
+    if not tools:
+        frappe.logger().warning(f"Niv MCP: All discovery methods failed for '{server_name}', using DB fallback")
+        tools = _db_get_tools(server_name) or []
+
+    # Store in all cache layers if we got tools
+    if tools:
+        with _cache_lock:
+            _tools_cache[server_name] = {"tools": tools, "expires": time.time() + CACHE_TTL}
+        _redis_set_tools(server_name, tools)
 
     return tools
 
@@ -344,6 +556,15 @@ def discover_tools(server_name: str, use_cache: bool = True) -> List[Dict]:
 def _rebuild_tool_index():
     """Rebuild the tool_name → server_name index from all active servers."""
     global _tool_index, _tool_index_expires
+    
+    # Try Redis first
+    redis_index = _redis_get_tool_index()
+    if redis_index:
+        with _cache_lock:
+            _tool_index = redis_index
+            _tool_index_expires = time.time() + CACHE_TTL
+        return
+
     new_index = {}
     for server_name in get_all_active_servers():
         try:
@@ -358,6 +579,9 @@ def _rebuild_tool_index():
     with _cache_lock:
         _tool_index = new_index
         _tool_index_expires = time.time() + CACHE_TTL
+    
+    if new_index:
+        _redis_set_tool_index(new_index)
 
 
 def find_tool_server(tool_name: str) -> Optional[str]:
@@ -368,7 +592,6 @@ def find_tool_server(tool_name: str) -> Optional[str]:
         if _tool_index_expires > time.time() and tool_name in _tool_index:
             return _tool_index[tool_name]
 
-    # Cache miss or expired — rebuild
     _rebuild_tool_index()
 
     with _cache_lock:
@@ -376,17 +599,20 @@ def find_tool_server(tool_name: str) -> Optional[str]:
 
 
 def call_tool_fast(server_name: str, tool_name: str, arguments: Dict[str, Any], user_api_key: str = None) -> Any:
-    """Execute a tool on an MCP server. Uses session reuse.
+    """Execute a tool on an MCP server.
     
-    Args:
-        user_api_key: If provided, overrides the server's admin key.
-            This enables per-user permission isolation — tool results
-            respect the user's ERPNext roles/permissions.
+    For same-server FAC: tries direct Python import first (no HTTP deadlock).
+    Falls back to HTTP if direct call fails.
     """
     doc = _get_server_config(server_name)
-
-    # Per-user key override for HTTP-based transports (stdio doesn't use API keys)
     api_key = user_api_key or _get_api_key(doc)
+
+    # Same-server optimization: direct Python call (no HTTP, no deadlock)
+    if doc.transport_type != "stdio" and _is_same_server(doc.server_url):
+        result = _direct_fac_call_tool(tool_name, arguments, api_key)
+        if result is not None:
+            return result
+        # Direct call failed, fall through to HTTP
 
     if doc.transport_type == "stdio":
         return stdio_call_tool(doc.command, doc.args, doc.env_vars, tool_name, arguments)
@@ -399,16 +625,26 @@ def call_tool_fast(server_name: str, tool_name: str, arguments: Dict[str, Any], 
 
 
 def get_all_mcp_tools_cached() -> List[Dict]:
-    """
-    Get all MCP tools in OpenAI function calling format.
-    Cached for performance — no repeated HTTP calls.
+    """Get all MCP tools in OpenAI function calling format.
+    
+    Bulletproof: checks worker cache → Redis → MCP discovery → DB fallback.
+    NEVER returns empty if tools were ever discovered.
     """
     global _openai_tools_cache
 
+    # 1. Worker memory cache
     with _cache_lock:
         if _openai_tools_cache["expires"] > time.time() and _openai_tools_cache["tools"]:
             return _openai_tools_cache["tools"]
 
+    # 2. Redis shared cache
+    redis_tools = _redis_get_openai_tools()
+    if redis_tools:
+        with _cache_lock:
+            _openai_tools_cache = {"tools": redis_tools, "expires": time.time() + CACHE_TTL}
+        return redis_tools
+
+    # 3. Build from MCP discovery (with all fallbacks)
     result = []
     seen_names = set()
 
@@ -433,12 +669,14 @@ def get_all_mcp_tools_cached() -> List[Dict]:
         except Exception as e:
             frappe.logger().error(f"Niv MCP: Error getting tools from '{server_name}': {e}")
 
-    # Also rebuild tool index while we're at it
-    global _tool_index, _tool_index_expires
-    with _cache_lock:
-        _openai_tools_cache = {"tools": result, "expires": time.time() + CACHE_TTL}
-
-    _rebuild_tool_index()
+    # Store in all cache layers
+    if result:
+        with _cache_lock:
+            _openai_tools_cache = {"tools": result, "expires": time.time() + CACHE_TTL}
+        _redis_set_openai_tools(result)
+        _rebuild_tool_index()
+    else:
+        frappe.logger().error("Niv MCP: WARNING — 0 tools loaded! All discovery + fallbacks failed.")
 
     return result
 
@@ -480,7 +718,7 @@ def call_tool(server_name, tool_name, arguments):
 
 
 def clear_cache(server_name: str = None):
-    """Clear all caches."""
+    """Clear all caches (worker + Redis)."""
     global _tool_index_expires, _openai_tools_cache
     with _cache_lock:
         if server_name:
@@ -491,3 +729,15 @@ def clear_cache(server_name: str = None):
         _tool_index_expires = 0
         _openai_tools_cache = {"tools": [], "expires": 0}
         _mcp_init_cache.clear()
+    
+    # Clear Redis too
+    try:
+        if server_name:
+            frappe.cache().delete_value(f"{REDIS_KEY_PREFIX}tools:{server_name}")
+        else:
+            for key in ("openai_tools", "tool_index"):
+                frappe.cache().delete_value(f"{REDIS_KEY_PREFIX}{key}")
+            for sn in get_all_active_servers():
+                frappe.cache().delete_value(f"{REDIS_KEY_PREFIX}tools:{sn}")
+    except Exception:
+        pass
