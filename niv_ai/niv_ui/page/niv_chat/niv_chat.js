@@ -198,15 +198,26 @@ class NivChat {
             this.wrapper.find(".btn-close-sidebar").show();
         }
 
-        // Auto-resize textarea + track text state
+        // Auto-resize textarea + track text state + save draft
         this.$input.on("input", () => {
             this.auto_resize_input();
-            if (this.$input.val().trim()) {
+            const val = this.$input.val().trim();
+            if (val) {
                 this.$inputPill.addClass("has-text");
+                localStorage.setItem("niv_draft", this.$input.val());
             } else {
                 this.$inputPill.removeClass("has-text");
+                localStorage.removeItem("niv_draft");
             }
         });
+
+        // Restore draft message on page load
+        const draft = localStorage.getItem("niv_draft");
+        if (draft) {
+            this.$input.val(draft);
+            this.$inputPill.addClass("has-text");
+            this.auto_resize_input();
+        }
 
         // Enter to send
         this.$input.on("keydown", (e) => {
@@ -624,19 +635,26 @@ class NivChat {
     }
 
     async new_conversation() {
-        try {
-            const r = await frappe.call({
-                method: "niv_ai.niv_core.api.conversation.create_conversation",
-                args: { title: "New Chat" },
-            });
-            const conv = r.message;
-            this.conversations.unshift(conv);
-            this.render_conversation_list();
-            this.select_conversation(conv.name);
-            this.$input.focus();
-        } catch (e) {
-            frappe.msgprint(__("Failed to create conversation"));
-        }
+        // Don't create a conversation until user sends a message
+        // This prevents empty "New Chat" entries in sidebar
+        this.current_conversation = null;
+        this.$convList.find(".niv-conv-item").removeClass("active");
+        this.messages_data = [];
+        this.show_empty_state();
+        this.$input.val("").focus();
+    }
+
+    async _create_conversation_on_server(title) {
+        // Actually create the conversation — called only when first message is sent
+        const r = await frappe.call({
+            method: "niv_ai.niv_core.api.conversation.create_conversation",
+            args: { title: title || "New Chat" },
+        });
+        const conv = r.message;
+        this.conversations.unshift(conv);
+        this.render_conversation_list();
+        this.$convList.find(`[data-name="${conv.name}"]`).addClass("active");
+        return conv;
     }
 
     async delete_conversation() {
@@ -722,7 +740,7 @@ class NivChat {
             this.scroll_to_bottom();
             this.update_last_assistant_actions();
         } catch (e) {
-            this.$chatArea.html('<div class="niv-error">Failed to load messages</div>');
+            this.$chatArea.html('<div class="niv-error">Messages load nahi ho paye. Please try again. 🔄</div>');
         }
     }
 
@@ -1016,11 +1034,20 @@ class NivChat {
         }
 
         if (!this.current_conversation) {
-            await this.new_conversation();
+            // Create conversation on server (lazy — only when user actually sends a message)
+            try {
+                const conv = await this._create_conversation_on_server("New Chat");
+                this.current_conversation = conv.name;
+                this.hide_empty_state();
+            } catch (e) {
+                frappe.msgprint(__("Failed to create conversation"));
+                return;
+            }
         }
 
         this.$input.val("").css("height", "auto");
         this.$inputPill.removeClass("has-text");
+        localStorage.removeItem("niv_draft");
 
         this.append_message("user", text);
         this.scroll_to_bottom();
@@ -1061,7 +1088,7 @@ class NivChat {
                 });
             } catch (err) {
                 this.hide_typing();
-                this.append_message("assistant", `❌ Error: ${err.message || "Something went wrong"}`, { is_error: 1 });
+                this.append_message("assistant", `❌ Kuch galat ho gaya. Please try again.\n\n_${err.message || ""}_`, { is_error: 1 });
             }
         }
 
@@ -1221,10 +1248,16 @@ class NivChat {
                         evtSource.close();
                         this.event_source = null;
                         this.hide_typing();
-                        const errMsg = data.message || "Something went wrong";
+                        const errMsg = data.message || data.content || "Something went wrong";
                         if (errMsg.toLowerCase().includes("insufficient") || errMsg.toLowerCase().includes("balance")) {
-                            this.append_message("assistant", `💳 ${errMsg}\n\nPlease recharge your credits to continue.`, { is_error: 1 });
+                            this.append_message("assistant", `💳 Credits khatam ho gaye!\n\n${errMsg}\n\nPlease recharge karein.`, { is_error: 1 });
                             this.load_balance();
+                        } else if (errMsg.toLowerCase().includes("rate limit")) {
+                            this.append_message("assistant", `⏳ Bahut zyada messages! Thodi der mein try karein.\n\n_${errMsg}_`, { is_error: 1 });
+                        } else if (errMsg.toLowerCase().includes("timeout") || errMsg.toLowerCase().includes("timed out")) {
+                            this.append_message("assistant", `⏱️ Request timeout ho gayi. Please dubara try karein.`, { is_error: 1 });
+                        } else if (errMsg.toLowerCase().includes("api key") || errMsg.toLowerCase().includes("auth")) {
+                            this.append_message("assistant", `🔑 AI provider authentication failed. Admin se contact karein.`, { is_error: 1 });
                         } else {
                             this.append_message("assistant", `❌ ${errMsg}`, { is_error: 1 });
                         }
@@ -1233,12 +1266,20 @@ class NivChat {
                 } catch (e) { /* ignore parse errors */ }
             };
 
+            let retryCount = 0;
             evtSource.onerror = () => {
                 evtSource.close();
                 this.event_source = null;
-                if (!$msgEl) {
-                    reject(new Error("SSE failed"));
+                if (!$msgEl && retryCount < 1) {
+                    // First failure before any response — retry once via non-stream fallback
+                    retryCount++;
+                    reject(new Error("SSE failed — retrying via fallback"));
+                } else if (!$msgEl) {
+                    this.hide_typing();
+                    this.append_message("assistant", `🔄 Connection lost. Please try again.\n\n_Network ya server issue ho sakta hai._`, { is_error: 1 });
+                    resolve();
                 } else {
+                    // Partial response received — keep what we have
                     resolve();
                 }
             };
@@ -2133,7 +2174,10 @@ class NivChat {
                 this.$voiceTranscript.text(transcript);
 
                 // Send to regular chat API
-                if (!this.current_conversation) await this.new_conversation();
+                if (!this.current_conversation) {
+                    const conv = await this._create_conversation_on_server("Voice Chat");
+                    this.current_conversation = conv.name;
+                }
                 const chatResp = await frappe.call({
                     method: "niv_ai.niv_core.api.chat.send_message",
                     args: {
