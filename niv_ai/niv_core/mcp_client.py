@@ -414,7 +414,7 @@ def stdio_call_tool(command, args_str, env_vars_str, tool_name, arguments) -> An
 
 # ─── HTTP Transport (streamable-http) ──────────────────────────────
 
-def _build_headers(api_key=None):
+def _build_headers(api_key=None, server_name=None):
     headers = {"Content-Type": "application/json"}
     if api_key:
         if ":" in api_key:
@@ -428,18 +428,27 @@ def _build_headers(api_key=None):
             headers["X-Frappe-Site-Name"] = site
     except Exception:
         pass
+    # Add MCP session ID if available
+    if server_name:
+        session_id = _redis_get(f"session:{server_name}")
+        if session_id:
+            headers["Mcp-Session-Id"] = session_id
     return headers
 
 
 def _http_post(url, payload, api_key=None, timeout=15, server_name=None):
     """HTTP POST with retry + circuit breaker integration."""
     session = _get_http_session(url)
-    headers = _build_headers(api_key)
+    headers = _build_headers(api_key, server_name=server_name)
     last_exc = None
     for attempt in range(_RETRY_MAX + 1):
         try:
             resp = session.post(url, json=payload, headers=headers, timeout=timeout)
             resp.raise_for_status()
+            # Capture MCP session ID from response
+            sid = resp.headers.get("mcp-session-id") or resp.headers.get("Mcp-Session-Id")
+            if sid and server_name:
+                _redis_set(f"session:{server_name}", sid, ttl=3600)
             result = resp.json()
             if server_name:
                 _circuit_record_success(server_name)
@@ -502,10 +511,14 @@ def _sse_request(url, payload, api_key=None, timeout=30, server_name=None):
     last_exc = None
     for attempt in range(_RETRY_MAX + 1):
         try:
-            headers = _build_headers(api_key)
+            headers = _build_headers(api_key, server_name=server_name)
             headers["Accept"] = "text/event-stream"
             resp = requests.post(url, json=payload, headers=headers, timeout=timeout, stream=True)
             resp.raise_for_status()
+            # Capture MCP session ID from response
+            sid = resp.headers.get("mcp-session-id") or resp.headers.get("Mcp-Session-Id")
+            if sid and server_name:
+                _redis_set(f"session:{server_name}", sid, ttl=3600)
 
             content_type = resp.headers.get("content-type", "")
             if "application/json" in content_type:

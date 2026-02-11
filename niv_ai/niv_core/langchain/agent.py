@@ -201,6 +201,7 @@ def stream_agent(
     messages = _build_messages(message, conversation_id, system_prompt)
 
     _setup_user_api_key(user)
+    pending_tool_calls = {}
     try:
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
             # LangGraph yields (message, metadata) tuples
@@ -219,6 +220,12 @@ def stream_agent(
                 tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
                 
                 if tool_calls:
+                    # Complete tool calls (non-streaming) — flush any pending first
+                    for idx in list(pending_tool_calls.keys()):
+                        tc_data = pending_tool_calls[idx]
+                        if tc_data["name"]:
+                            yield {"type": "tool_call", "tool": tc_data["name"], "arguments": tc_data["args"]}
+                    pending_tool_calls.clear()
                     for tc in tool_calls:
                         yield {
                             "type": "tool_call",
@@ -226,20 +233,33 @@ def stream_agent(
                             "arguments": tc.get("args", {}),
                         }
                 elif tool_call_chunks:
+                    # Accumulate chunks by index — first chunk has name, subsequent have args
                     for tc in tool_call_chunks:
-                        name = tc.get("name", "")
-                        if name:  # Only yield when we have the tool name (first chunk)
-                            yield {
-                                "type": "tool_call",
-                                "tool": name,
-                                "arguments": tc.get("args", ""),
-                            }
+                        idx = tc.get("index", 0)
+                        if idx not in pending_tool_calls:
+                            pending_tool_calls[idx] = {"name": "", "args": ""}
+                        if tc.get("name"):
+                            pending_tool_calls[idx]["name"] = tc["name"]
+                        if tc.get("args"):
+                            pending_tool_calls[idx]["args"] += tc["args"]
                 # Text content
                 elif msg.content:
+                    # Flush any pending tool calls before yielding text
+                    for idx in list(pending_tool_calls.keys()):
+                        tc_data = pending_tool_calls[idx]
+                        if tc_data["name"]:
+                            yield {"type": "tool_call", "tool": tc_data["name"], "arguments": tc_data["args"]}
+                    pending_tool_calls.clear()
                     yield {"type": "token", "content": msg.content}
 
             # Tool results
             elif msg.type == "tool":
+                # Flush pending tool calls before yielding results
+                for idx in list(pending_tool_calls.keys()):
+                    tc_data = pending_tool_calls[idx]
+                    if tc_data["name"]:
+                        yield {"type": "tool_call", "tool": tc_data["name"], "arguments": tc_data["args"]}
+                pending_tool_calls.clear()
                 yield {
                     "type": "tool_result",
                     "tool": getattr(msg, "name", "unknown"),

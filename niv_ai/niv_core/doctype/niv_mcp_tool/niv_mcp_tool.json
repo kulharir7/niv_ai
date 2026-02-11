@@ -3,10 +3,11 @@
   "creation": "2026-02-10 00:00:00",
   "doctype": "DocType",
   "engine": "InnoDB",
-  "field_order": ["tool_name", "description", "enabled"],
+  "field_order": ["tool_name", "description", "input_schema", "enabled"],
   "fields": [
     {"fieldname": "tool_name", "fieldtype": "Data", "label": "Tool Name", "in_list_view": 1, "columns": 3, "read_only": 1},
     {"fieldname": "description", "fieldtype": "Small Text", "label": "Description", "in_list_view": 1, "columns": 6, "read_only": 1},
+    {"fieldname": "input_schema", "fieldtype": "Long Text", "label": "Input Schema", "read_only": 1, "hidden": 1},
     {"fieldname": "enabled", "fieldtype": "Check", "label": "Enabled", "default": "1", "in_list_view": 1, "columns": 1}
   ],
   "index_web_pages_for_search": 0,

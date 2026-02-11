@@ -30,9 +30,25 @@ def _check_rate_limit(user):
             frappe.throw(_(custom_msg))
 
 
-@frappe.whitelist()
-def stream_chat(conversation_id, message, model=None, provider=None):
+@frappe.whitelist(methods=["GET", "POST"])
+def stream_chat(**kwargs):
     """Stream chat via LangChain agent (SSE)."""
+    # Support both GET (legacy EventSource) and POST (new fetch)
+    if frappe.request.method == "POST":
+        try:
+            data = frappe.request.get_json(silent=True) or {}
+        except Exception:
+            data = {}
+        conversation_id = data.get("conversation_id") or frappe.form_dict.get("conversation_id")
+        message = data.get("message") or frappe.form_dict.get("message")
+        model = data.get("model") or frappe.form_dict.get("model")
+        provider = data.get("provider") or frappe.form_dict.get("provider")
+    else:
+        conversation_id = kwargs.get("conversation_id") or frappe.form_dict.get("conversation_id")
+        message = kwargs.get("message") or frappe.form_dict.get("message")
+        model = kwargs.get("model") or frappe.form_dict.get("model")
+        provider = kwargs.get("provider") or frappe.form_dict.get("provider")
+
     user = frappe.session.user
     message = (message or "").strip()
 

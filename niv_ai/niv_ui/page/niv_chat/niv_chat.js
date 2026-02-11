@@ -1143,7 +1143,7 @@ class NivChat {
     }
 
     async send_with_stream(text, attachments) {
-        return new Promise((resolve, reject) => {
+        return new Promise(async (resolve, reject) => {
             const params = {
                 conversation_id: this.current_conversation,
                 message: text,
@@ -1152,144 +1152,175 @@ class NivChat {
             };
             if (this.selected_model) params.model = this.selected_model;
 
-            const url = "/api/method/niv_ai.niv_core.api.stream.stream_chat?" +
-                new URLSearchParams(params).toString();
-
-            const evtSource = new EventSource(url, { withCredentials: true });
-            this.event_source = evtSource;
+            const abortController = new AbortController();
+            this._abortController = abortController;
             let $msgEl = null;
             let fullContent = "";
             let toolCallsAccum = [];
             let toolResultsAccum = [];
+            let streamDone = false;
 
-            evtSource.onmessage = (event) => {
-                try {
-                    const data = JSON.parse(event.data);
-
-                    if (data.type === "token" || data.type === "chunk") {
-                        if (!$msgEl) {
-                            this.hide_typing();
-                            $msgEl = this.append_message("assistant", "", {
-                                model: this.selected_model || data.model || ""
-                            });
-                        }
-                        fullContent += data.content;
-                        $msgEl.find(".msg-content").html(this.render_markdown(fullContent));
-                        const idx = this.messages_data.length - 1;
-                        if (this.messages_data[idx]) this.messages_data[idx].content = fullContent;
-                        this.add_code_copy_buttons($msgEl);
-                        if (window.hljs) {
-                            $msgEl.find("pre code:not(.hljs)").each(function () { hljs.highlightElement(this); });
-                        }
-                        this.scroll_to_bottom_if_near();
-                    } else if (data.type === "tool_call") {
-                        if (!$msgEl) {
-                            this.hide_typing();
-                            $msgEl = this.append_message("assistant", "");
-                        }
-                        this.update_typing_text("Niv is calling tools...");
-                        toolCallsAccum.push({ name: data.tool, arguments: data.params });
-                        const $toolHtml = $(`
-                            <div class="tool-call-accordion running">
-                                <div class="tool-call-header">
-                                    <i class="fa fa-spinner fa-spin tool-status-icon"></i>
-                                    <span class="tool-name">${frappe.utils.escape_html(data.tool)}</span>
-                                    <span class="tool-running-text">Running...</span>
-                                </div>
-                            </div>
-                        `);
-                        if (!$msgEl.find(".msg-tool-calls").length) {
-                            $msgEl.find(".msg-body").find(".msg-content").before('<div class="msg-tool-calls"></div>');
-                        }
-                        $msgEl.find(".msg-tool-calls").append($toolHtml);
-                        this.scroll_to_bottom_if_near();
-                    } else if (data.type === "tool_result") {
-                        toolResultsAccum.push({ name: data.tool, result: data.result });
-                        const $running = $msgEl.find(".tool-call-accordion.running").first();
-                        $running.removeClass("running");
-                        $running.find(".tool-status-icon").removeClass("fa-spinner fa-spin").addClass("fa-check-circle");
-                        $running.find(".tool-running-text").remove();
-                        const resultStr = JSON.stringify(data.result || {}, null, 2).substring(0, 2000);
-                        $running.find(".tool-call-header").attr("onclick", "$(this).closest('.tool-call-accordion').toggleClass('open')");
-                        $running.append(`
-                            <div class="tool-call-body">
-                                <div class="tool-section"><strong>Result:</strong><pre><code>${frappe.utils.escape_html(resultStr)}</code></pre></div>
-                            </div>
-                        `);
-                        $running.find(".tool-call-header").append('<i class="fa fa-chevron-right tool-chevron"></i>');
-                    } else if (data.type === "suggestions") {
-                        // AI follow-up suggestions
-                        if ($msgEl && data.items && data.items.length > 0) {
-                            this.render_suggestions(data.items, $msgEl);
-                        }
-                        evtSource.close();
-                        this.event_source = null;
-                    } else if (data.type === "done") {
-                        // Don't close yet — wait for possible suggestions event
-                        if ($msgEl) {
-                            const tokens = data.tokens?.total_tokens || 0;
-                            if (tokens) {
-                                $msgEl.find(".msg-footer").prepend(`<span class="msg-tokens">${tokens} tokens</span>`);
-                            }
-                        }
-                        // Update balance from stream response
-                        if (data.remaining_balance !== undefined) {
-                            this.update_balance_from_response(data.remaining_balance);
-                        }
-                        resolve();
-                        // Auto-close after timeout if no suggestions arrive
-                        setTimeout(() => {
-                            if (this.event_source === evtSource) {
-                                evtSource.close();
-                                this.event_source = null;
-                            }
-                        }, 20000);
-                    } else if (data.type === "error") {
-                        evtSource.close();
-                        this.event_source = null;
-                        this.hide_typing();
-                        const errMsg = data.message || data.content || "Something went wrong";
-                        if (errMsg.toLowerCase().includes("insufficient") || errMsg.toLowerCase().includes("balance")) {
-                            this.append_message("assistant", `💳 Credits khatam ho gaye!\n\n${errMsg}\n\nPlease recharge karein.`, { is_error: 1 });
-                            this.load_balance();
-                        } else if (errMsg.toLowerCase().includes("rate limit")) {
-                            this.append_message("assistant", `⏳ Bahut zyada messages! Thodi der mein try karein.\n\n_${errMsg}_`, { is_error: 1 });
-                        } else if (errMsg.toLowerCase().includes("timeout") || errMsg.toLowerCase().includes("timed out")) {
-                            this.append_message("assistant", `⏱️ Request timeout ho gayi. Please dubara try karein.`, { is_error: 1 });
-                        } else if (errMsg.toLowerCase().includes("api key") || errMsg.toLowerCase().includes("auth")) {
-                            this.append_message("assistant", `🔑 AI provider authentication failed. Admin se contact karein.`, { is_error: 1 });
-                        } else {
-                            this.append_message("assistant", `❌ ${errMsg}`, { is_error: 1 });
-                        }
-                        resolve();
+            try {
+                const response = await fetch(
+                    "/api/method/niv_ai.niv_core.api.stream.stream_chat",
+                    {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json",
+                            "X-Frappe-CSRF-Token": frappe.csrf_token,
+                            "Accept": "text/event-stream",
+                        },
+                        body: JSON.stringify(params),
+                        credentials: "include",
+                        signal: abortController.signal,
                     }
-                } catch (e) { /* ignore parse errors */ }
-            };
+                );
 
-            let retryCount = 0;
-            evtSource.onerror = () => {
-                evtSource.close();
-                this.event_source = null;
-                if (!$msgEl && retryCount < 1) {
-                    // First failure before any response — retry once via non-stream fallback
-                    retryCount++;
-                    reject(new Error("SSE failed — retrying via fallback"));
-                } else if (!$msgEl) {
-                    this.hide_typing();
-                    this.append_message("assistant", `🔄 Connection lost. Please try again.\n\n_Network ya server issue ho sakta hai._`, { is_error: 1 });
-                    resolve();
-                } else {
-                    // Partial response received — keep what we have
+                if (!response.ok) {
+                    throw new Error("HTTP " + response.status);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = "";
+
+                while (true) {
+                    var readResult = await reader.read();
+                    if (readResult.done) break;
+
+                    buffer += decoder.decode(readResult.value, { stream: true });
+                    var lines = buffer.split("\n");
+                    buffer = lines.pop(); // keep incomplete line in buffer
+
+                    for (var li = 0; li < lines.length; li++) {
+                        var line = lines[li].trim();
+                        if (!line || !line.startsWith("data: ")) continue;
+                        var jsonStr = line.substring(6).trim();
+                        if (!jsonStr) continue;
+
+                        try {
+                            var data = JSON.parse(jsonStr);
+                        } catch (e) { continue; }
+
+                        if (data.type === "token" || data.type === "chunk") {
+                            if (!$msgEl) {
+                                this.hide_typing();
+                                $msgEl = this.append_message("assistant", "", {
+                                    model: this.selected_model || data.model || ""
+                                });
+                            }
+                            fullContent += data.content;
+                            $msgEl.find(".msg-content").html(this.render_markdown(fullContent));
+                            var idx = this.messages_data.length - 1;
+                            if (this.messages_data[idx]) this.messages_data[idx].content = fullContent;
+                            this.add_code_copy_buttons($msgEl);
+                            if (window.hljs) {
+                                $msgEl.find("pre code:not(.hljs)").each(function () { hljs.highlightElement(this); });
+                            }
+                            this.scroll_to_bottom_if_near();
+                        } else if (data.type === "tool_call") {
+                            if (!$msgEl) {
+                                this.hide_typing();
+                                $msgEl = this.append_message("assistant", "");
+                            }
+                            this.update_typing_text("Niv is calling tools...");
+                            toolCallsAccum.push({ name: data.tool, arguments: data.params });
+                            var $toolHtml = $(`
+                                <div class="tool-call-accordion running">
+                                    <div class="tool-call-header">
+                                        <i class="fa fa-spinner fa-spin tool-status-icon"></i>
+                                        <span class="tool-name">${frappe.utils.escape_html(data.tool)}</span>
+                                        <span class="tool-running-text">Running...</span>
+                                    </div>
+                                </div>
+                            `);
+                            if (!$msgEl.find(".msg-tool-calls").length) {
+                                $msgEl.find(".msg-body").find(".msg-content").before('<div class="msg-tool-calls"></div>');
+                            }
+                            $msgEl.find(".msg-tool-calls").append($toolHtml);
+                            this.scroll_to_bottom_if_near();
+                        } else if (data.type === "tool_result") {
+                            toolResultsAccum.push({ name: data.tool, result: data.result });
+                            var $running = $msgEl.find(".tool-call-accordion.running").first();
+                            $running.removeClass("running");
+                            $running.find(".tool-status-icon").removeClass("fa-spinner fa-spin").addClass("fa-check-circle");
+                            $running.find(".tool-running-text").remove();
+                            var resultStr = JSON.stringify(data.result || {}, null, 2).substring(0, 2000);
+                            $running.find(".tool-call-header").attr("onclick", "$(this).closest('.tool-call-accordion').toggleClass('open')");
+                            $running.append(`
+                                <div class="tool-call-body">
+                                    <div class="tool-section"><strong>Result:</strong><pre><code>${frappe.utils.escape_html(resultStr)}</code></pre></div>
+                                </div>
+                            `);
+                            $running.find(".tool-call-header").append('<i class="fa fa-chevron-right tool-chevron"></i>');
+                        } else if (data.type === "suggestions") {
+                            if ($msgEl && data.items && data.items.length > 0) {
+                                this.render_suggestions(data.items, $msgEl);
+                            }
+                            this._abortController = null;
+                        } else if (data.type === "done") {
+                            streamDone = true;
+                            if ($msgEl) {
+                                var tokens = (data.tokens && data.tokens.total_tokens) ? data.tokens.total_tokens : 0;
+                                if (tokens) {
+                                    $msgEl.find(".msg-footer").prepend(`<span class="msg-tokens">${tokens} tokens</span>`);
+                                }
+                            }
+                            if (data.remaining_balance !== undefined) {
+                                this.update_balance_from_response(data.remaining_balance);
+                            }
+                            resolve();
+                        } else if (data.type === "error") {
+                            this._abortController = null;
+                            this.hide_typing();
+                            var errMsg = data.message || data.content || "Something went wrong";
+                            if (errMsg.toLowerCase().indexOf("insufficient") !== -1 || errMsg.toLowerCase().indexOf("balance") !== -1) {
+                                this.append_message("assistant", `💳 Credits khatam ho gaye!\n\n${errMsg}\n\nPlease recharge karein.`, { is_error: 1 });
+                                this.load_balance();
+                            } else if (errMsg.toLowerCase().indexOf("rate limit") !== -1) {
+                                this.append_message("assistant", `⏳ Bahut zyada messages! Thodi der mein try karein.\n\n_${errMsg}_`, { is_error: 1 });
+                            } else if (errMsg.toLowerCase().indexOf("timeout") !== -1 || errMsg.toLowerCase().indexOf("timed out") !== -1) {
+                                this.append_message("assistant", `⏱️ Request timeout ho gayi. Please dubara try karein.`, { is_error: 1 });
+                            } else if (errMsg.toLowerCase().indexOf("api key") !== -1 || errMsg.toLowerCase().indexOf("auth") !== -1) {
+                                this.append_message("assistant", `🔑 AI provider authentication failed. Admin se contact karein.`, { is_error: 1 });
+                            } else {
+                                this.append_message("assistant", `❌ ${errMsg}`, { is_error: 1 });
+                            }
+                            resolve();
+                        }
+                    }
+                }
+
+                // Stream ended naturally
+                this._abortController = null;
+                if (!streamDone) {
+                    if (!$msgEl) {
+                        this.hide_typing();
+                        this.append_message("assistant", `🔄 Connection lost. Please try again.\n\n_Network ya server issue ho sakta hai._`, { is_error: 1 });
+                    }
                     resolve();
                 }
-            };
+
+            } catch (err) {
+                this._abortController = null;
+                if (err.name === "AbortError") {
+                    // User stopped generation
+                    resolve();
+                    return;
+                }
+                if (!$msgEl) {
+                    reject(new Error("SSE failed — retrying via fallback"));
+                } else {
+                    resolve();
+                }
+            }
         });
     }
 
     stop_generation() {
-        if (this.event_source) {
-            this.event_source.close();
-            this.event_source = null;
+        if (this._abortController) {
+            this._abortController.abort();
+            this._abortController = null;
         }
         this.hide_typing();
         this.is_streaming = false;
