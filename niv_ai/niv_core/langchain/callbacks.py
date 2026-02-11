@@ -10,6 +10,18 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 
+def _estimate_token_count(text):
+    """BUG-011: Try tiktoken for accurate count, fallback to ~4 chars/token."""
+    if not text:
+        return 1
+    try:
+        import tiktoken
+        enc = tiktoken.get_encoding("cl100k_base")
+        return len(enc.encode(text))
+    except Exception:
+        return max(1, len(text) // 4)
+
+
 class NivStreamingCallback(BaseCallbackHandler):
     """Collects streaming tokens and tool events for SSE delivery."""
 
@@ -24,12 +36,13 @@ class NivStreamingCallback(BaseCallbackHandler):
         self.events.append({"type": "token", "content": token})
 
     def on_tool_start(self, serialized: Dict, input_str: str, **kwargs) -> None:
+        # BUG-008: truncate to avoid logging sensitive data
         tool_name = serialized.get("name", "unknown")
         self._current_tool = tool_name
         self.events.append({
             "type": "tool_call",
             "tool": tool_name,
-            "arguments": input_str[:2000],
+            "arguments": input_str[:500] if input_str else "",
         })
 
     def on_tool_end(self, output, **kwargs) -> None:
@@ -102,9 +115,14 @@ class NivBillingCallback(BaseCallbackHandler):
         if self.total_prompt_tokens == 0 and self.total_completion_tokens == 0 and stream_cb:
             response_text = stream_cb.get_full_response()
             if response_text:
-                # Rough estimate: ~4 chars per token
-                self.total_completion_tokens = max(1, len(response_text) // 4)
+                # BUG-011: try tiktoken for better estimate, fallback to rough
+                estimated = _estimate_token_count(response_text)
+                self.total_completion_tokens = max(1, estimated)
                 self.total_prompt_tokens = self.total_completion_tokens  # rough prompt estimate
+            else:
+                # BUG-016: empty string case — still bill minimum 1 token
+                self.total_completion_tokens = 1
+                self.total_prompt_tokens = 1
 
         total = self.total_prompt_tokens + self.total_completion_tokens
         if total <= 0:
@@ -143,9 +161,10 @@ class NivLoggingCallback(BaseCallbackHandler):
         self._pending_logs: list = []
 
     def on_tool_start(self, serialized: Dict, input_str: str, *, run_id: UUID, **kwargs) -> None:
+        # BUG-008: truncate sensitive input to avoid logging user queries to stdout
         self._tool_runs[str(run_id)] = {
             "name": serialized.get("name", "unknown"),
-            "input": input_str[:5000],
+            "input": input_str[:500] if input_str else "",
             "start": time.time(),
         }
 

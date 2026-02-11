@@ -27,7 +27,8 @@ def get_user_api_key(user: str = None) -> str:
         return None
 
     try:
-        user_doc = frappe.get_doc("User", user)
+        # BUG-018: use for_update to prevent race condition in concurrent requests
+        user_doc = frappe.get_doc("User", user, for_update=True)
         
         # Auto-generate API key if missing
         if not user_doc.api_key:
@@ -37,7 +38,19 @@ def get_user_api_key(user: str = None) -> str:
             user_doc.api_secret = api_secret
             user_doc.save(ignore_permissions=True)
             frappe.db.commit()
+            # BUG-017: audit trail for auto-generated API keys
             frappe.logger().info(f"Niv AI: Auto-generated API key for user {user}")
+            try:
+                frappe.get_doc({
+                    "doctype": "Comment",
+                    "comment_type": "Info",
+                    "reference_doctype": "User",
+                    "reference_name": user,
+                    "content": "Niv AI: Auto-generated API key for MCP permission isolation.",
+                }).insert(ignore_permissions=True)
+                frappe.db.commit()
+            except Exception:
+                pass
         
         # Get decrypted secret
         api_secret = frappe.utils.password.get_decrypted_password(

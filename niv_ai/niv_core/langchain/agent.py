@@ -2,6 +2,7 @@
 Niv AI Agent — LangGraph ReAct agent with MCP tools.
 Main entry point for all LangChain-powered chat.
 """
+import json
 import frappe
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -9,6 +10,18 @@ from .llm import get_llm
 from .tools import get_langchain_tools
 from .memory import get_chat_history, get_system_prompt
 from .callbacks import NivStreamingCallback, NivBillingCallback, NivLoggingCallback
+
+
+def _parse_tc_args(args_str):
+    """BUG-004: Parse accumulated tool_call_chunks args string into dict."""
+    if isinstance(args_str, dict):
+        return args_str
+    if not args_str:
+        return {}
+    try:
+        return json.loads(args_str)
+    except (json.JSONDecodeError, TypeError):
+        return {}
 
 
 def _build_messages(message: str, conversation_id: str = None, system_prompt: str = ""):
@@ -224,7 +237,7 @@ def stream_agent(
                     for idx in list(pending_tool_calls.keys()):
                         tc_data = pending_tool_calls[idx]
                         if tc_data["name"]:
-                            yield {"type": "tool_call", "tool": tc_data["name"], "arguments": tc_data["args"]}
+                            yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
                     pending_tool_calls.clear()
                     for tc in tool_calls:
                         yield {
@@ -248,7 +261,7 @@ def stream_agent(
                     for idx in list(pending_tool_calls.keys()):
                         tc_data = pending_tool_calls[idx]
                         if tc_data["name"]:
-                            yield {"type": "tool_call", "tool": tc_data["name"], "arguments": tc_data["args"]}
+                            yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
                     pending_tool_calls.clear()
                     yield {"type": "token", "content": msg.content}
 
@@ -258,7 +271,7 @@ def stream_agent(
                 for idx in list(pending_tool_calls.keys()):
                     tc_data = pending_tool_calls[idx]
                     if tc_data["name"]:
-                        yield {"type": "tool_call", "tool": tc_data["name"], "arguments": tc_data["args"]}
+                        yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
                 pending_tool_calls.clear()
                 yield {
                     "type": "tool_result",

@@ -25,8 +25,9 @@ from typing import Dict, Any, List, Optional
 _cache_lock = threading.Lock()
 
 
-# ─── Circuit Breaker (per server) ─────────────────────────────────
+# ─── Circuit Breaker (per server, Redis-shared across workers) ────
 # States: CLOSED (normal), OPEN (skip HTTP), HALF_OPEN (testing one call)
+# BUG-007: Moved from module-level dict to Redis so all gunicorn workers share state.
 
 CIRCUIT_CLOSED = "CLOSED"
 CIRCUIT_OPEN = "OPEN"
@@ -35,51 +36,76 @@ CIRCUIT_HALF_OPEN = "HALF_OPEN"
 CIRCUIT_FAILURE_THRESHOLD = 3   # consecutive failures before opening
 CIRCUIT_RECOVERY_TIMEOUT = 60   # seconds before trying again (half-open)
 
-# server_name → {"state": str, "failures": int, "opened_at": float}
-_circuit_breaker = {}
+_CB_REDIS_PREFIX = "niv_mcp_cb:"
+_CB_TTL = 300  # 5 min TTL for circuit breaker state in Redis
+
+
+def _cb_redis_get(server_name):
+    """Get circuit breaker state from Redis."""
+    try:
+        data = frappe.cache().get_value(f"{_CB_REDIS_PREFIX}{server_name}")
+        if data:
+            if isinstance(data, bytes):
+                data = data.decode("utf-8")
+            if isinstance(data, str):
+                return json.loads(data)
+            return data
+    except Exception:
+        pass
+    return None
+
+
+def _cb_redis_set(server_name, state):
+    """Set circuit breaker state in Redis."""
+    try:
+        val = json.dumps(state)
+        try:
+            frappe.cache().set_value(f"{_CB_REDIS_PREFIX}{server_name}", val, expires_in_sec=_CB_TTL)
+        except TypeError:
+            frappe.cache().setex(f"{_CB_REDIS_PREFIX}{server_name}", _CB_TTL, val)
+    except Exception:
+        pass
 
 
 def _circuit_check(server_name):
     """Check if circuit is open (should skip HTTP). Returns True if should skip."""
-    with _cache_lock:
-        cb = _circuit_breaker.get(server_name)
-        if not cb or cb["state"] == CIRCUIT_CLOSED:
-            return False
-        if cb["state"] == CIRCUIT_OPEN:
-            # Check if recovery timeout has elapsed → transition to HALF_OPEN
-            if time.time() - cb["opened_at"] >= CIRCUIT_RECOVERY_TIMEOUT:
-                cb["state"] = CIRCUIT_HALF_OPEN
-                frappe.logger().info(f"Niv MCP: Circuit half-open for '{server_name}', testing one call")
-                return False  # Allow one test call
-            return True  # Still open, skip
-        # HALF_OPEN — allow the test call
+    cb = _cb_redis_get(server_name)
+    if not cb or cb["state"] == CIRCUIT_CLOSED:
         return False
+    if cb["state"] == CIRCUIT_OPEN:
+        # Check if recovery timeout has elapsed → transition to HALF_OPEN
+        if time.time() - cb["opened_at"] >= CIRCUIT_RECOVERY_TIMEOUT:
+            cb["state"] = CIRCUIT_HALF_OPEN
+            _cb_redis_set(server_name, cb)
+            frappe.logger().info(f"Niv MCP: Circuit half-open for '{server_name}', testing one call")
+            return False  # Allow one test call
+        return True  # Still open, skip
+    # HALF_OPEN — allow the test call
+    return False
 
 
 def _circuit_record_success(server_name):
     """Record a successful call — close the circuit."""
-    with _cache_lock:
-        cb = _circuit_breaker.get(server_name)
-        if cb and cb["state"] != CIRCUIT_CLOSED:
-            frappe.logger().info(f"Niv MCP: Circuit closed for '{server_name}' (recovered)")
-        _circuit_breaker[server_name] = {"state": CIRCUIT_CLOSED, "failures": 0, "opened_at": 0}
+    cb = _cb_redis_get(server_name)
+    if cb and cb["state"] != CIRCUIT_CLOSED:
+        frappe.logger().info(f"Niv MCP: Circuit closed for '{server_name}' (recovered)")
+    _cb_redis_set(server_name, {"state": CIRCUIT_CLOSED, "failures": 0, "opened_at": 0})
 
 
 def _circuit_record_failure(server_name):
     """Record a failed call — may open the circuit."""
-    with _cache_lock:
-        cb = _circuit_breaker.get(server_name, {"state": CIRCUIT_CLOSED, "failures": 0, "opened_at": 0})
-        cb["failures"] += 1
-        if cb["state"] == CIRCUIT_HALF_OPEN:
-            # Test call failed — re-open
-            cb["state"] = CIRCUIT_OPEN
-            cb["opened_at"] = time.time()
-            frappe.logger().warning(f"Niv MCP: Circuit re-opened for '{server_name}' (half-open test failed)")
-        elif cb["failures"] >= CIRCUIT_FAILURE_THRESHOLD:
-            cb["state"] = CIRCUIT_OPEN
-            cb["opened_at"] = time.time()
-            frappe.logger().warning(f"Niv MCP: Circuit opened for '{server_name}' after {cb['failures']} failures")
-        _circuit_breaker[server_name] = cb
+    cb = _cb_redis_get(server_name) or {"state": CIRCUIT_CLOSED, "failures": 0, "opened_at": 0}
+    cb["failures"] += 1
+    if cb["state"] == CIRCUIT_HALF_OPEN:
+        # Test call failed — re-open
+        cb["state"] = CIRCUIT_OPEN
+        cb["opened_at"] = time.time()
+        frappe.logger().warning(f"Niv MCP: Circuit re-opened for '{server_name}' (half-open test failed)")
+    elif cb["failures"] >= CIRCUIT_FAILURE_THRESHOLD:
+        cb["state"] = CIRCUIT_OPEN
+        cb["opened_at"] = time.time()
+        frappe.logger().warning(f"Niv MCP: Circuit opened for '{server_name}' after {cb['failures']} failures")
+    _cb_redis_set(server_name, cb)
 
 
 # ─── Retry with Exponential Backoff ───────────────────────────────
@@ -161,10 +187,14 @@ def _get_http_session(url):
 # ─── Redis Shared Cache ───────────────────────────────────────────
 
 def _redis_get(key):
-    """Get from Redis cache. Returns None on miss or error."""
+    """Get from Redis cache. Returns None on miss or error.
+    BUG-006: handles bytes returned by some Redis configs.
+    """
     try:
         data = frappe.cache().get_value(f"{REDIS_KEY_PREFIX}{key}")
         if data:
+            if isinstance(data, bytes):
+                data = data.decode("utf-8")
             return json.loads(data) if isinstance(data, str) else data
     except Exception:
         pass
@@ -172,13 +202,19 @@ def _redis_get(key):
 
 
 def _redis_set(key, value, ttl=REDIS_CACHE_TTL):
-    """Set in Redis cache."""
+    """Set in Redis cache.
+    BUG-015: v14 compat — fallback to setex if expires_in_sec not supported.
+    """
     try:
-        frappe.cache().set_value(
-            f"{REDIS_KEY_PREFIX}{key}",
-            json.dumps(value) if not isinstance(value, str) else value,
-            expires_in_sec=ttl,
-        )
+        serialized = json.dumps(value) if not isinstance(value, str) else value
+        try:
+            frappe.cache().set_value(
+                f"{REDIS_KEY_PREFIX}{key}",
+                serialized,
+                expires_in_sec=ttl,
+            )
+        except TypeError:
+            frappe.cache().setex(f"{REDIS_KEY_PREFIX}{key}", ttl, serialized)
     except Exception:
         pass
 
@@ -390,26 +426,61 @@ def _stdio_initialize(command, args_str, env_vars_str):
         raise
 
 
-def stdio_list_tools(command, args_str, env_vars_str) -> List[Dict]:
+# BUG-013: stdio process cache to avoid new subprocess per call
+_stdio_cache = {}  # command → {"proc": proc, "send": fn, "recv": fn, "expires": ts}
+_STDIO_CACHE_TTL = 120  # 2 minutes
+
+
+def _get_stdio_session(command, args_str, env_vars_str):
+    """Get or create a cached stdio session. BUG-013 fix."""
+    cache_key = f"{command}:{args_str or ''}"
+    cached = _stdio_cache.get(cache_key)
+    if cached and cached["expires"] > time.time():
+        # Check if process is still alive
+        if cached["proc"].poll() is None:
+            return cached["proc"], cached["send"], cached["recv"]
+        # Process died, remove from cache
+        _stdio_cache.pop(cache_key, None)
+
     proc, send, recv = _stdio_initialize(command, args_str, env_vars_str)
+    _stdio_cache[cache_key] = {
+        "proc": proc, "send": send, "recv": recv,
+        "expires": time.time() + _STDIO_CACHE_TTL,
+    }
+    return proc, send, recv
+
+
+def stdio_list_tools(command, args_str, env_vars_str) -> List[Dict]:
+    proc, send, recv = _get_stdio_session(command, args_str, env_vars_str)
     try:
         send(_jsonrpc("tools/list", {}, req_id=_next_id()))
         resp = recv()
         return resp.get("result", {}).get("tools", [])
-    finally:
-        proc.terminate()
+    except Exception:
+        # Evict bad cached session
+        cache_key = f"{command}:{args_str or ''}"
+        cached = _stdio_cache.pop(cache_key, None)
+        if cached and cached["proc"].poll() is None:
+            cached["proc"].terminate()
+        raise
 
 
 def stdio_call_tool(command, args_str, env_vars_str, tool_name, arguments) -> Any:
-    proc, send, recv = _stdio_initialize(command, args_str, env_vars_str)
+    proc, send, recv = _get_stdio_session(command, args_str, env_vars_str)
     try:
         send(_jsonrpc("tools/call", {"name": tool_name, "arguments": arguments}, req_id=_next_id()))
         resp = recv(timeout=30)
         if "error" in resp:
             raise MCPError(resp["error"].get("message", str(resp["error"])))
         return resp.get("result", {})
-    finally:
-        proc.terminate()
+    except MCPError:
+        raise
+    except Exception:
+        cache_key = f"{command}:{args_str or ''}"
+        cached = _stdio_cache.pop(cache_key, None)
+        if cached and cached["proc"].poll() is None:
+            cached["proc"].terminate()
+        raise
 
 
 # ─── HTTP Transport (streamable-http) ──────────────────────────────
@@ -794,6 +865,13 @@ def get_all_mcp_tools_cached() -> List[Dict]:
                 seen_names.add(name)
 
                 params = tool.get("inputSchema", {"type": "object", "properties": {}})
+                # BUG-005: ensure parameters always has proper structure
+                if not isinstance(params, dict):
+                    params = {"type": "object", "properties": {}}
+                if "type" not in params:
+                    params["type"] = "object"
+                if "properties" not in params:
+                    params["properties"] = {}
                 result.append({
                     "type": "function",
                     "function": {
@@ -851,6 +929,24 @@ def get_all_mcp_tools() -> List[Dict]:
 def call_tool(server_name, tool_name, arguments):
     """Legacy wrapper."""
     return call_tool_fast(server_name, tool_name, arguments)
+
+
+def close_all_sessions():
+    """Close all HTTP sessions and stdio processes. BUG-014 fix.
+    Call during worker shutdown or cache clear."""
+    for key, session in list(_http_sessions.items()):
+        try:
+            session.close()
+        except Exception:
+            pass
+    _http_sessions.clear()
+    for key, cached in list(_stdio_cache.items()):
+        try:
+            if cached["proc"].poll() is None:
+                cached["proc"].terminate()
+        except Exception:
+            pass
+    _stdio_cache.clear()
 
 
 def clear_cache(server_name: str = None):

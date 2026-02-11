@@ -8,6 +8,7 @@ Per-user permission isolation:
   This means tool results respect the user's roles/permissions —
   e.g., a Sales User only sees their own Sales Orders.
 """
+import hashlib
 import json
 import threading
 import frappe
@@ -53,7 +54,8 @@ def get_current_user_api_key() -> Optional[str]:
 
 def _build_pydantic_model(name: str, parameters: dict):
     """Convert OpenAI function parameters JSON schema → Pydantic model. Cached."""
-    cache_key = f"{name}_{hash(json.dumps(parameters, sort_keys=True))}"
+    # BUG-009: use hashlib.md5 instead of hash() for cross-process stable keys
+    cache_key = f"{name}_{hashlib.md5(json.dumps(parameters, sort_keys=True).encode()).hexdigest()}"
     if cache_key in _schema_cache:
         return _schema_cache[cache_key]
 
