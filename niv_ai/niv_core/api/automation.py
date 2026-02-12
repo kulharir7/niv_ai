@@ -43,7 +43,7 @@ def on_doc_event(doc, method):
     # Niv AI Triggers — run AI agent on doc events
     try:
         from niv_ai.niv_core.trigger_engine import run_triggers
-        run_triggers(doc, method)
+        run_triggers(doc, event)
     except Exception as e:
         frappe.log_error(f"Niv Trigger error for {doc.doctype} {doc.name}: {str(e)}", "Niv AI Trigger Error")
 

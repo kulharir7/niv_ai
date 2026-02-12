@@ -157,19 +157,22 @@ def run_agent(
     provider_name: str = None,
     model: str = None,
     user: str = None,
+    system_prompt: str = None,
 ) -> str:
     """Run agent synchronously — returns final response text."""
     user = user or frappe.session.user
     
-    agent, config, system_prompt, cbs = create_niv_agent(
+    agent, config, default_system_prompt, cbs = create_niv_agent(
         provider_name=provider_name,
         model=model,
         conversation_id=conversation_id,
         user=user,
         streaming=False,
     )
+    # Use custom system_prompt if provided, else default
+    final_system_prompt = system_prompt or default_system_prompt
 
-    messages = _build_messages(message, conversation_id, system_prompt)
+    messages = _build_messages(message, conversation_id, final_system_prompt)
 
     _setup_user_api_key(user)
     try:

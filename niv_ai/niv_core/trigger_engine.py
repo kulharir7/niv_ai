@@ -117,7 +117,7 @@ def _execute_trigger(trigger_name, doctype, docname, prompt, system_prompt_name=
         if system_prompt_name:
             try:
                 sp_doc = frappe.get_doc("Niv System Prompt", system_prompt_name)
-                system_prompt = sp_doc.content
+                system_prompt = sp_doc.prompt
             except Exception:
                 pass
         
@@ -152,9 +152,9 @@ def _execute_trigger(trigger_name, doctype, docname, prompt, system_prompt_name=
         })
         frappe.db.commit()
         
-        # If the AI found issues, create a Comment on the document
+        # Add AI response as Comment on the document
         response = result.get("response", "") if isinstance(result, dict) else str(result)
-        if response and any(word in response.lower() for word in ["error", "issue", "warning", "problem", "invalid"]):
+        if response:
             try:
                 frappe.get_doc({
                     "doctype": "Comment",
