@@ -62,6 +62,18 @@ def stream_chat(**kwargs):
     if dev_mode and "System Manager" not in frappe.get_roles(user):
         dev_mode = False
 
+    # Auto-create conversation if not provided (mobile app support)
+    if not conversation_id:
+        conv = frappe.get_doc({
+            "doctype": "Niv Conversation",
+            "user": user,
+            "title": message[:50],
+            "channel": "mobile",
+        })
+        conv.insert(ignore_permissions=True)
+        frappe.db.commit()
+        conversation_id = conv.name
+
     validate_conversation(conversation_id, user)
 
     # Rate limiting
