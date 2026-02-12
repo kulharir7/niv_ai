@@ -109,6 +109,27 @@ def pair(code=None, device_name=None):
     # Get AI config
     settings = frappe.get_cached_doc("Niv Settings")
 
+    # Get company info
+    companies = []
+    try:
+        company_list = frappe.get_all(
+            "Company",
+            fields=["name", "company_name", "company_logo", "abbr"],
+            order_by="creation asc",
+        )
+        for c in company_list:
+            logo_url = ""
+            if c.company_logo:
+                logo_url = frappe.utils.get_url() + c.company_logo
+            companies.append({
+                "name": c.name,
+                "company_name": c.company_name,
+                "logo": logo_url,
+                "abbr": c.abbr or "",
+            })
+    except Exception:
+        pass
+
     return {
         "success": True,
         "site_url": site_url,
@@ -122,6 +143,7 @@ def pair(code=None, device_name=None):
             "full_name": user_doc.full_name,
             "user_image": user_doc.user_image,
         },
+        "companies": companies,
         "config": {
             "model": getattr(settings, "default_model", ""),
             "enable_voice": bool(getattr(settings, "enable_voice", 0)),
@@ -142,28 +164,32 @@ def verify_token():
         token = auth_header.replace("token ", "")
         api_key, api_secret = token.split(":")
 
-        # Validate API key exists and is active
-        key_doc = frappe.db.get_value(
-            "User API Key",
-            {"api_key": api_key},
-            ["name", "user"],
-            as_dict=True,
-        )
-
-        if not key_doc:
+        # Validate API key on User doctype
+        user_email = frappe.db.get_value("User", {"api_key": api_key}, "name")
+        if not user_email:
             return {"valid": False, "reason": "Invalid API key"}
 
-        user_doc = frappe.get_doc("User", key_doc.user)
+        user_doc = frappe.get_doc("User", user_email)
         if not user_doc.enabled:
             return {"valid": False, "reason": "User disabled"}
+
+        # Get companies
+        companies = []
+        try:
+            for c in frappe.get_all("Company", fields=["name", "company_name", "company_logo", "abbr"]):
+                logo_url = (frappe.utils.get_url() + c.company_logo) if c.company_logo else ""
+                companies.append({"name": c.name, "company_name": c.company_name, "logo": logo_url, "abbr": c.abbr or ""})
+        except Exception:
+            pass
 
         return {
             "valid": True,
             "user": {
-                "email": key_doc.user,
+                "email": user_email,
                 "full_name": user_doc.full_name,
                 "user_image": user_doc.user_image,
             },
+            "companies": companies,
         }
     except Exception:
         return {"valid": False, "reason": "Token verification failed"}
@@ -211,29 +237,20 @@ def _generate_unique_code():
 
 def _generate_api_credentials(user_email):
     """Generate API key + secret for a user."""
-    # Check if user already has an API key from Niv
-    existing = frappe.get_all(
-        "User API Key",
-        filters={"user": user_email},
-        fields=["name", "api_key"],
-        order_by="creation desc",
-        limit=1,
-    )
+    user_doc = frappe.get_doc("User", user_email)
 
-    if existing:
-        # Reuse existing key
-        key_doc = frappe.get_doc("User API Key", existing[0].name)
-        api_secret = key_doc.get_password("api_secret")
-        return existing[0].api_key, api_secret
+    # Check if user already has api_key
+    if user_doc.api_key:
+        api_key = user_doc.api_key
+        api_secret = user_doc.get_password("api_secret")
+        return api_key, api_secret
 
-    # Create new API key
-    key_doc = frappe.get_doc({
-        "doctype": "User API Key",
-        "user": user_email,
-    })
-    key_doc.insert(ignore_permissions=True)
+    # Generate new API key + secret
+    api_key = frappe.generate_hash(length=15)
+    api_secret = frappe.generate_hash(length=15)
 
-    api_key = key_doc.api_key
-    api_secret = key_doc.get_password("api_secret")
+    user_doc.api_key = api_key
+    user_doc.api_secret = api_secret
+    user_doc.save(ignore_permissions=True)
 
     return api_key, api_secret

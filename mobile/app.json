@@ -6,23 +6,59 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "scheme": "nivai",
     "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#1a1a2e"
+      "backgroundColor": "#000000"
     },
     "assetBundlePatterns": ["**/*"],
-    "android": {
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#1a1a2e"
-      },
-      "package": "com.nivai.app",
-      "versionCode": 1
-    },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.nivai.app"
+      "bundleIdentifier": "com.nivai.mobile",
+      "infoPlist": {
+        "NSMicrophoneUsageDescription": "Voice input for AI chat",
+        "NSCameraUsageDescription": "Scan documents and bills",
+        "NSPhotoLibraryUsageDescription": "Upload images to AI chat",
+        "NSFaceIDUsageDescription": "Secure app with biometric lock",
+        "NSLocationWhenInUseUsageDescription": "Find nearby customers"
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#000000"
+      },
+      "package": "com.nivai.mobile",
+      "permissions": [
+        "CAMERA",
+        "RECORD_AUDIO",
+        "READ_EXTERNAL_STORAGE",
+        "VIBRATE",
+        "USE_BIOMETRIC",
+        "USE_FINGERPRINT",
+        "ACCESS_FINE_LOCATION",
+        "RECEIVE_BOOT_COMPLETED"
+      ]
+    },
+    "plugins": [
+      "expo-local-authentication",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow Niv AI to access photos for uploading to chat.",
+          "cameraPermission": "Allow Niv AI to use camera for scanning documents."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#8b5cf6"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "niv-ai-mobile"
+      }
     }
   }
 }
