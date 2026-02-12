@@ -540,12 +540,15 @@ def voice_chat_base64(**kwargs):
     # Auto-create conversation if not provided
     if not conversation_id:
         try:
-            from niv_ai.niv_core.api.chat import create_conversation
-            conv = create_conversation(title="Voice Chat")
-            if isinstance(conv, dict):
-                conversation_id = conv.get("name") or conv.get("conversation_id", "")
-            else:
-                conversation_id = str(conv)
+            conv = frappe.get_doc({
+                "doctype": "Niv Conversation",
+                "user": frappe.session.user,
+                "title": "Voice Chat",
+                "channel": "voice",
+            })
+            conv.insert(ignore_permissions=True)
+            frappe.db.commit()
+            conversation_id = conv.name
         except Exception as e:
             frappe.throw("Failed to create conversation: " + str(e))
     
