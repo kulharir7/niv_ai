@@ -1,0 +1,87 @@
+<div class="niv-dashboard">
+    <div class="niv-dash-header">
+        <div class="niv-dash-header-left">
+            <div class="niv-dash-logo">✦</div>
+            <h2 class="niv-dash-title">Niv AI Analytics</h2>
+        </div>
+        <div class="niv-dash-controls">
+            <div class="niv-dash-date-range">
+                <input type="date" class="niv-dash-from-date" />
+                <span class="niv-dash-date-sep">→</span>
+                <input type="date" class="niv-dash-to-date" />
+            </div>
+            <select class="niv-dash-period-select">
+                <option value="7">7 days</option>
+                <option value="30" selected>30 days</option>
+                <option value="90">90 days</option>
+                <option value="180">6 months</option>
+                <option value="365">1 year</option>
+            </select>
+            <button class="niv-dash-btn niv-dash-export" title="Export CSV">
+                <i class="fa fa-download"></i> Export
+            </button>
+            <button class="niv-dash-btn niv-dash-refresh" title="Refresh">
+                <i class="fa fa-refresh"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="niv-dash-stats-row"></div>
+
+    <!-- Usage Over Time Chart -->
+    <div class="niv-dash-section">
+        <div class="niv-dash-card niv-dash-card-full">
+            <div class="niv-dash-card-header">
+                <h4>Usage Over Time</h4>
+                <div class="niv-dash-chart-toggle">
+                    <button class="niv-dash-toggle active" data-metric="tokens">Tokens</button>
+                    <button class="niv-dash-toggle" data-metric="messages">Messages</button>
+                    <button class="niv-dash-toggle" data-metric="cost">Cost</button>
+                </div>
+            </div>
+            <div class="niv-dash-usage-chart-container">
+                <canvas id="niv-usage-chart" height="280"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Model + Tool Row -->
+    <div class="niv-dash-grid-2">
+        <div class="niv-dash-card">
+            <div class="niv-dash-card-header"><h4>Model Breakdown</h4></div>
+            <div class="niv-dash-model-chart-container">
+                <canvas id="niv-model-chart" height="260"></canvas>
+            </div>
+        </div>
+        <div class="niv-dash-card">
+            <div class="niv-dash-card-header"><h4>Tool Usage</h4></div>
+            <div class="niv-dash-tool-chart-container">
+                <canvas id="niv-tool-chart" height="260"></canvas>
+            </div>
+            <div class="niv-dash-tool-empty" style="display:none;">
+                <p class="text-muted">No tool usage data</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Heatmap + Top Users Row -->
+    <div class="niv-dash-grid-2">
+        <div class="niv-dash-card">
+            <div class="niv-dash-card-header"><h4>Activity Heatmap</h4></div>
+            <div class="niv-dash-heatmap"></div>
+        </div>
+        <div class="niv-dash-card">
+            <div class="niv-dash-card-header"><h4>Top Users</h4></div>
+            <div class="niv-dash-top-users"></div>
+        </div>
+    </div>
+
+    <!-- Auto-refresh indicator -->
+    <div class="niv-dash-footer">
+        <span class="niv-dash-auto-refresh-label">
+            <i class="fa fa-clock-o"></i> Auto-refreshes every 60s
+        </span>
+        <span class="niv-dash-last-updated"></span>
+    </div>
+</div>

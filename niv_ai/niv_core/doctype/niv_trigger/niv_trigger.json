@@ -1,0 +1,152 @@
+{
+ "actions": [],
+ "autoname": "format:NIV-TRG-{####}",
+ "creation": "2026-02-12 10:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "trigger_name",
+  "section_break_1",
+  "reference_doctype",
+  "doc_event",
+  "condition",
+  "section_break_2",
+  "prompt_template",
+  "include_document_data",
+  "section_break_3",
+  "system_prompt",
+  "model",
+  "section_break_4",
+  "last_triggered",
+  "trigger_count"
+ ],
+ "fields": [
+  {
+   "default": "1",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "trigger_name",
+   "fieldtype": "Data",
+   "label": "Trigger Name",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "section_break_1",
+   "fieldtype": "Section Break",
+   "label": "Trigger Condition"
+  },
+  {
+   "fieldname": "reference_doctype",
+   "fieldtype": "Link",
+   "label": "Reference DocType",
+   "options": "DocType",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "doc_event",
+   "fieldtype": "Select",
+   "label": "Document Event",
+   "options": "\nBefore Save\nAfter Save\nBefore Submit\nAfter Submit\nBefore Cancel\nAfter Cancel\nBefore Delete",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "condition",
+   "fieldtype": "Code",
+   "label": "Condition (Python Expression)",
+   "description": "Optional. Python expression using 'doc' variable. Example: doc.grand_total > 100000",
+   "options": "Python"
+  },
+  {
+   "fieldname": "section_break_2",
+   "fieldtype": "Section Break",
+   "label": "AI Prompt"
+  },
+  {
+   "fieldname": "prompt_template",
+   "fieldtype": "Code",
+   "label": "Prompt Template",
+   "reqd": 1,
+   "options": "Markdown",
+   "description": "Use {doc.fieldname} for document fields. Example: Validate this Sales Order {doc.name} for customer {doc.customer}. Check if delivery_date is reasonable."
+  },
+  {
+   "default": "1",
+   "fieldname": "include_document_data",
+   "fieldtype": "Check",
+   "label": "Include Document Data as JSON"
+  },
+  {
+   "fieldname": "section_break_3",
+   "fieldtype": "Section Break",
+   "label": "AI Settings"
+  },
+  {
+   "fieldname": "system_prompt",
+   "fieldtype": "Link",
+   "label": "System Prompt",
+   "options": "Niv System Prompt",
+   "description": "Optional. Override default system prompt for this trigger."
+  },
+  {
+   "fieldname": "model",
+   "fieldtype": "Data",
+   "label": "Model Override",
+   "description": "Optional. Use a specific model for this trigger."
+  },
+  {
+   "fieldname": "section_break_4",
+   "fieldtype": "Section Break",
+   "label": "Statistics"
+  },
+  {
+   "fieldname": "last_triggered",
+   "fieldtype": "Datetime",
+   "label": "Last Triggered",
+   "read_only": 1
+  },
+  {
+   "fieldname": "trigger_count",
+   "fieldtype": "Int",
+   "label": "Trigger Count",
+   "read_only": 1,
+   "default": "0"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "links": [],
+ "modified": "2026-02-12 10:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Niv Core",
+ "name": "Niv Trigger",
+ "naming_rule": "Expression",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "title_field": "trigger_name",
+ "track_changes": 1
+}

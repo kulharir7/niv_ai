@@ -1,0 +1,209 @@
+/* Niv AI Floating Widget Styles */
+
+.niv-widget-btn {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #5e64ff, #7c3aed);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 4px 16px rgba(94, 100, 255, 0.4);
+    z-index: 10000;
+    transition: transform 0.2s, box-shadow 0.2s;
+    font-size: 22px;
+}
+
+.niv-widget-btn:hover {
+    transform: scale(1.1);
+    box-shadow: 0 6px 24px rgba(94, 100, 255, 0.5);
+}
+
+.niv-widget-btn.active {
+    transform: scale(0.95);
+}
+
+.niv-widget-panel {
+    position: fixed;
+    bottom: 92px;
+    right: 24px;
+    width: 380px;
+    height: 520px;
+    background: var(--fg-color, #fff);
+    border-radius: 16px;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.15);
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--border-color, #e0e0e0);
+}
+
+.niv-widget-header {
+    padding: 14px 16px;
+    background: linear-gradient(135deg, #5e64ff, #7c3aed);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-weight: 600;
+    font-size: 14px;
+}
+
+.niv-widget-header button {
+    background: none;
+    border: none;
+    color: white;
+    cursor: pointer;
+    padding: 4px 8px;
+    opacity: 0.8;
+    font-size: 14px;
+}
+
+.niv-widget-header button:hover {
+    opacity: 1;
+}
+
+.niv-widget-title {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.niv-widget-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.niv-widget-msg {
+    display: flex;
+}
+
+.niv-widget-msg.user {
+    justify-content: flex-end;
+}
+
+.niv-widget-bubble {
+    max-width: 85%;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 13px;
+    line-height: 1.5;
+    word-wrap: break-word;
+}
+
+.niv-widget-msg.user .niv-widget-bubble {
+    background: #5e64ff;
+    color: white;
+    border-bottom-right-radius: 4px;
+}
+
+.niv-widget-msg.assistant .niv-widget-bubble {
+    background: var(--subtle-fg, #f5f5f5);
+    color: var(--text-color, #333);
+    border-bottom-left-radius: 4px;
+}
+
+.niv-widget-bubble code {
+    background: rgba(0,0,0,0.08);
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+.niv-widget-bubble.typing {
+    display: flex;
+    gap: 4px;
+    padding: 14px 18px;
+}
+
+.niv-widget-bubble.typing span {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--text-muted, #888);
+    animation: niv-widget-dot 1.4s infinite;
+}
+
+.niv-widget-bubble.typing span:nth-child(2) { animation-delay: 0.2s; }
+.niv-widget-bubble.typing span:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes niv-widget-dot {
+    0%, 60%, 100% { opacity: 0.3; transform: scale(0.8); }
+    30% { opacity: 1; transform: scale(1); }
+}
+
+.niv-widget-input-area {
+    padding: 10px 12px;
+    border-top: 1px solid var(--border-color, #e0e0e0);
+    display: flex;
+    gap: 8px;
+    align-items: flex-end;
+}
+
+.niv-widget-input {
+    flex: 1;
+    border: 1px solid var(--border-color, #e0e0e0);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+    resize: none;
+    max-height: 100px;
+    outline: none;
+    background: var(--control-bg, #fff);
+    color: var(--text-color, #333);
+    line-height: 1.4;
+}
+
+.niv-widget-input:focus {
+    border-color: #5e64ff;
+}
+
+.niv-widget-send {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: #5e64ff;
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: background 0.15s;
+}
+
+.niv-widget-send:hover {
+    background: #4a50e0;
+}
+
+/* Scrollbar */
+.niv-widget-messages::-webkit-scrollbar {
+    width: 4px;
+}
+
+.niv-widget-messages::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 2px;
+}
+
+/* Mobile */
+@media (max-width: 480px) {
+    .niv-widget-panel {
+        width: calc(100vw - 20px);
+        height: calc(100vh - 120px);
+        right: 10px;
+        bottom: 80px;
+        border-radius: 12px;
+    }
+}
