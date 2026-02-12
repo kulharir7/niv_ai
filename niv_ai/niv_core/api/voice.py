@@ -598,7 +598,7 @@ def voice_chat_base64(**kwargs):
     # Send to chat
     from niv_ai.niv_core.api.chat import send_message
     chat_result = send_message(conversation_id=conversation_id, message=user_text)
-    response_text = chat_result.get("message", "") or chat_result.get("content", "")
+    response_text = chat_result.get("response", "") or chat_result.get("message", "") or chat_result.get("content", "")
     
     # Generate TTS
     audio_url = None
