@@ -83,13 +83,17 @@ def webhook(**kwargs):
         from niv_ai.niv_core.langchain.agent import stream_agent
         from niv_ai.niv_core.api._helpers import save_user_message, save_assistant_message
 
+        # Prepend Telegram formatting hint to user message
+        telegram_hint = "[TELEGRAM BOT — Format rules: Use markdown tables with | pipes. Use bullet lists instead of wide tables. Keep responses concise. Use bold (*text*) for emphasis. Hindi/Hinglish reply preferred.]\n\n"
+        agent_message = telegram_hint + text
+
         full_response = ""
         tool_calls_shown = set()
         last_status_update = time.time()
 
         try:
             for event in stream_agent(
-                message=text,
+                message=agent_message,
                 conversation_id=conversation_id,
                 user=frappe_user,
             ):
@@ -235,61 +239,93 @@ def _get_bot_token():
 
 def _format_for_telegram(text):
     """Convert markdown to Telegram-friendly format.
-    - Tables → monospace pre blocks (aligned)
+    - Markdown tables (|...|) → monospace pre blocks
+    - Space-aligned tables (--- lines) → monospace pre blocks
     - Headers → bold
-    - Clean up excessive newlines
+    - Escape Telegram markdown special chars in regular text
     """
     import re
     
     lines = text.split("\n")
     result = []
-    table_rows = []
-    in_table = False
+    table_block = []
+    in_pipe_table = False
+    in_space_table = False
     
-    for line in lines:
+    i = 0
+    while i < len(lines):
+        line = lines[i]
         stripped = line.strip()
         
-        # Detect table rows (starts with |)
+        # === Pipe table detection (|col1|col2|) ===
         if stripped.startswith("|") and stripped.endswith("|"):
-            # Skip separator rows (|---|---|)
-            if re.match(r'^\|[\s\-:]+\|$', stripped.replace("|", "|").replace("-", "-")):
+            # Separator row — skip
+            if re.match(r'^[\|\s\-:]+$', stripped):
+                i += 1
                 continue
-            # Parse cells
             cells = [c.strip() for c in stripped.split("|")[1:-1]]
             if cells:
-                table_rows.append(cells)
-                in_table = True
+                table_block.append(cells)
+                in_pipe_table = True
+            i += 1
             continue
         
-        # If we were in a table and hit non-table line, flush table
-        if in_table and table_rows:
-            result.append(_render_table(table_rows))
-            table_rows = []
-            in_table = False
+        # Flush pipe table
+        if in_pipe_table and table_block:
+            result.append(_render_table_cells(table_block))
+            table_block = []
+            in_pipe_table = False
         
-        # Convert ### headers to bold
-        if stripped.startswith("###"):
-            result.append("*{}*".format(stripped.lstrip("#").strip()))
-        elif stripped.startswith("##"):
-            result.append("*{}*".format(stripped.lstrip("#").strip()))
-        elif stripped.startswith("#"):
-            result.append("*{}*".format(stripped.lstrip("#").strip()))
+        # === Space-aligned table detection (line of dashes like --------) ===
+        if re.match(r'^[\-\s]{10,}$', stripped) and not in_space_table:
+            # Look back — previous line is likely header
+            # Look forward — next lines are data rows
+            in_space_table = True
+            # Previous line was header — wrap it
+            header = result.pop() if result else ""
+            table_block = [header]
+            i += 1
+            continue
+        
+        if in_space_table:
+            if stripped and not re.match(r'^[\-\s]{10,}$', stripped):
+                table_block.append(line)
+                i += 1
+                continue
+            else:
+                # End of space table — flush
+                if table_block:
+                    result.append("```\n{}\n```".format("\n".join(table_block)))
+                    table_block = []
+                in_space_table = False
+                if re.match(r'^[\-\s]{10,}$', stripped):
+                    i += 1
+                    continue
+        
+        # === Headers → bold ===
+        if stripped.startswith("#"):
+            clean = stripped.lstrip("#").strip()
+            # Escape any * in header text
+            result.append("*{}*".format(clean.replace("*", "")))
         else:
             result.append(line)
+        
+        i += 1
     
-    # Flush remaining table
-    if table_rows:
-        result.append(_render_table(table_rows))
+    # Flush remaining tables
+    if in_pipe_table and table_block:
+        result.append(_render_table_cells(table_block))
+    if in_space_table and table_block:
+        result.append("```\n{}\n```".format("\n".join(table_block)))
     
     return "\n".join(result)
 
 
-def _render_table(rows):
-    """Render table rows as monospace pre block for Telegram."""
+def _render_table_cells(rows):
+    """Render parsed table cells as monospace pre block."""
     if not rows:
         return ""
     
-    # Calculate column widths
     num_cols = max(len(r) for r in rows)
     col_widths = [0] * num_cols
     for row in rows:
@@ -297,17 +333,15 @@ def _render_table(rows):
             if i < num_cols:
                 col_widths[i] = max(col_widths[i], len(cell))
     
-    # Build formatted rows
     formatted = []
     for idx, row in enumerate(rows):
         parts = []
         for i in range(num_cols):
             cell = row[i] if i < len(row) else ""
             parts.append(cell.ljust(col_widths[i]))
-        formatted.append("  ".join(parts))
-        # Add separator after header row
+        formatted.append(" | ".join(parts))
         if idx == 0:
-            formatted.append("  ".join(["-" * w for w in col_widths]))
+            formatted.append(" | ".join(["-" * w for w in col_widths]))
     
     return "```\n{}\n```".format("\n".join(formatted))
 
