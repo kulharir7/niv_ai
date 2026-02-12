@@ -136,11 +136,21 @@ def get_system_prompt(conversation_id: str = None) -> str:
 
     Priority: conversation.system_prompt → settings.system_prompt (text field) → built-in default
     """
+    # Dynamic branding — never say ERPNext/Frappe, use configured name
+    try:
+        _settings = frappe.get_cached_doc("Niv Settings")
+        _brand = getattr(_settings, "brand_name", "") or "Niv"
+    except Exception:
+        _brand = "Niv"
+
     default_prompt = (
-        "You are Niv AI, an intelligent assistant embedded in ERPNext. "
+        "You are Niv AI, an intelligent assistant embedded in {brand}. "
         "You help users with their business tasks, answer questions about their data, "
         "and perform actions using available tools. Be concise, helpful, and professional. "
         "When using tools, explain what you are doing. Format data in tables when appropriate.\n\n"
+        "BRANDING RULE (CRITICAL): NEVER say 'ERPNext', 'Frappe', or 'Frappe Framework' to the user. "
+        "Always refer to the system as '{brand}'. For example say '{brand} system' not 'ERPNext'.\n\n"
+    ).format(brand=_brand) + (
         "PLAN-THEN-ACT (CRITICAL — follow for ALL document creation):\n"
         "When creating documents (Sales Order, Invoice, etc.):\n"
         "1. FIRST check the RAG context above — it contains DocType schemas with required fields.\n"
@@ -209,9 +219,16 @@ def get_dev_system_prompt() -> str:
     except Exception:
         pass
 
+    # Dynamic branding
+    try:
+        _settings = frappe.get_cached_doc("Niv Settings")
+        _brand = getattr(_settings, "brand_name", "") or "Niv"
+    except Exception:
+        _brand = "Niv"
+
     return (
-        "You are Niv AI in DEVELOPER MODE — a Frappe/ERPNext development assistant.\n"
-        "You help developers build and customize ERPNext by creating DocTypes, adding fields, "
+        "You are Niv AI in DEVELOPER MODE — a {brand} development assistant.\n"
+        "You help developers build and customize {brand} by creating DocTypes, adding fields, ".format(brand=_brand) +
         "writing Client Scripts, Server Scripts, Workflows, Print Formats, and more.\n\n"
         "CAPABILITIES:\n"
         "- Create new DocTypes (with fields, permissions, naming rules)\n"
@@ -222,7 +239,9 @@ def get_dev_system_prompt() -> str:
         "- Create Workflows (multi-level approval chains)\n"
         "- Create Print Formats (Jinja HTML templates)\n"
         "- Create Script Reports and Query Reports\n"
-        "- Explain Frappe architecture, field types, APIs, hooks, permissions\n\n"
+        "- Explain system architecture, field types, APIs, hooks, permissions\n\n"
+        "BRANDING RULE (CRITICAL): NEVER say 'ERPNext', 'Frappe', or 'Frappe Framework' to the user. "
+        "Always refer to the system as '" + _brand + "'. Say '" + _brand + " system' not 'ERPNext'.\n\n"
         "RULES:\n"
         "1. ALWAYS check RAG context first — it has field types, API references, patterns.\n"
         "2. For Custom Fields: fieldname MUST start with 'custom_'. Use insert_after for position.\n"

@@ -8,6 +8,45 @@ from frappe import _
 from niv_ai.niv_core.api._helpers import validate_conversation, save_user_message, save_assistant_message, auto_title
 
 
+def _smart_route_model(message, default_model, dev_mode, settings):
+    """Route to optimal model based on message complexity. Zero API call — keyword based."""
+    import re
+
+    # Read routing config from settings (custom fields)
+    model_light = getattr(settings, "model_light", "") or ""
+    model_medium = getattr(settings, "model_medium", "") or ""
+    model_heavy = getattr(settings, "model_heavy", "") or ""
+
+    # If no routing models configured, use default
+    if not (model_light or model_medium or model_heavy):
+        return default_model
+
+    msg = message.strip().lower()
+    msg_len = len(message.strip())
+
+    # LIGHT — casual greetings, short responses (< 20 chars, no question)
+    _casual = {"hi", "hello", "hey", "thanks", "thank you", "ok", "okay", "bye",
+               "good morning", "good evening", "good night", "haan", "ha", "nahi",
+               "theek hai", "shukriya", "dhanyavaad", "namaste", "kya haal"}
+    if msg in _casual or (msg_len < 15 and "?" not in msg and not dev_mode):
+        return model_light or default_model
+
+    # HEAVY — dev mode, coding, creation, complex analysis
+    _heavy_patterns = [
+        r"(create|banao|bana do|build|design|write|likh)",
+        r"(doctype|custom field|script|workflow|print format|report)",
+        r"(code|function|api|endpoint|hook|migration)",
+        r"(analyze|analysis|trend|pattern|compare|optimize)",
+        r"(blueprint|module|system|architecture|schema)",
+        r"(explain|samjhao|detail|in depth|step by step)",
+    ]
+    if dev_mode or any(re.search(p, msg) for p in _heavy_patterns) or msg_len > 200:
+        return model_heavy or default_model
+
+    # MEDIUM — queries, reports, data questions (default)
+    return model_medium or default_model
+
+
 def _check_rate_limit(user):
     """Check rate limits from Niv Settings. Throws if exceeded."""
     settings = frappe.get_cached_doc("Niv Settings")
@@ -84,6 +123,10 @@ def stream_chat(**kwargs):
     settings = frappe.get_cached_doc("Niv Settings")
     provider = provider or settings.default_provider
     model = model or settings.default_model
+
+    # Smart Model Routing — auto-select model based on message complexity
+    if not (kwargs.get("model") or (frappe.request.method == "POST" and (frappe.request.get_json(silent=True) or {}).get("model"))):
+        model = _smart_route_model(message, model, dev_mode, settings)
 
     # Dev Mode: check if user is confirming a pending action
     if dev_mode:

@@ -188,6 +188,48 @@ Default Model  : mistral-large-3:675b
 
 </details>
 
+<details open>
+<summary><b>⚡ Smart Model Routing — Auto-select best model per message</b></summary>
+<br/>
+
+> **Why pay for a 675B model to say "Hello"?** Niv AI automatically picks the right model based on message complexity.
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Message                        →  Model       Speed    │
+├─────────────────────────────────────────────────────────┤
+│  "hi" / "thanks" / casual      →  gpt-oss:20b    ⚡ 2s │
+│  "show customers" / data query  →  gpt-oss:120b   🔄 3s │
+│  "create DocType" / dev work    →  mistral:675b   🧠 5s │
+│  DEV mode ON (any message)      →  mistral:675b   🧠    │
+└─────────────────────────────────────────────────────────┘
+```
+
+#### How it works
+- **Zero API cost** — keyword-based routing, no classifier model needed
+- **Automatic** — no user action required, just chat normally
+- **Configurable** — set models in Niv Settings → Smart Model Routing
+- **Override** — user can still manually specify a model per request
+
+#### Configure in Niv Settings
+
+<img src="docs/smart-routing-settings.jpg" width="800" alt="Smart Model Routing Settings"/>
+
+Set 3 models:
+- **Light Model** → fast, cheap (greetings, short replies)
+- **Medium Model** → balanced (data queries, reports)
+- **Heavy Model** → best brain (coding, analysis, creation)
+
+> Leave all 3 empty to disable routing — default model will be used for everything.
+
+#### Result
+
+<img src="docs/smart-routing-chat.png" width="600" alt="Fast response with smart routing"/>
+
+*"hi" → instant reply from lightweight model. Complex dev tasks → automatically uses the biggest model.*
+
+</details>
+
 <details>
 <summary><b>🐳 Docker Setup (click to expand)</b></summary>
 <br/>
