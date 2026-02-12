@@ -197,6 +197,12 @@ def get_dev_system_prompt() -> str:
     except Exception:
         quick_ref = ""
 
+    try:
+        from ..knowledge.module_templates import MODULE_TEMPLATES, FIELD_TYPE_GUIDE
+        quick_ref += "\n" + MODULE_TEMPLATES + "\n" + FIELD_TYPE_GUIDE
+    except Exception:
+        pass
+
     return (
         "You are Niv AI in DEVELOPER MODE — a Frappe/ERPNext development assistant.\n"
         "You help developers build and customize ERPNext by creating DocTypes, adding fields, "
