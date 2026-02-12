@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 
 @frappe.whitelist(methods=["POST"])
 def generate_pairing_code(user_email=None):
-    """Generate a pairing code for a user. Admin only."""
+    """Generate a pairing code. Admin can generate for any user."""
     frappe.only_for("System Manager")
 
     user_email = user_email or frappe.form_dict.get("user_email")
@@ -33,6 +33,50 @@ def generate_pairing_code(user_email=None):
     site_url = getattr(settings, "mobile_site_url", "") or frappe.utils.get_url()
 
     # Create pairing code doc
+    doc = frappe.get_doc({
+        "doctype": "Niv Pairing Code",
+        "code": code,
+        "frappe_user": user_email,
+        "status": "Active",
+        "expires_at": expires_at,
+        "site_url": site_url,
+    })
+    doc.insert(ignore_permissions=True)
+    frappe.db.commit()
+
+    return {
+        "code": code,
+        "expires_at": str(expires_at),
+        "site_url": site_url,
+        "user": user_email,
+    }
+
+
+@frappe.whitelist(methods=["POST"])
+def my_pairing_code():
+    """Self-service: logged-in user generates their own pairing code.
+    Deactivates any previous active codes for this user."""
+    user_email = frappe.session.user
+    if user_email == "Guest":
+        frappe.throw(_("Please login first"))
+
+    # Deactivate old active codes for this user
+    old_codes = frappe.get_all(
+        "Niv Pairing Code",
+        filters={"frappe_user": user_email, "status": "Active"},
+        pluck="name",
+    )
+    for name in old_codes:
+        frappe.db.set_value("Niv Pairing Code", name, "status", "Expired")
+
+    # Generate new code
+    code = _generate_unique_code()
+
+    settings = frappe.get_cached_doc("Niv Settings")
+    expiry_hours = getattr(settings, "pairing_code_expiry_hours", 24) or 24
+    expires_at = datetime.now() + timedelta(hours=int(expiry_hours))
+    site_url = getattr(settings, "mobile_site_url", "") or frappe.utils.get_url()
+
     doc = frappe.get_doc({
         "doctype": "Niv Pairing Code",
         "code": code,
