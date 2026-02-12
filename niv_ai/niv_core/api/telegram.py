@@ -138,11 +138,19 @@ def webhook(**kwargs):
         save_user_message(conversation_id, text)
         save_assistant_message(conversation_id, full_response)
 
-        # Build final message with tool summary
-        final_msg = full_response
+        # Format response for Telegram
+        final_msg = _format_for_telegram(full_response)
+        
+        # Add tool calls header if tools were used
         if tool_calls_shown:
-            tools_summary = " | ".join(["🔧 {}".format(t) for t in tool_calls_shown])
-            final_msg = "{}\n\n_Tools used: {}_".format(full_response, tools_summary)
+            tools_header = "🔧 *Tools used:*\n"
+            for t in tool_calls_shown:
+                label = TOOL_LABELS.get(t, t)
+                # Remove "kar raha hoon..." suffix for summary
+                short = label.split("...")[0].strip() if "..." in label else label
+                tools_header += "  • {}\n".format(short)
+            tools_header += "\n"
+            final_msg = tools_header + final_msg
 
         # Send final response
         _send_long_message(chat_id, final_msg)
@@ -223,6 +231,85 @@ def _get_bot_token():
     except Exception as e:
         frappe.logger("telegram").error("Token error: {}".format(str(e)))
         return None
+
+
+def _format_for_telegram(text):
+    """Convert markdown to Telegram-friendly format.
+    - Tables → monospace pre blocks (aligned)
+    - Headers → bold
+    - Clean up excessive newlines
+    """
+    import re
+    
+    lines = text.split("\n")
+    result = []
+    table_rows = []
+    in_table = False
+    
+    for line in lines:
+        stripped = line.strip()
+        
+        # Detect table rows (starts with |)
+        if stripped.startswith("|") and stripped.endswith("|"):
+            # Skip separator rows (|---|---|)
+            if re.match(r'^\|[\s\-:]+\|$', stripped.replace("|", "|").replace("-", "-")):
+                continue
+            # Parse cells
+            cells = [c.strip() for c in stripped.split("|")[1:-1]]
+            if cells:
+                table_rows.append(cells)
+                in_table = True
+            continue
+        
+        # If we were in a table and hit non-table line, flush table
+        if in_table and table_rows:
+            result.append(_render_table(table_rows))
+            table_rows = []
+            in_table = False
+        
+        # Convert ### headers to bold
+        if stripped.startswith("###"):
+            result.append("*{}*".format(stripped.lstrip("#").strip()))
+        elif stripped.startswith("##"):
+            result.append("*{}*".format(stripped.lstrip("#").strip()))
+        elif stripped.startswith("#"):
+            result.append("*{}*".format(stripped.lstrip("#").strip()))
+        else:
+            result.append(line)
+    
+    # Flush remaining table
+    if table_rows:
+        result.append(_render_table(table_rows))
+    
+    return "\n".join(result)
+
+
+def _render_table(rows):
+    """Render table rows as monospace pre block for Telegram."""
+    if not rows:
+        return ""
+    
+    # Calculate column widths
+    num_cols = max(len(r) for r in rows)
+    col_widths = [0] * num_cols
+    for row in rows:
+        for i, cell in enumerate(row):
+            if i < num_cols:
+                col_widths[i] = max(col_widths[i], len(cell))
+    
+    # Build formatted rows
+    formatted = []
+    for idx, row in enumerate(rows):
+        parts = []
+        for i in range(num_cols):
+            cell = row[i] if i < len(row) else ""
+            parts.append(cell.ljust(col_widths[i]))
+        formatted.append("  ".join(parts))
+        # Add separator after header row
+        if idx == 0:
+            formatted.append("  ".join(["-" * w for w in col_widths]))
+    
+    return "```\n{}\n```".format("\n".join(formatted))
 
 
 def _send_telegram(chat_id, text, parse_mode="Markdown"):
