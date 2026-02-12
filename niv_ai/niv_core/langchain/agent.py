@@ -67,8 +67,10 @@ def _sanitize_error(error: Exception) -> str:
         return "The configured AI model was not found. Please check Niv Settings."
     if "recursion" in err_str or "iteration" in err_str:
         return "The request required too many steps. Please try a simpler query."
+    if "insufficient" in err_str or "balance" in err_str or "credit" in err_str:
+        return "Insufficient credits. Please recharge to continue using Niv AI."
     # Generic — don't leak stack traces
-    return "Something went wrong. Please try again or contact your administrator."
+    return "I wasn't able to complete that request. Please try rephrasing your question or try again."
 
 
 def create_niv_agent(
@@ -108,7 +110,7 @@ def create_niv_agent(
     )
 
     config = {
-        "recursion_limit": 12,
+        "recursion_limit": 25,  # Allow self-correction retries (tool fail → fix → retry)
         "callbacks": all_callbacks,
     }
 
@@ -196,6 +198,7 @@ def stream_agent(
     provider_name: str = None,
     model: str = None,
     user: str = None,
+    dev_mode: bool = False,
 ):
     """Stream agent — yields SSE event dicts.
 
@@ -210,6 +213,11 @@ def stream_agent(
         user=user,
         streaming=True,
     )
+
+    # Developer mode: use dev system prompt
+    if dev_mode:
+        from .memory import get_dev_system_prompt
+        system_prompt = get_dev_system_prompt()
 
     messages = _build_messages(message, conversation_id, system_prompt)
 
@@ -280,10 +288,22 @@ def stream_agent(
                 }
 
     except Exception as e:
-        frappe.log_error(f"Stream agent error: {e}", "Niv AI Agent")
+        try:
+            frappe.log_error(f"Stream agent error: {e}", "Niv AI Agent")
+        except Exception:
+            print(f"[Niv AI Agent] Error: {e}")
         yield {"type": "error", "content": _sanitize_error(e)}
 
     finally:
         _cleanup_user_api_key()
+        # Reconnect DB if stale before finalize (gthread workers lose connections during streaming)
+        try:
+            frappe.db.sql("SELECT 1")
+        except Exception:
+            try:
+                frappe.db.connect()
+            except Exception:
+                print("[Niv AI Agent] DB reconnect failed, skipping finalize")
+                return
         cbs["billing"].finalize(stream_cb=cbs["stream"])
         cbs["logging"].finalize()

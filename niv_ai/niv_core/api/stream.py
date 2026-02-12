@@ -43,17 +43,24 @@ def stream_chat(**kwargs):
         message = data.get("message") or frappe.form_dict.get("message")
         model = data.get("model") or frappe.form_dict.get("model")
         provider = data.get("provider") or frappe.form_dict.get("provider")
+        dev_mode = data.get("dev_mode") or frappe.form_dict.get("dev_mode")
     else:
         conversation_id = kwargs.get("conversation_id") or frappe.form_dict.get("conversation_id")
         message = kwargs.get("message") or frappe.form_dict.get("message")
         model = kwargs.get("model") or frappe.form_dict.get("model")
         provider = kwargs.get("provider") or frappe.form_dict.get("provider")
+        dev_mode = kwargs.get("dev_mode") or frappe.form_dict.get("dev_mode")
 
     user = frappe.session.user
     message = (message or "").strip()
 
     if not message:
         frappe.throw(_("Message cannot be empty"))
+
+    # Developer mode — only for System Manager
+    dev_mode = bool(int(dev_mode or 0))
+    if dev_mode and "System Manager" not in frappe.get_roles(user):
+        dev_mode = False
 
     validate_conversation(conversation_id, user)
 
@@ -66,12 +73,120 @@ def stream_chat(**kwargs):
     provider = provider or settings.default_provider
     model = model or settings.default_model
 
+    # Dev Mode: check if user is confirming a pending action
+    if dev_mode:
+        _confirm_words = {"yes", "y", "ha", "haan", "ok", "confirm", "proceed", "kar do", "kardo"}
+        _cancel_words = {"no", "n", "nahi", "nhi", "cancel", "mat karo", "ruk"}
+        msg_lower = message.strip().lower()
+
+        from niv_ai.niv_core.langchain.tools import (
+            get_pending_dev_action, execute_pending_dev_action,
+            clear_pending_dev_action, set_dev_mode as _set_dev_mode,
+            get_undo_stack, execute_undo
+        )
+
+        _undo_words = {"undo", "rollback", "revert", "wapas", "vapas", "hatao", "delete last"}
+
+        # Handle undo
+        if msg_lower in _undo_words:
+            undo_stack = get_undo_stack(conversation_id)
+            if undo_stack:
+                def generate_undo():
+                    try:
+                        result = execute_undo(conversation_id)
+                        if result:
+                            yield _sse({"type": "token", "content": f"↩️ **Undo Complete:**\n\n{result}"})
+                            try:
+                                frappe.db.sql("SELECT 1")
+                            except Exception:
+                                frappe.db.connect()
+                            save_assistant_message(conversation_id, f"↩️ Undo Complete:\n\n{result}", [])
+                        else:
+                            msg = "Nothing to undo."
+                            yield _sse({"type": "token", "content": msg})
+                            save_assistant_message(conversation_id, msg, [])
+                    except Exception as e:
+                        err = f"Undo failed: {str(e)}"
+                        yield _sse({"type": "error", "content": err})
+                    yield _sse({"type": "done", "content": ""})
+                from werkzeug.wrappers import Response
+                return Response(generate_undo(), content_type="text/event-stream",
+                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+            else:
+                def generate_no_undo():
+                    msg = "❌ Nothing to undo. No recent dev actions found."
+                    yield _sse({"type": "token", "content": msg})
+                    save_assistant_message(conversation_id, msg, [])
+                    yield _sse({"type": "done", "content": msg})
+                from werkzeug.wrappers import Response
+                return Response(generate_no_undo(), content_type="text/event-stream",
+                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+
+        pending = get_pending_dev_action(conversation_id)
+        if pending and msg_lower in _confirm_words:
+            # Execute all pending actions directly
+            def generate_confirm():
+                _set_dev_mode(False)  # Don't intercept during execution
+                try:
+                    # Show tool calls being executed
+                    for action in pending:
+                        yield _sse({"type": "tool_call", "tool": action.get("tool_name", ""), "arguments": action.get("arguments", {})})
+
+                    result = execute_pending_dev_action(conversation_id)
+                    if result:
+                        yield _sse({"type": "tool_result", "tool": "dev_actions", "result": (result or "")[:2000]})
+                        # Let AI summarize
+                        from niv_ai.niv_core.langchain.agent import stream_agent as _sa
+                        summary_msg = f"Developer actions executed successfully. Results:\n{result}\n\nSummarize what was done for the user. Be concise."
+                        full_resp = ""
+                        for evt in _sa(message=summary_msg, conversation_id=conversation_id, provider_name=provider, model=model, user=user, dev_mode=False):
+                            if evt.get("type") == "token":
+                                full_resp += evt.get("content", "")
+                                yield _sse(evt)
+                        try:
+                            frappe.db.sql("SELECT 1")
+                        except Exception:
+                            frappe.db.connect()
+                        tc_data = [{"tool": a.get("tool_name", ""), "arguments": a.get("arguments", {})} for a in pending]
+                        save_assistant_message(conversation_id, full_resp, tc_data)
+                    else:
+                        msg = "No pending action found to execute."
+                        yield _sse({"type": "token", "content": msg})
+                        save_assistant_message(conversation_id, msg, [])
+                except Exception as e:
+                    err_msg = f"Error executing actions: {str(e)}"
+                    yield _sse({"type": "error", "content": err_msg})
+                finally:
+                    _set_dev_mode(False)
+                yield _sse({"type": "done", "content": ""})
+
+            from werkzeug.wrappers import Response
+            return Response(generate_confirm(), content_type="text/event-stream",
+                          headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+
+        elif pending and msg_lower in _cancel_words:
+            clear_pending_dev_action(conversation_id)
+            def generate_cancel():
+                msg = "❌ Action cancelled. What would you like to do instead?"
+                yield _sse({"type": "token", "content": msg})
+                save_assistant_message(conversation_id, msg, [])
+                yield _sse({"type": "done", "content": msg})
+            from werkzeug.wrappers import Response
+            return Response(generate_cancel(), content_type="text/event-stream",
+                          headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+
     def generate():
         full_response = ""
         tool_calls_data = []
 
         try:
             from niv_ai.niv_core.langchain.agent import stream_agent
+            from niv_ai.niv_core.langchain.tools import set_dev_mode as _set_dev_mode, set_active_dev_conversation
+
+            # Set dev mode on tools layer (Redis flag + global conv_id for cross-thread)
+            if dev_mode:
+                _set_dev_mode(True, conversation_id)
+                set_active_dev_conversation(conversation_id)
 
             for event in stream_agent(
                 message=message,
@@ -79,6 +194,7 @@ def stream_chat(**kwargs):
                 provider_name=provider,
                 model=model,
                 user=user,
+                dev_mode=dev_mode,
             ):
                 event_type = event.get("type", "")
 
@@ -101,8 +217,27 @@ def stream_chat(**kwargs):
 
         except Exception as e:
             full_response = "Something went wrong. Please try again."
-            frappe.log_error(f"Stream error: {e}", "Niv AI Stream")
+            try:
+                frappe.log_error(f"Stream error: {e}", "Niv AI Stream")
+            except Exception:
+                print(f"[Niv AI Stream] Error: {e}")
             yield _sse({"type": "error", "content": full_response})
+        finally:
+            # Clear dev mode flag
+            if dev_mode:
+                _set_dev_mode(False, conversation_id)
+                set_active_dev_conversation("")
+
+        # Reconnect DB if stale before saving (gthread workers lose connections during streaming)
+        try:
+            frappe.db.sql("SELECT 1")
+        except Exception:
+            try:
+                frappe.db.connect()
+            except Exception:
+                print("[Niv AI Stream] DB reconnect failed, skipping save")
+                yield _sse({"type": "done", "content": full_response})
+                return
 
         # Save response
         save_assistant_message(conversation_id, full_response, tool_calls_data)

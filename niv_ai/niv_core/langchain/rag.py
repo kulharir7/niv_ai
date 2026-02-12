@@ -1,6 +1,9 @@
 """
 RAG (Retrieval-Augmented Generation) — FAISS vectorstore.
 No raw SQL, no injection risk. Lazy-loaded.
+
+Embeddings: Uses provider API (Mistral/OpenAI) — zero local install.
+Fallback: Simple keyword matching if embeddings unavailable.
 """
 import os
 import json
@@ -13,15 +16,65 @@ _embeddings = None
 
 
 def _get_embeddings():
-    """HuggingFace embeddings — free, local, ~90MB model."""
+    """Get embeddings from configured AI provider (Mistral/OpenAI).
+    
+    Uses the same API key as chat — no extra config needed.
+    Falls back to OpenAI-compatible endpoint.
+    """
     global _embeddings
-    if _embeddings is None:
-        from langchain_community.embeddings import HuggingFaceEmbeddings
-        _embeddings = HuggingFaceEmbeddings(
-            model_name="all-MiniLM-L6-v2",
-            model_kwargs={"device": "cpu"},
-            encode_kwargs={"normalize_embeddings": True},
+    if _embeddings is not None:
+        return _embeddings
+
+    settings = frappe.get_cached_doc("Niv Settings")
+    provider = None
+    if settings.default_provider:
+        try:
+            provider = frappe.get_doc("Niv AI Provider", settings.default_provider)
+        except Exception:
+            pass
+
+    if not provider:
+        # Fallback: try first active provider
+        providers = frappe.get_all(
+            "Niv AI Provider",
+            filters={"is_active": 1},
+            fields=["name"],
+            limit=1,
         )
+        if providers:
+            provider = frappe.get_doc("Niv AI Provider", providers[0].name)
+
+    if not provider:
+        frappe.throw("No AI provider configured. Set up a provider in Niv Settings.")
+
+    api_key = provider.get_password("api_key") if provider.api_key else ""
+    base_url = (provider.base_url or "").rstrip("/")
+
+    # Use OpenAIEmbeddings for all providers (OpenAI-compatible API)
+    # Mistral, OpenAI, Groq — all support /v1/embeddings endpoint
+    from langchain_openai import OpenAIEmbeddings
+
+    provider_name_lower = (provider.provider_name or provider.name or "").lower()
+
+    if "mistral" in provider_name_lower or "mistral" in base_url:
+        # Mistral uses OpenAI-compatible API at api.mistral.ai/v1
+        # check_embedding_ctx_length=False prevents tiktoken tokenization
+        # (Mistral expects raw strings, not token IDs)
+        _embeddings = OpenAIEmbeddings(
+            model="mistral-embed",
+            api_key=api_key,
+            base_url="https://api.mistral.ai/v1",
+            check_embedding_ctx_length=False,
+        )
+    else:
+        kwargs = {"api_key": api_key}
+        if base_url:
+            kwargs["base_url"] = base_url
+        _embeddings = OpenAIEmbeddings(
+            model="text-embedding-3-small",
+            **kwargs,
+        )
+
     return _embeddings
 
 
@@ -63,19 +116,26 @@ def _reset_vectorstore():
     _vectorstore = None
 
 
-def add_documents(texts: List[str], metadatas: List[dict] = None) -> int:
-    """Add documents to knowledge base. Returns count added."""
+def add_documents(texts: List[str], metadatas: List[dict] = None, batch_size: int = 50) -> int:
+    """Add documents to knowledge base in batches. Returns count added."""
     from langchain_core.documents import Document
 
     store = _get_vectorstore()
-    docs = []
-    for i, text in enumerate(texts):
-        meta = metadatas[i] if metadatas and i < len(metadatas) else {}
-        docs.append(Document(page_content=text, metadata=meta))
+    total_added = 0
 
-    store.add_documents(docs)
+    for i in range(0, len(texts), batch_size):
+        batch_texts = texts[i:i + batch_size]
+        docs = []
+        for j, text in enumerate(batch_texts):
+            idx = i + j
+            meta = metadatas[idx] if metadatas and idx < len(metadatas) else {}
+            docs.append(Document(page_content=text, metadata=meta))
+
+        store.add_documents(docs)
+        total_added += len(docs)
+
     store.save_local(_get_store_path())
-    return len(docs)
+    return total_added
 
 
 def search(query: str, k: int = 5) -> List[Dict]:
@@ -197,11 +257,14 @@ def get_rag_context(query: str, k: int = 3) -> str:
         if not results:
             return ""
 
-        parts = ["Relevant knowledge base information:"]
+        parts = ["Relevant context from knowledge base:"]
         for i, r in enumerate(results, 1):
             title = r["metadata"].get("title", "")
-            prefix = f"[{title}] " if title else ""
-            parts.append(f"{i}. {prefix}{r['content']}")
+            source = r["metadata"].get("source", "")
+            prefix = f"[{title}]" if title else f"[{source}]" if source else ""
+            parts.append(f"{i}. {prefix} {r['content']}")
         return "\n".join(parts)
-    except Exception:
+    except Exception as e:
+        # RAG failure should never block chat
+        print(f"[Niv AI RAG] Context retrieval failed: {e}")
         return ""

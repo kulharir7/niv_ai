@@ -129,6 +129,12 @@ class NivBillingCallback(BaseCallbackHandler):
             return
 
         try:
+            # Reconnect DB if stale (gthread workers lose connections during streaming)
+            try:
+                frappe.db.sql("SELECT 1")
+            except Exception:
+                frappe.db.connect()
+
             settings = frappe.get_cached_doc("Niv Settings")
             if not settings.enable_billing:
                 return
@@ -141,7 +147,10 @@ class NivBillingCallback(BaseCallbackHandler):
                 conversation=self.conversation_id,
             )
         except Exception as e:
-            frappe.log_error(f"Token deduction failed: {e}", "Niv AI Billing")
+            try:
+                frappe.log_error(f"Token deduction failed: {e}", "Niv AI Billing")
+            except Exception:
+                print(f"[Niv AI Billing] Token deduction failed: {e}")
 
     @property
     def total_tokens(self) -> int:

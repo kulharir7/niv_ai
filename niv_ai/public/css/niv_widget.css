@@ -1,14 +1,18 @@
-/* Niv AI Widget — FAB + iframe panel */
+/* ═══════════════════════════════════════════════════════════
+   Niv AI Widget — FAB + iframe panel
+   Modern glassmorphism dark design
+   ═══════════════════════════════════════════════════════════ */
 
 .niv-fab {
     position: fixed;
     right: 24px;
     bottom: 24px;
-    width: 54px;
-    height: 54px;
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
     border: none;
-    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 100%);
+    background: linear-gradient(135deg, #7c3aed 0%, #a855f7 50%, #7c3aed 100%);
+    background-size: 200% 200%;
     color: #fff;
     font-size: 24px;
     font-weight: 700;
@@ -17,46 +21,67 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 20px rgba(124, 58, 237, 0.45);
-    transition: transform 0.2s ease, box-shadow 0.2s ease, opacity 0.3s ease;
-    animation: nivPulse 2.5s ease-in-out infinite;
+    box-shadow:
+        0 4px 20px rgba(124, 58, 237, 0.4),
+        0 0 0 0 rgba(124, 58, 237, 0);
+    transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                box-shadow 0.25s ease,
+                opacity 0.3s ease;
+    animation: nivFabGradient 4s ease-in-out infinite, nivFabPulse 3s ease-in-out infinite;
     line-height: 1;
 }
 .niv-fab:hover {
-    transform: scale(1.1);
-    box-shadow: 0 6px 28px rgba(124, 58, 237, 0.6);
+    transform: scale(1.08);
+    box-shadow:
+        0 8px 32px rgba(124, 58, 237, 0.5),
+        0 0 0 4px rgba(124, 58, 237, 0.1);
 }
-.niv-fab:active { transform: scale(0.95); }
+.niv-fab:active {
+    transform: scale(0.95);
+    box-shadow: 0 2px 12px rgba(124, 58, 237, 0.4);
+}
 .niv-fab.hidden {
     opacity: 0;
     pointer-events: none;
-    transform: scale(0.3);
+    transform: scale(0.3) rotate(90deg);
 }
-@keyframes nivPulse {
-    0%, 100% { box-shadow: 0 4px 20px rgba(124, 58, 237, 0.45); }
-    50% { box-shadow: 0 4px 30px rgba(124, 58, 237, 0.7), 0 0 50px rgba(124, 58, 237, 0.15); }
+@keyframes nivFabGradient {
+    0%, 100% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+}
+@keyframes nivFabPulse {
+    0%, 100% { box-shadow: 0 4px 20px rgba(124, 58, 237, 0.4), 0 0 0 0 rgba(124, 58, 237, 0); }
+    50% { box-shadow: 0 4px 28px rgba(124, 58, 237, 0.55), 0 0 0 8px rgba(124, 58, 237, 0.06); }
 }
 
-/* Panel */
+/* Panel — Glassmorphism dark */
 .niv-panel {
     position: fixed;
     right: 24px;
     bottom: 24px;
-    width: 480px;
-    height: 88vh;
-    max-height: 850px;
+    width: 440px;
+    height: 85vh;
+    max-height: 780px;
     min-height: 400px;
-    background: #212121;
-    border-radius: 16px;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0,0,0,0.08);
+    background: rgba(24, 24, 30, 0.92);
+    backdrop-filter: blur(24px) saturate(1.3);
+    -webkit-backdrop-filter: blur(24px) saturate(1.3);
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow:
+        0 32px 80px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.04),
+        inset 0 1px 0 rgba(255, 255, 255, 0.06);
     z-index: 10002;
     display: flex;
     flex-direction: column;
     overflow: hidden;
     opacity: 0;
-    transform: translateY(30px) scale(0.92);
+    transform: translateY(24px) scale(0.94);
     pointer-events: none;
-    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+        opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+        transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .niv-panel.open {
     opacity: 1;
@@ -66,51 +91,55 @@
 
 /* Panel Header */
 .niv-panel-header {
-    background: #1a1a1a;
+    background: rgba(16, 16, 22, 0.8);
     color: #fff;
-    padding: 12px 16px;
+    padding: 14px 18px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     flex-shrink: 0;
-    border-bottom: 1px solid rgba(255,255,255,0.08);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
 }
 .niv-panel-title {
     font-weight: 700;
     font-size: 15px;
     display: flex;
     align-items: center;
-    gap: 8px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    gap: 10px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+    letter-spacing: -0.01em;
 }
 .niv-panel-avatar {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    border-radius: 10px;
     background: linear-gradient(135deg, #7c3aed, #a855f7);
     display: flex;
     align-items: center;
     justify-content: center;
     font-size: 13px;
     font-weight: 700;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.3);
 }
 .niv-panel-actions {
     display: flex;
-    gap: 4px;
+    gap: 2px;
 }
 .niv-panel-btn {
     border: none;
     background: none;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(255, 255, 255, 0.5);
     cursor: pointer;
-    padding: 6px 8px;
-    border-radius: 6px;
+    padding: 7px 9px;
+    border-radius: 8px;
     font-size: 14px;
-    transition: background 0.15s, color 0.15s;
+    transition: background 0.15s ease, color 0.15s ease;
 }
 .niv-panel-btn:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.9);
 }
 
 /* Loading state */
@@ -121,17 +150,17 @@
     align-items: center;
     justify-content: center;
     gap: 16px;
-    color: #9ca3af;
+    color: rgba(255, 255, 255, 0.4);
     font-size: 14px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
 }
 .niv-loading-spinner {
-    width: 36px;
-    height: 36px;
-    border: 3px solid #e5e7eb;
-    border-top-color: #7c3aed;
+    width: 32px;
+    height: 32px;
+    border: 2.5px solid rgba(255, 255, 255, 0.08);
+    border-top-color: #a78bfa;
     border-radius: 50%;
-    animation: nivSpin 0.8s linear infinite;
+    animation: nivSpin 0.7s linear infinite;
 }
 @keyframes nivSpin {
     to { transform: rotate(360deg); }
@@ -142,8 +171,8 @@
     flex: 1;
     width: 100%;
     border: none;
-    display: none; /* hidden until loaded */
-    background: #212121;
+    display: none;
+    background: rgba(24, 24, 30, 0.95);
 }
 
 /* Mobile */
@@ -157,6 +186,7 @@
         max-height: 100vh;
         max-height: 100dvh;
         border-radius: 0;
+        border: none;
         padding-bottom: env(safe-area-inset-bottom, 0px);
     }
     .niv-panel.open {
@@ -165,18 +195,28 @@
     .niv-fab {
         right: 16px;
         bottom: 16px;
-        width: 48px;
-        height: 48px;
+        width: 50px;
+        height: 50px;
         font-size: 20px;
     }
     .niv-panel-header {
-        padding: 8px 12px;
-        padding-top: calc(8px + env(safe-area-inset-top, 0px));
+        padding: 10px 14px;
+        padding-top: calc(10px + env(safe-area-inset-top, 0px));
     }
 }
 
-/* Dark theme */
-[data-theme="dark"] .niv-panel { background: #1f2937; }
-[data-theme="dark"] .niv-iframe { background: #212121; }
-[data-theme="dark"] .niv-panel-loading { color: #6b7280; }
-[data-theme="dark"] .niv-loading-spinner { border-color: #374151; border-top-color: #a78bfa; }
+/* Dark theme overrides */
+[data-theme="dark"] .niv-panel {
+    background: rgba(18, 18, 24, 0.95);
+    border-color: rgba(255, 255, 255, 0.06);
+}
+[data-theme="dark"] .niv-iframe {
+    background: rgba(18, 18, 24, 0.95);
+}
+[data-theme="dark"] .niv-panel-loading {
+    color: rgba(255, 255, 255, 0.35);
+}
+[data-theme="dark"] .niv-loading-spinner {
+    border-color: rgba(255, 255, 255, 0.06);
+    border-top-color: #a78bfa;
+}

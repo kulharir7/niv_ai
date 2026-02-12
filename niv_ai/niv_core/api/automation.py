@@ -15,9 +15,13 @@ def on_doc_event(doc, method):
     """Generic doc event handler - called for all doctypes"""
     # Map method name to event type
     event_map = {
-        "on_submit": "on_submit",
+        "before_save": "before_save",
         "on_update": "on_update",
+        "before_submit": "before_submit",
+        "on_submit": "on_submit",
+        "before_cancel": "before_cancel",
         "on_cancel": "on_cancel",
+        "on_trash": "on_trash",
         "after_insert": "after_insert",
     }
 
@@ -35,6 +39,13 @@ def on_doc_event(doc, method):
         check_auto_actions(doc, event)
     except Exception as e:
         frappe.log_error(f"Auto action error for {doc.doctype} {doc.name}: {str(e)}", "Niv Auto Action Error")
+
+    # Niv AI Triggers — run AI agent on doc events
+    try:
+        from niv_ai.niv_core.trigger_engine import run_triggers
+        run_triggers(doc, method)
+    except Exception as e:
+        frappe.log_error(f"Niv Trigger error for {doc.doctype} {doc.name}: {str(e)}", "Niv AI Trigger Error")
 
 
 def check_auto_actions(doc, event):

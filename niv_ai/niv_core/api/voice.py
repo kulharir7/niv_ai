@@ -98,8 +98,15 @@ def _get_voice_config():
     settings = frappe.get_single("Niv Settings")
     api_key = settings.get_password("voice_api_key") if settings.voice_api_key else None
     base_url = settings.voice_base_url or "https://api.openai.com/v1"
-    default_voice = settings.default_voice or "en_US-lessac-medium"
+    default_voice = settings.default_voice or "hi_IN-priyamvada-medium"
     tts_model = settings.tts_model or "tts-1"
+
+    # Read additional voice settings safely (fields may not exist yet)
+    stt_engine = getattr(settings, "stt_engine", "") or "auto"
+    tts_engine = getattr(settings, "tts_engine", "") or "auto"
+    tts_language = getattr(settings, "tts_language", "") or "en"
+    tts_voice = getattr(settings, "tts_voice", "") or default_voice
+    enable_voice = getattr(settings, "enable_voice", 1)
 
     if not api_key:
         provider_name = settings.default_provider
@@ -112,11 +119,24 @@ def _get_voice_config():
             except Exception:
                 pass
 
+    # Detect provider type from base_url
+    provider_type = "openai"  # default
+    if base_url and "mistral" in base_url.lower():
+        provider_type = "mistral"
+    elif base_url and "anthropic" in base_url.lower():
+        provider_type = "anthropic"
+
     return {
         "api_key": api_key,
         "base_url": base_url.rstrip("/") if base_url else "",
         "default_voice": default_voice,
         "tts_model": tts_model,
+        "provider_type": provider_type,
+        "stt_engine": stt_engine,
+        "tts_engine": tts_engine,
+        "tts_language": tts_language,
+        "tts_voice": tts_voice,
+        "enable_voice": enable_voice,
     }
 
 
@@ -185,6 +205,14 @@ def _get_piper_model_path(voice_name):
         return None, None
 
 
+def _is_piper_voice_name(name):
+    """Check if a voice name looks like a Piper voice (e.g. en_US-lessac-medium)"""
+    if not name:
+        return False
+    # Piper voices have format: lang_REGION-name-quality
+    return bool(re.match(r'^[a-z]{2}_[A-Z]{2}-\w+-\w+$', name))
+
+
 def _tts_piper(text, voice_name=None):
     """Generate speech using Piper TTS (local, free, fast)"""
     try:
@@ -192,7 +220,9 @@ def _tts_piper(text, voice_name=None):
     except ImportError:
         return None
 
-    voice_name = voice_name or "en_US-lessac-medium"
+    # Always use Piper-format voice name, fallback to default
+    if not voice_name or not _is_piper_voice_name(voice_name):
+        voice_name = "en_US-lessac-medium"
 
     try:
         import wave
@@ -239,6 +269,10 @@ def _tts_piper(text, voice_name=None):
 
 def _tts_openai(text, voice, model, response_format, config):
     """Generate speech using OpenAI-compatible API"""
+    # Don't pass Piper-format voice names to OpenAI
+    if _is_piper_voice_name(voice):
+        voice = "alloy"
+
     response = requests.post(
         f"{config['base_url']}/audio/speech",
         headers={
@@ -278,7 +312,7 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
     """
     Convert text to speech. Tries engines in order:
     1. Piper TTS (free, local, fast) — if installed
-    2. OpenAI-compatible API — if API key configured
+    2. OpenAI-compatible API — if API key configured AND provider supports TTS
     3. Returns engine='browser' signal for client-side fallback
     """
     check_rate_limit()
@@ -296,13 +330,19 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
 
     # ── Try Piper TTS (free, local) ──
     if engine in (None, "auto", "piper"):
-        result = _tts_piper(text, voice or config.get("default_voice"))
+        piper_voice = voice or config.get("default_voice") or "en_US-lessac-medium"
+        result = _tts_piper(text, piper_voice)
         if result:
             return result
 
-    # ── Try OpenAI-compatible API ──
+    # ── Try OpenAI-compatible API (only if provider supports TTS) ──
     if engine in (None, "auto", "openai") and config.get("api_key"):
-        return _tts_openai(text, voice or "alloy", model or config["tts_model"], response_format, config)
+        # Skip OpenAI TTS for providers that don't have /audio/speech (e.g. Mistral)
+        if config.get("provider_type") == "mistral":
+            frappe.logger().info("Skipping OpenAI TTS: Mistral does not support /audio/speech")
+        else:
+            openai_voice = voice if (voice and not _is_piper_voice_name(voice)) else "alloy"
+            return _tts_openai(text, openai_voice, model or config["tts_model"], response_format, config)
 
     # ── Fallback: tell client to use browser TTS ──
     return {"audio_url": None, "engine": "browser", "text": text}
@@ -311,7 +351,7 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
 @frappe.whitelist(allow_guest=False)
 def speech_to_text(audio_file):
     """
-    Transcribe audio using OpenAI-compatible Whisper API.
+    Transcribe audio using OpenAI-compatible or Mistral STT API.
     audio_file: URL of uploaded file
     """
     check_rate_limit()
@@ -331,12 +371,27 @@ def speech_to_text(audio_file):
     if not os.path.exists(file_path):
         frappe.throw(f"Audio file not found: {audio_file}")
 
+    # Auto-detect STT model based on provider
+    provider_type = config.get("provider_type", "openai")
+    if provider_type == "mistral":
+        stt_model = "mistral-stt-latest"
+    else:
+        stt_model = "whisper-1"
+
+    # Build request data
+    data = {"model": stt_model}
+
+    # Add language parameter if configured
+    lang = config.get("tts_language", "")
+    if lang:
+        data["language"] = lang
+
     with open(file_path, "rb") as f:
         resp = requests.post(
             f"{config['base_url']}/audio/transcriptions",
             headers={"Authorization": f"Bearer {config['api_key']}"},
             files={"file": (os.path.basename(audio_file), f, "audio/webm")},
-            data={"model": "whisper-1"},
+            data=data,
             timeout=60,
         )
 
@@ -404,12 +459,114 @@ def voice_chat(conversation_id, audio_file, voice=None):
 
 
 @frappe.whitelist(allow_guest=False)
+def voice_chat_base64(**kwargs):
+    """Voice chat using base64-encoded audio — bypasses upload_file API.
+    
+    Args:
+        audio_base64: base64 encoded audio data
+        conversation_id: optional, auto-creates if empty
+        browser_transcript: optional, browser STT result
+    """
+    import base64, tempfile, os
+    
+    audio_base64 = frappe.form_dict.get("audio_base64", "")
+    conversation_id = frappe.form_dict.get("conversation_id", "")
+    browser_transcript = frappe.form_dict.get("browser_transcript", "")
+    
+    # Auto-create conversation if not provided
+    if not conversation_id:
+        try:
+            from niv_ai.niv_core.api.chat import create_conversation
+            conv = create_conversation(title="Voice Chat")
+            if isinstance(conv, dict):
+                conversation_id = conv.get("name") or conv.get("conversation_id", "")
+            else:
+                conversation_id = str(conv)
+        except Exception as e:
+            frappe.throw("Failed to create conversation: " + str(e))
+    
+    user_text = browser_transcript
+    
+    # If we have audio, try server-side STT
+    if audio_base64 and not user_text:
+        try:
+            audio_bytes = base64.b64decode(audio_base64)
+            # Write to temp file
+            tmp = tempfile.NamedTemporaryFile(suffix=".webm", delete=False)
+            tmp.write(audio_bytes)
+            tmp.close()
+            
+            # Save as Frappe file
+            from frappe.utils.file_manager import save_file
+            file_doc = save_file(
+                "voice_input.webm", audio_bytes, "Niv Conversation",
+                conversation_id, folder="Home/Niv AI", is_private=1
+            )
+            file_url = file_doc.file_url
+            
+            # Run STT
+            stt_result = speech_to_text(file_url)
+            user_text = stt_result.get("text", "")
+            
+            # Cleanup temp file
+            os.unlink(tmp.name)
+            try:
+                _cleanup_file(file_url)
+            except Exception:
+                pass
+        except Exception as e:
+            frappe.log_error("voice_chat_base64 STT error: " + str(e))
+            if not user_text:
+                user_text = browser_transcript or ""
+    
+    if not user_text:
+        return {
+            "text": "",
+            "response": "I couldn't hear anything. Please try again.",
+            "audio_url": None,
+            "conversation_id": conversation_id,
+            "tokens": {"input": 0, "output": 0, "total": 0},
+        }
+    
+    # Send to chat
+    from niv_ai.niv_core.api.chat import send_message
+    chat_result = send_message(conversation_id=conversation_id, message=user_text)
+    response_text = chat_result.get("message", "") or chat_result.get("content", "")
+    
+    # Generate TTS
+    audio_url = None
+    if response_text:
+        try:
+            tts_result = text_to_speech(text=response_text)
+            audio_url = tts_result.get("audio_url")
+        except Exception:
+            pass
+    
+    return {
+        "text": user_text,
+        "response": response_text,
+        "audio_url": audio_url,
+        "conversation_id": conversation_id,
+        "message_id": chat_result.get("message_id"),
+        "tokens": {
+            "input": chat_result.get("input_tokens", 0),
+            "output": chat_result.get("output_tokens", 0),
+            "total": chat_result.get("total_tokens", 0),
+        },
+    }
+
+
+@frappe.whitelist(allow_guest=False)
 def get_tts_status():
     """Check which TTS engines are available"""
+    config = _get_voice_config()
+    # OpenAI TTS only available if provider supports it (not Mistral)
+    openai_available = bool(config.get("api_key")) and config.get("provider_type") != "mistral"
     return {
         "piper": _is_piper_available(),
-        "openai": bool(_get_voice_config().get("api_key")),
+        "openai": openai_available,
         "browser": True,
+        "provider_type": config.get("provider_type", "unknown"),
     }
 
 

@@ -84,6 +84,7 @@ class NivChat {
         this.setup_voice_mode();
         this.last_used_model = "";
         this.setup_dark_mode();
+        this.setup_dev_mode();
         // emoji picker disabled
         this.setup_drag_drop();
         this.setup_slash_commands();
@@ -707,16 +708,46 @@ class NivChat {
 
     filter_conversations(query) {
         const q = query.toLowerCase();
+        if (q.length < 2) {
+            // Show all, reset
+            this.$convList.find(".niv-conv-item, .niv-conv-date-group").show();
+            return;
+        }
+
+        // Local title filter (instant)
         this.$convList.find(".niv-conv-item").each(function () {
             const title = $(this).find(".conv-title").text().toLowerCase();
             $(this).toggle(title.includes(q));
         });
-        // Hide empty group headers
         this.$convList.find(".niv-conv-date-group").each(function () {
             const $next = $(this).nextUntil(".niv-conv-date-group");
-            const anyVisible = $next.filter(":visible").length > 0;
-            $(this).toggle(anyVisible);
+            $(this).toggle($next.filter(":visible").length > 0);
         });
+
+        // Server-side full-text search (debounced, 3+ chars)
+        if (q.length >= 3) {
+            clearTimeout(this._searchTimer);
+            this._searchTimer = setTimeout(() => {
+                frappe.call({
+                    method: "niv_ai.niv_core.api.conversation.search_conversations",
+                    args: { query: q, limit: 20 },
+                    async: true,
+                    callback: (r) => {
+                        if (!r.message || !r.message.length) return;
+                        const serverNames = r.message.map(c => c.name);
+                        // Also show conversations found by server search
+                        this.$convList.find(".niv-conv-item").each(function () {
+                            const name = $(this).data("name");
+                            if (serverNames.includes(name)) $(this).show();
+                        });
+                        this.$convList.find(".niv-conv-date-group").each(function () {
+                            const $next = $(this).nextUntil(".niv-conv-date-group");
+                            $(this).toggle($next.filter(":visible").length > 0);
+                        });
+                    },
+                });
+            }, 300);
+        }
     }
 
     // ─── Messages ───────────────────────────────────────────────────
@@ -740,7 +771,7 @@ class NivChat {
             this.scroll_to_bottom();
             this.update_last_assistant_actions();
         } catch (e) {
-            this.$chatArea.html('<div class="niv-error">Messages load nahi ho paye. Please try again. 🔄</div>');
+            this.$chatArea.html('<div class="niv-error">Failed to load messages. Please try again. 🔄</div>');
         }
     }
 
@@ -778,6 +809,8 @@ class NivChat {
                             <button class="msg-action-btn btn-edit-msg" title="Edit"><i class="fa fa-pencil"></i></button>
                             <button class="msg-action-btn btn-pin-msg ${meta.is_pinned ? 'active' : ''}" title="Pin"><i class="fa fa-thumb-tack"></i></button>
                         ` : `
+                            <button class="msg-action-btn btn-react-up" title="Good response"><i class="fa fa-thumbs-up"></i></button>
+                            <button class="msg-action-btn btn-react-down" title="Bad response"><i class="fa fa-thumbs-down"></i></button>
                             <button class="msg-action-btn btn-copy-msg" title="Copy"><i class="fa fa-copy"></i></button>
                             <button class="msg-action-btn btn-tts-msg" title="Read aloud"><i class="fa fa-volume-up"></i></button>
                             <button class="msg-action-btn btn-pin-msg ${meta.is_pinned ? 'active' : ''}" title="Pin"><i class="fa fa-thumb-tack"></i></button>
@@ -805,11 +838,15 @@ class NivChat {
         this.$chatArea.append($msg);
         this.messages_data.push({ role, content: content || "", meta, $el: $msg });
 
-        // Reactions disabled
-        if (false && meta.reactions_json) {
+        // Load saved reactions
+        if (meta.reactions_json) {
             try {
                 const reactions = typeof meta.reactions_json === "string" ? JSON.parse(meta.reactions_json) : meta.reactions_json;
-                this.render_reactions($msg, reactions, msgIndex);
+                const userReaction = reactions[frappe.session.user];
+                if (userReaction) {
+                    this.reactions[msgIndex] = userReaction;
+                    $msg.find(userReaction === "up" ? ".btn-react-up" : ".btn-react-down").addClass("active");
+                }
             } catch (e) {}
         }
 
@@ -1006,14 +1043,26 @@ class NivChat {
     toggle_reaction(msgIndex, type, $btn) {
         const current = this.reactions[msgIndex];
         const $msg = this.messages_data[msgIndex].$el;
+        const meta = this.messages_data[msgIndex]?.meta || {};
 
         $msg.find(".btn-react-up, .btn-react-down").removeClass("active");
 
+        let newReaction = null;
         if (current === type) {
             this.reactions[msgIndex] = null;
         } else {
             this.reactions[msgIndex] = type;
+            newReaction = type;
             $btn.addClass("active");
+        }
+
+        // Save reaction to server
+        if (meta.name) {
+            frappe.call({
+                method: "niv_ai.niv_core.api.chat.save_reaction",
+                args: { message_name: meta.name, reaction: newReaction || "" },
+                async: true,
+            });
         }
     }
 
@@ -1088,7 +1137,7 @@ class NivChat {
                 });
             } catch (err) {
                 this.hide_typing();
-                this.append_message("assistant", `❌ Kuch galat ho gaya. Please try again.\n\n_${err.message || ""}_`, { is_error: 1 });
+                this.append_message("assistant", `⚠️ Something went wrong. Please try again.\n\n_${err.message || ""}_`, { is_error: 1 });
             }
         }
 
@@ -1151,6 +1200,8 @@ class NivChat {
                 context: JSON.stringify(this.get_current_context()),
             };
             if (this.selected_model) params.model = this.selected_model;
+            if (this.dev_mode) params.dev_mode = 1;
+            if (this.dev_mode) params.dev_mode = 1;
 
             const abortController = new AbortController();
             this._abortController = abortController;
@@ -1275,14 +1326,14 @@ class NivChat {
                             this.hide_typing();
                             var errMsg = data.message || data.content || "Something went wrong";
                             if (errMsg.toLowerCase().indexOf("insufficient") !== -1 || errMsg.toLowerCase().indexOf("balance") !== -1) {
-                                this.append_message("assistant", `💳 Credits khatam ho gaye!\n\n${errMsg}\n\nPlease recharge karein.`, { is_error: 1 });
+                                this.append_message("assistant", `💳 Insufficient credits!\n\n${errMsg}\n\nPlease recharge to continue.`, { is_error: 1 });
                                 this.load_balance();
                             } else if (errMsg.toLowerCase().indexOf("rate limit") !== -1) {
-                                this.append_message("assistant", `⏳ Bahut zyada messages! Thodi der mein try karein.\n\n_${errMsg}_`, { is_error: 1 });
+                                this.append_message("assistant", `⏳ Too many requests! Please wait a moment and try again.\n\n_${errMsg}_`, { is_error: 1 });
                             } else if (errMsg.toLowerCase().indexOf("timeout") !== -1 || errMsg.toLowerCase().indexOf("timed out") !== -1) {
-                                this.append_message("assistant", `⏱️ Request timeout ho gayi. Please dubara try karein.`, { is_error: 1 });
+                                this.append_message("assistant", `⏱️ Request timed out. Please try again.`, { is_error: 1 });
                             } else if (errMsg.toLowerCase().indexOf("api key") !== -1 || errMsg.toLowerCase().indexOf("auth") !== -1) {
-                                this.append_message("assistant", `🔑 AI provider authentication failed. Admin se contact karein.`, { is_error: 1 });
+                                this.append_message("assistant", `🔑 AI provider authentication failed. Please contact your administrator.`, { is_error: 1 });
                             } else {
                                 this.append_message("assistant", `❌ ${errMsg}`, { is_error: 1 });
                             }
@@ -1460,7 +1511,7 @@ class NivChat {
         this.recognition = new SpeechRecognition();
         this.recognition.continuous = true;
         this.recognition.interimResults = false;
-        this.recognition.lang = "hi-IN";
+        this.recognition.lang = "en-IN";
         this.$voiceBtn.addClass("recording");
 
         this.recognition.onresult = (event) => {
@@ -1586,7 +1637,7 @@ class NivChat {
         if (!("speechSynthesis" in window)) return;
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "hi-IN";
+        utterance.lang = "en-IN";
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
         window.speechSynthesis.speak(utterance);
@@ -1928,8 +1979,24 @@ class NivChat {
 
         // Bind events
         this.wrapper.find(".btn-voice-mode").on("click", () => this.open_voice_mode());
+        const self = this;
         this.$voiceOverlay.find(".voice-close-btn").on("click", () => this.close_voice_mode());
         this.$voiceOrb.on("click", () => this.voice_orb_clicked());
+
+        // Control bar buttons
+        this.$voiceOverlay.find(".voice-end-btn").on("click", () => this.close_voice_mode());
+        this.$voiceOverlay.find(".voice-mute-btn").on("click", function() {
+            $(this).toggleClass("active");
+            if (self.voiceStream) {
+                self.voiceStream.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
+            }
+        });
+        this.$voiceOverlay.find(".voice-speaker-btn").on("click", function() {
+            $(this).toggleClass("active");
+            if (self.voiceAudio) {
+                self.voiceAudio.muted = !self.voiceAudio.muted;
+            }
+        });
 
         // ESC to close
         this.$voiceOverlay.on("keydown", (e) => {
@@ -2166,30 +2233,32 @@ class NivChat {
 
             try {
                 const blob = new Blob(this.voiceAudioChunks, { type: this.voiceAudioChunks[0]?.type || "audio/webm" });
-                const formData = new FormData();
-                formData.append("file", blob, "voice_input.webm");
-                formData.append("is_private", "1");
-                formData.append("folder", "Home/Niv AI");
 
-                const uploadResp = await fetch("/api/method/upload_file", {
-                    method: "POST",
-                    body: formData,
-                    headers: { "X-Frappe-CSRF-Token": frappe.csrf_token },
+                // Convert blob to base64 and send via voice_chat_base64 (bypasses upload_file 417)
+                const reader = new FileReader();
+                const base64Data = await new Promise((resolve, reject) => {
+                    reader.onloadend = () => resolve(reader.result.split(",")[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
                 });
 
-                if (!uploadResp.ok) throw new Error("Upload failed");
-                const uploadData = await uploadResp.json();
-                const fileUrl = uploadData.message?.file_url;
-                if (!fileUrl) throw new Error("No file URL");
-
                 const r = await frappe.call({
-                    method: "niv_ai.niv_core.api.voice.voice_chat",
-                    args: { conversation_id: this.current_conversation, audio_file: fileUrl },
+                    method: "niv_ai.niv_core.api.voice.voice_chat_base64",
+                    args: {
+                        conversation_id: this.current_conversation || "",
+                        audio_base64: base64Data,
+                        browser_transcript: this.voiceBrowserTranscript || "",
+                    },
                 });
                 result = r.message;
                 if (!result || !result.response) throw new Error("Empty response");
+
+                // Update conversation_id if auto-created
+                if (result.conversation_id && !this.current_conversation) {
+                    this.current_conversation = result.conversation_id;
+                }
             } catch (serverErr) {
-                console.warn("Server voice API unavailable, using browser fallback:", serverErr.message);
+                console.warn("Server voice API failed:", serverErr.message);
                 useServerAPI = false;
             }
 
@@ -2292,7 +2361,7 @@ class NivChat {
         this.set_voice_state("speaking");
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "hi-IN";
+        utterance.lang = "en-IN";
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
         utterance.onend = () => {
@@ -2481,6 +2550,45 @@ class NivChat {
         }
         this.$darkModeToggle.prop("checked", on);
         localStorage.setItem("niv-dark-mode", on ? "true" : "false");
+    }
+
+    setup_dev_mode() {
+        // Only show for System Manager
+        if (!frappe.user.has_role("System Manager")) return;
+
+        this.wrapper.find(".niv-dev-mode-section").show();
+        this.$devModeToggle = this.wrapper.find(".btn-dev-mode-toggle");
+        this.dev_mode = localStorage.getItem("niv-dev-mode") === "true";
+        this.$devModeToggle.prop("checked", this.dev_mode);
+
+        this.$devModeToggle.on("change", () => {
+            this.dev_mode = this.$devModeToggle.is(":checked");
+            localStorage.setItem("niv-dev-mode", this.dev_mode ? "true" : "false");
+            this.update_dev_mode_indicator();
+            if (this.dev_mode) {
+                frappe.show_alert({message: "Developer Mode ON — AI will help with DocType creation, scripts, and customizations.", indicator: "blue"}, 5);
+            } else {
+                frappe.show_alert({message: "Developer Mode OFF — Normal assistant mode.", indicator: "green"}, 3);
+            }
+        });
+
+        this.update_dev_mode_indicator();
+    }
+
+    update_dev_mode_indicator() {
+        let $indicator = this.wrapper.find(".niv-dev-mode-indicator");
+        if (this.dev_mode) {
+            if (!$indicator.length) {
+                this.wrapper.find(".niv-header-title").after(
+                    '<span class="niv-dev-mode-indicator" title="Developer Mode Active" style="' +
+                    "font-size:11px;background:var(--niv-accent,#7c3aed);color:#fff;padding:2px 8px;" +
+                    "border-radius:10px;margin-left:8px;font-weight:600;" +
+                    '">DEV</span>'
+                );
+            }
+        } else {
+            $indicator.remove();
+        }
     }
 
     // ─── Emoji Picker ───────────────────────────────────────────────

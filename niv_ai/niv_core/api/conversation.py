@@ -329,3 +329,27 @@ def get_system_prompts():
         order_by="is_default DESC, prompt_name ASC",
     )
     return prompts
+
+
+@frappe.whitelist(allow_guest=False)
+def search_conversations(query, limit=20):
+    """Full-text search across conversation messages.
+    Returns conversations with matching messages."""
+    if not query or len(query.strip()) < 2:
+        return []
+
+    user = frappe.session.user
+    q = f"%{query.strip()}%"
+
+    results = frappe.db.sql("""
+        SELECT DISTINCT c.name, c.title, c.modified,
+               SUBSTRING(m.content, 1, 200) as snippet
+        FROM `tabNiv Conversation` c
+        JOIN `tabNiv Message` m ON m.conversation = c.name
+        WHERE c.user = %(user)s
+          AND m.content LIKE %(query)s
+        ORDER BY c.modified DESC
+        LIMIT %(limit)s
+    """, {"user": user, "query": q, "limit": int(limit)}, as_dict=True)
+
+    return results

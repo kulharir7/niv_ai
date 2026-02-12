@@ -4,7 +4,7 @@ app_publisher = "Ravindra Kulhari"
 app_description = "Complete AI Chat Assistant for ERPNext"
 app_email = "kulharir7@gmail.com"
 app_license = "MIT"
-app_version = "0.3.1"
+app_version = "0.5.0"
 # Works with Frappe/ERPNext v14 and v15
 required_apps = ["frappe", "erpnext"]
 
@@ -50,9 +50,13 @@ doc_events = {
         "after_insert": "niv_ai.niv_core.doctype.niv_conversation.niv_conversation.after_insert",
     },
     "*": {
-        "on_submit": "niv_ai.niv_core.api.automation.on_doc_event",
+        "before_save": "niv_ai.niv_core.api.automation.on_doc_event",
         "on_update": "niv_ai.niv_core.api.automation.on_doc_event",
+        "before_submit": "niv_ai.niv_core.api.automation.on_doc_event",
+        "on_submit": "niv_ai.niv_core.api.automation.on_doc_event",
+        "before_cancel": "niv_ai.niv_core.api.automation.on_doc_event",
         "on_cancel": "niv_ai.niv_core.api.automation.on_doc_event",
+        "on_trash": "niv_ai.niv_core.api.automation.on_doc_event",
         "after_insert": "niv_ai.niv_core.api.automation.on_doc_event",
     },
 }
