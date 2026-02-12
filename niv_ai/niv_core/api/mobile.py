@@ -298,3 +298,40 @@ def _generate_api_credentials(user_email):
     user_doc.save(ignore_permissions=True)
 
     return api_key, api_secret
+
+
+@frappe.whitelist(allow_guest=True)
+def mobile_login():
+    """Login via API token — creates session cookie for WebView.
+    Authorization header: 'token api_key:api_secret'
+    Returns: user info + sets sid cookie
+    """
+    auth = frappe.get_request_header("Authorization", "")
+    if not auth or not auth.startswith("token "):
+        frappe.throw("Missing or invalid Authorization header", frappe.AuthenticationError)
+
+    token_parts = auth.replace("token ", "").split(":")
+    if len(token_parts) != 2:
+        frappe.throw("Invalid token format", frappe.AuthenticationError)
+
+    api_key, api_secret = token_parts
+
+    user = frappe.db.get_value("User", {"api_key": api_key}, "name")
+    if not user:
+        frappe.throw("Invalid API key", frappe.AuthenticationError)
+
+    frappe.set_user("Administrator")
+    user_doc = frappe.get_doc("User", user)
+    stored_secret = user_doc.get_password("api_secret")
+    if not stored_secret or api_secret != stored_secret:
+        frappe.throw("Invalid API secret", frappe.AuthenticationError)
+
+    # Create logged-in session (sets sid cookie)
+    frappe.local.login_manager.login_as(user)
+
+    return {
+        "success": True,
+        "user": user,
+        "full_name": frappe.db.get_value("User", user, "full_name"),
+        "sid": frappe.session.sid
+    }
