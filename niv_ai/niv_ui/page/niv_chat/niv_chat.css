@@ -1764,6 +1764,7 @@ pre:hover .code-copy-btn { opacity: 1; }
     background: rgba(255,255,255,0.04);
     border-radius: 20px;
     padding: 10px 20px;
+    margin-bottom: 120px;
     border: 1px solid rgba(255,255,255,0.04);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
