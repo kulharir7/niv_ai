@@ -203,6 +203,12 @@ def get_dev_system_prompt() -> str:
     except Exception:
         pass
 
+    try:
+        from ..knowledge.domain_nbfc import NBFC_DOMAIN_KNOWLEDGE, NBFC_FIELD_SUGGESTIONS
+        quick_ref += "\n" + NBFC_DOMAIN_KNOWLEDGE + "\n" + NBFC_FIELD_SUGGESTIONS
+    except Exception:
+        pass
+
     return (
         "You are Niv AI in DEVELOPER MODE — a Frappe/ERPNext development assistant.\n"
         "You help developers build and customize ERPNext by creating DocTypes, adding fields, "
