@@ -11,14 +11,16 @@ def after_install():
     _seed_default_plans()
     frappe.db.commit()
     _preload_piper_voice()
+    _run_auto_discovery()
     print("✅ Niv AI installed successfully!")
     print("  → Connect an MCP server in Niv Settings to enable tools")
 
 
 def after_migrate():
-    """Run after bench migrate — ensures defaults exist"""
+    """Run after bench migrate — ensures defaults exist, re-discovers system"""
     _create_settings()
     frappe.db.commit()
+    _run_auto_discovery()
 
 
 def _create_settings():
@@ -68,6 +70,19 @@ def _seed_default_plans():
             })
             doc.insert(ignore_permissions=True)
     print(f"  → {len(DEFAULT_PLANS)} default credit plans created")
+
+
+def _run_auto_discovery():
+    """Run auto-discovery to scan and learn the system."""
+    try:
+        from niv_ai.niv_core.discovery import auto_discover_system
+        result = auto_discover_system()
+        apps = len(result.get("apps", []))
+        modules = len(result.get("modules", {}))
+        domain = result.get("domain", {}).get("primary", "General")
+        print("  → Auto-discovery complete: {0} apps, {1} modules, domain: {2}".format(apps, modules, domain))
+    except Exception as e:
+        print("  → Auto-discovery skipped: {0}".format(str(e)))
 
 
 def _preload_piper_voice():

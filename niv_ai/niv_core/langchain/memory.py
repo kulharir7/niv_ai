@@ -180,6 +180,13 @@ def get_system_prompt(conversation_id: str = None) -> str:
         except Exception:
             pass
 
+    # Append auto-discovery context if available
+    try:
+        from niv_ai.niv_core.discovery import get_discovery_context
+        discovery_ctx = get_discovery_context()
+    except Exception:
+        discovery_ctx = ""
+
     # Try settings-level prompt (text field, not Link)
     try:
         settings = frappe.get_cached_doc("Niv Settings")
@@ -188,13 +195,21 @@ def get_system_prompt(conversation_id: str = None) -> str:
             if frappe.db.exists("Niv System Prompt", settings.system_prompt):
                 prompt_doc = frappe.get_doc("Niv System Prompt", settings.system_prompt)
                 if prompt_doc.content:
-                    return prompt_doc.content
+                    prompt = prompt_doc.content
+                    if discovery_ctx:
+                        prompt += "\n\n" + discovery_ctx
+                    return prompt
             else:
                 # It's raw text
-                return settings.system_prompt
+                prompt = settings.system_prompt
+                if discovery_ctx:
+                    prompt += "\n\n" + discovery_ctx
+                return prompt
     except Exception:
         pass
 
+    if discovery_ctx:
+        return default_prompt + "\n\n" + discovery_ctx
     return default_prompt
 
 
