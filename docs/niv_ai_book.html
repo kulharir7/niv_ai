@@ -1,0 +1,1871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Niv AI — Complete Documentation</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-size: 11pt;
+    line-height: 1.7;
+    color: #1a1a2e;
+    background: #fff;
+}
+
+/* ── Page Setup ── */
+@page {
+    size: A4;
+    margin: 2.5cm 2cm;
+    @bottom-center { content: counter(page); font-size: 9pt; color: #666; }
+}
+
+.page-break { page-break-before: always; }
+
+/* ── Cover Page ── */
+.cover {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+    color: white;
+    page-break-after: always;
+    padding: 3cm;
+}
+.cover h1 {
+    font-size: 52pt;
+    font-weight: 800;
+    background: linear-gradient(135deg, #7c3aed, #06b6d4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.3em;
+}
+.cover .subtitle {
+    font-size: 18pt;
+    font-weight: 300;
+    color: #a5b4fc;
+    margin-bottom: 2em;
+}
+.cover .version {
+    font-size: 12pt;
+    color: #64748b;
+    border: 1px solid #334155;
+    padding: 8px 24px;
+    border-radius: 20px;
+    margin-bottom: 1em;
+}
+.cover .author {
+    font-size: 11pt;
+    color: #94a3b8;
+    margin-top: 3em;
+}
+
+/* ── Table of Contents ── */
+.toc { page-break-after: always; }
+.toc h2 { font-size: 24pt; margin-bottom: 1em; color: #7c3aed; }
+.toc ul { list-style: none; }
+.toc li { padding: 6px 0; border-bottom: 1px dotted #e2e8f0; }
+.toc li a { text-decoration: none; color: #1a1a2e; font-weight: 500; }
+.toc li.chapter { font-weight: 700; font-size: 12pt; margin-top: 12px; color: #7c3aed; border: none; }
+.toc li.section { padding-left: 24px; font-weight: 400; font-size: 10pt; }
+
+/* ── Chapter Headers ── */
+.chapter-header {
+    background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+    color: white;
+    padding: 2cm 1.5cm;
+    margin: -2.5cm -2cm 2cm -2cm;
+    page-break-before: always;
+}
+.chapter-header .chapter-num {
+    font-size: 14pt;
+    font-weight: 300;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    opacity: 0.7;
+}
+.chapter-header h2 {
+    font-size: 32pt;
+    font-weight: 800;
+    margin-top: 0.2em;
+}
+.chapter-header .chapter-desc {
+    font-size: 12pt;
+    font-weight: 300;
+    margin-top: 0.5em;
+    opacity: 0.85;
+}
+
+/* ── Headings ── */
+h3 {
+    font-size: 16pt;
+    font-weight: 700;
+    color: #7c3aed;
+    margin: 1.5em 0 0.5em;
+    padding-bottom: 0.3em;
+    border-bottom: 2px solid #e9d5ff;
+}
+h4 {
+    font-size: 13pt;
+    font-weight: 600;
+    color: #1a1a2e;
+    margin: 1.2em 0 0.4em;
+}
+h5 {
+    font-size: 11pt;
+    font-weight: 600;
+    color: #6d28d9;
+    margin: 1em 0 0.3em;
+}
+
+/* ── Content ── */
+p { margin: 0.6em 0; }
+
+/* ── Code Blocks ── */
+pre {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 16px 20px;
+    border-radius: 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9pt;
+    line-height: 1.5;
+    overflow-x: auto;
+    margin: 1em 0;
+    border-left: 4px solid #7c3aed;
+}
+code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9pt;
+    background: #f1f0ff;
+    color: #6d28d9;
+    padding: 2px 6px;
+    border-radius: 4px;
+}
+pre code { background: none; color: inherit; padding: 0; }
+
+/* ── Tables ── */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1em 0;
+    font-size: 10pt;
+}
+th {
+    background: #7c3aed;
+    color: white;
+    padding: 10px 12px;
+    text-align: left;
+    font-weight: 600;
+}
+td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #e2e8f0;
+}
+tr:nth-child(even) { background: #f8fafc; }
+
+/* ── Boxes ── */
+.info-box {
+    background: #eff6ff;
+    border-left: 4px solid #3b82f6;
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 1em 0;
+}
+.info-box .title { font-weight: 700; color: #1d4ed8; margin-bottom: 4px; }
+
+.warning-box {
+    background: #fef3c7;
+    border-left: 4px solid #f59e0b;
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 1em 0;
+}
+.warning-box .title { font-weight: 700; color: #b45309; margin-bottom: 4px; }
+
+.tip-box {
+    background: #ecfdf5;
+    border-left: 4px solid #10b981;
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    margin: 1em 0;
+}
+.tip-box .title { font-weight: 700; color: #059669; margin-bottom: 4px; }
+
+.prompt-box {
+    background: #faf5ff;
+    border: 1px solid #d8b4fe;
+    border-left: 4px solid #7c3aed;
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin: 1em 0;
+}
+.prompt-box .title { font-weight: 700; color: #7c3aed; margin-bottom: 8px; font-size: 11pt; }
+.prompt-box pre { background: #1a1a2e; margin: 8px 0; }
+
+/* ── Feature Cards ── */
+.feature-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 1em 0;
+}
+.feature-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    padding: 16px;
+}
+.feature-card .icon { font-size: 24pt; margin-bottom: 8px; }
+.feature-card h5 { margin: 0 0 4px; color: #1a1a2e; }
+.feature-card p { font-size: 9pt; color: #64748b; margin: 0; }
+
+/* ── Lists ── */
+ul, ol { margin: 0.5em 0 0.5em 1.5em; }
+li { margin: 0.3em 0; }
+
+/* ── Screenshot placeholder ── */
+.screenshot {
+    background: #f1f5f9;
+    border: 2px dashed #cbd5e1;
+    border-radius: 12px;
+    padding: 3em;
+    text-align: center;
+    color: #94a3b8;
+    margin: 1em 0;
+    font-style: italic;
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- COVER PAGE -->
+<!-- ════════════════════════════════════════════ -->
+<div class="cover">
+    <div class="version">Version 0.5.1 — February 2026</div>
+    <h1>Niv AI</h1>
+    <div class="subtitle">The Complete AI Assistant for ERPNext</div>
+    <p style="color:#94a3b8; font-size: 13pt; max-width: 500px; line-height: 1.6;">
+        Turn your ERPNext into an intelligent system. Chat in natural language, automate workflows, 
+        build custom DocTypes, and manage your entire business — all through conversation.
+    </p>
+    <div class="author">
+        By Ravindra Kulhari<br>
+        <span style="font-size:9pt;">github.com/kulharir7/niv_ai</span>
+    </div>
+</div>
+
+<!-- ════════════════════════════════════════════ -->
+<!-- TABLE OF CONTENTS -->
+<!-- ════════════════════════════════════════════ -->
+<div class="toc">
+    <h2>Table of Contents</h2>
+    <ul>
+        <li class="chapter">Chapter 1 — Introduction</li>
+        <li class="section">What is Niv AI?</li>
+        <li class="section">Key Features</li>
+        <li class="section">Architecture Overview</li>
+        <li class="section">System Requirements</li>
+
+        <li class="chapter">Chapter 2 — Installation & Setup</li>
+        <li class="section">Docker Installation</li>
+        <li class="section">Manual Installation (bench)</li>
+        <li class="section">Initial Configuration</li>
+        <li class="section">AI Provider Setup (Mistral / OpenAI)</li>
+
+        <li class="chapter">Chapter 3 — Chat Interface</li>
+        <li class="section">Web Chat (Desk Page)</li>
+        <li class="section">Floating Widget</li>
+        <li class="section">Conversations & History</li>
+        <li class="section">Reactions & Search</li>
+
+        <li class="chapter">Chapter 4 — MCP Tools (29 Tools)</li>
+        <li class="section">Document Operations</li>
+        <li class="section">Search & Discovery</li>
+        <li class="section">Reports & Analytics</li>
+        <li class="section">Developer Tools</li>
+        <li class="section">Dashboard & Visualization</li>
+
+        <li class="chapter">Chapter 5 — Developer Mode</li>
+        <li class="section">Enabling Developer Mode</li>
+        <li class="section">Creating DocTypes via Chat</li>
+        <li class="section">Custom Fields & Scripts</li>
+        <li class="section">Workflows & Notifications</li>
+        <li class="section">Confirmation & Undo System</li>
+        <li class="section">94 Developer Features (RAG)</li>
+
+        <li class="chapter">Chapter 6 — Auto-Pilot Triggers</li>
+        <li class="section">What are Niv Triggers?</li>
+        <li class="section">Creating Triggers</li>
+        <li class="section">System Prompts</li>
+        <li class="section">Use Cases & Examples</li>
+
+        <li class="chapter">Chapter 7 — Voice Mode</li>
+        <li class="section">Voice Architecture</li>
+        <li class="section">Speech-to-Text (STT)</li>
+        <li class="section">Text-to-Speech (TTS)</li>
+        <li class="section">Continuous Conversation</li>
+
+        <li class="chapter">Chapter 8 — Telegram Bot</li>
+        <li class="section">Setup & Configuration</li>
+        <li class="section">User Mapping</li>
+        <li class="section">Progressive Updates</li>
+        <li class="section">Commands & Features</li>
+
+        <li class="chapter">Chapter 9 — WhatsApp Bot</li>
+        <li class="section">Meta Cloud API Setup</li>
+        <li class="section">QR Code Onboarding</li>
+        <li class="section">Message Formatting</li>
+
+        <li class="chapter">Chapter 10 — NBFC / Lending Use Case</li>
+        <li class="section">Growth System Overview</li>
+        <li class="section">NBFC-Specific Prompts</li>
+        <li class="section">Loan Application Management</li>
+        <li class="section">Co-Lending Operations</li>
+        <li class="section">Compliance & Reporting</li>
+
+        <li class="chapter">Chapter 11 — Billing & Token Management</li>
+        <li class="section">Shared Pool vs Per User</li>
+        <li class="section">Razorpay Integration</li>
+        <li class="section">Usage Tracking</li>
+
+        <li class="chapter">Chapter 12 — Administration</li>
+        <li class="section">Niv Settings Reference</li>
+        <li class="section">Rate Limiting</li>
+        <li class="section">User Permissions</li>
+        <li class="section">Error Monitoring</li>
+
+        <li class="chapter">Chapter 13 — Deployment Guide</li>
+        <li class="section">Production Deployment (AWS/VPS)</li>
+        <li class="section">Docker Configuration</li>
+        <li class="section">Nginx & SSL</li>
+        <li class="section">Backup & Recovery</li>
+
+        <li class="chapter">Chapter 14 — API Reference</li>
+        <li class="section">Chat API</li>
+        <li class="section">Conversation API</li>
+        <li class="section">Voice API</li>
+        <li class="section">Telegram & WhatsApp Webhooks</li>
+        <li class="section">Billing API</li>
+
+        <li class="chapter">Appendix A — Prompt Library</li>
+        <li class="chapter">Appendix B — Troubleshooting</li>
+        <li class="chapter">Appendix C — Roadmap</li>
+    </ul>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 1: INTRODUCTION -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 1</div>
+    <h2>Introduction</h2>
+    <div class="chapter-desc">Understanding Niv AI and what it can do for your business</div>
+</div>
+
+<h3>What is Niv AI?</h3>
+<p>
+    Niv AI is a <strong>complete AI assistant</strong> built as a native Frappe/ERPNext application. It transforms your ERPNext instance into an intelligent system where users can interact with their business data through natural language conversation — in English, Hindi, or Hinglish.
+</p>
+<p>
+    Unlike external AI chatbots that have no knowledge of your data, Niv AI is deeply integrated with ERPNext. It can read your Sales Orders, create Invoices, generate reports, build custom DocTypes, and even automate business workflows — all through simple conversation.
+</p>
+
+<div class="feature-grid">
+    <div class="feature-card">
+        <div class="icon">💬</div>
+        <h5>Natural Language Chat</h5>
+        <p>Ask questions in plain language. "Aaj ki sales kitni?" or "Show pending invoices" — Niv understands both.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon">🔧</div>
+        <h5>29 MCP Tools</h5>
+        <p>Create, read, update, delete documents. Run queries. Generate reports. All through conversation.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon">👨‍💻</div>
+        <h5>Developer Mode</h5>
+        <p>Build DocTypes, Custom Fields, Server Scripts, Workflows — all by telling AI what you need.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon">🤖</div>
+        <h5>Auto-Pilot Triggers</h5>
+        <p>AI automatically validates documents on submit. Sales Order → AI checks → warns about issues.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon">🎤</div>
+        <h5>Voice Mode</h5>
+        <p>Speak to your ERPNext. Voice input with speech recognition, AI responds with text-to-speech.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon">📱</div>
+        <h5>Telegram & WhatsApp</h5>
+        <p>Access your ERPNext from Telegram or WhatsApp. Same AI power, on your phone.</p>
+    </div>
+</div>
+
+<h3>Key Features</h3>
+
+<table>
+    <tr><th>Feature</th><th>Description</th><th>Status</th></tr>
+    <tr><td>Web Chat UI</td><td>Dark theme, Claude-inspired, glassmorphism design</td><td>✅ Live</td></tr>
+    <tr><td>Floating Widget</td><td>Chat from any ERPNext page via floating button</td><td>✅ Live</td></tr>
+    <tr><td>29 MCP Tools</td><td>Full CRUD + search + reports + analytics</td><td>✅ Live</td></tr>
+    <tr><td>Developer Mode</td><td>94 features via RAG — create DocTypes, scripts, workflows</td><td>✅ Live</td></tr>
+    <tr><td>Auto-Pilot Triggers</td><td>AI runs on document events (submit, save, etc.)</td><td>✅ Live</td></tr>
+    <tr><td>Voice Mode</td><td>Speech input + TTS output (Piper + Voxtral)</td><td>✅ Live</td></tr>
+    <tr><td>Telegram Bot</td><td>Full AI access from Telegram with progressive updates</td><td>✅ Live</td></tr>
+    <tr><td>WhatsApp Bot</td><td>Meta Cloud API integration with QR onboarding</td><td>✅ Ready</td></tr>
+    <tr><td>Token Billing</td><td>Shared Pool + Per User with Razorpay payments</td><td>✅ Live</td></tr>
+    <tr><td>Conversation History</td><td>Full chat history, search, reactions</td><td>✅ Live</td></tr>
+    <tr><td>v14 + v15 Compatible</td><td>Works on both Frappe v14 and v15</td><td>✅ Tested</td></tr>
+    <tr><td>Multi-language</td><td>English, Hindi, Hinglish responses</td><td>✅ Live</td></tr>
+</table>
+
+<h3>Architecture Overview</h3>
+<p>Niv AI follows a clean, modular architecture:</p>
+
+<pre><code>┌─────────────────────────────────────────────────────┐
+│                    User Interfaces                   │
+│  ┌──────────┐  ┌──────────┐  ┌────────┐  ┌───────┐ │
+│  │ Web Chat │  │  Widget  │  │Telegram│  │WhatsApp│ │
+│  └────┬─────┘  └────┬─────┘  └───┬────┘  └───┬───┘ │
+│       └──────────────┴────────────┴───────────┘     │
+│                        │                             │
+│              ┌─────────▼──────────┐                  │
+│              │   Niv AI Core      │                  │
+│              │  (LangGraph Agent) │                  │
+│              └─────────┬──────────┘                  │
+│                        │                             │
+│         ┌──────────────┼──────────────┐              │
+│         │              │              │              │
+│  ┌──────▼─────┐ ┌──────▼─────┐ ┌─────▼──────┐      │
+│  │ MCP Client │ │   Memory   │ │  Billing   │      │
+│  │ (29 tools) │ │  (History) │ │  (Tokens)  │      │
+│  └──────┬─────┘ └────────────┘ └────────────┘      │
+│         │                                            │
+│  ┌──────▼─────────────────────────┐                  │
+│  │  Frappe Assistant Core (FAC)   │                  │
+│  │  + niv_tools (6 custom tools)  │                  │
+│  └──────┬─────────────────────────┘                  │
+│         │                                            │
+│  ┌──────▼──────────┐                                 │
+│  │  ERPNext / Frappe│                                │
+│  │  (Your Data)    │                                 │
+│  └─────────────────┘                                 │
+└─────────────────────────────────────────────────────┘</code></pre>
+
+<h3>System Requirements</h3>
+<table>
+    <tr><th>Component</th><th>Minimum</th><th>Recommended</th></tr>
+    <tr><td>Frappe</td><td>v14.0</td><td>v15.x</td></tr>
+    <tr><td>ERPNext</td><td>v14.0</td><td>v15.x</td></tr>
+    <tr><td>Python</td><td>3.10</td><td>3.11+</td></tr>
+    <tr><td>Node.js</td><td>16.x</td><td>18.x+</td></tr>
+    <tr><td>RAM</td><td>2 GB</td><td>4 GB+</td></tr>
+    <tr><td>AI Provider</td><td>Any OpenAI-compatible</td><td>Mistral AI</td></tr>
+</table>
+
+<div class="info-box">
+    <div class="title">ℹ️ AI Provider</div>
+    Niv AI works with any OpenAI-compatible API: Mistral AI, OpenAI, Anthropic (via proxy), Groq, Together AI, local models (Ollama), etc. Mistral AI is recommended for best Hindi/Hinglish support.
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 2: INSTALLATION -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 2</div>
+    <h2>Installation & Setup</h2>
+    <div class="chapter-desc">Get Niv AI running on your ERPNext instance</div>
+</div>
+
+<h3>Docker Installation</h3>
+<p>If you're running ERPNext on Docker (recommended for development):</p>
+
+<h4>Step 1: Install the App</h4>
+<pre><code># Enter your backend container
+docker exec -it frappe_docker-backend-1 bash
+
+# Navigate to bench
+cd /home/frappe/frappe-bench
+
+# Get the apps
+bench get-app https://github.com/kulharir7/niv_ai.git
+bench get-app https://github.com/buildswithpaul/Frappe_Assistant_Core.git
+
+# Install on your site
+bench --site your-site install-app frappe_assistant_core
+bench --site your-site install-app niv_ai
+
+# Build frontend assets
+bench build --app niv_ai
+
+# Restart
+bench restart</code></pre>
+
+<div class="warning-box">
+    <div class="title">⚠️ Docker Restart Note</div>
+    After Docker container restart, you may need to reinstall pip packages and fix nginx SSE config. Use the provided <code>scripts/full_restore.ps1</code> script.
+</div>
+
+<h4>Step 2: Install niv_tools (Optional but Recommended)</h4>
+<pre><code># niv_tools adds 6 extra tools: universal_search, explore_fields, 
+# test_created_item, monitor_errors, rollback_changes, introspect_system
+
+bench get-app https://github.com/kulharir7/niv_tools.git
+bench --site your-site install-app niv_tools
+bench restart</code></pre>
+
+<h3>Manual Installation (bench)</h3>
+<p>For standard bench installations (production servers, VPS):</p>
+
+<pre><code># From your bench directory
+bench get-app https://github.com/kulharir7/niv_ai.git
+bench get-app https://github.com/buildswithpaul/Frappe_Assistant_Core.git
+
+bench --site your-site install-app frappe_assistant_core
+bench --site your-site install-app niv_ai
+
+bench build --app niv_ai
+sudo supervisorctl restart all</code></pre>
+
+<h3>Initial Configuration</h3>
+<p>After installation, navigate to <code>Niv Settings</code> in your ERPNext:</p>
+
+<h4>🤖 AI Configuration</h4>
+<ol>
+    <li>Go to <strong>Niv Settings</strong> (search in awesome bar)</li>
+    <li>Create a <strong>Niv AI Provider</strong> first:
+        <ul>
+            <li>Name: <code>Mistral</code></li>
+            <li>Base URL: <code>https://api.mistral.ai/v1</code></li>
+            <li>API Key: Your Mistral API key</li>
+        </ul>
+    </li>
+    <li>In Niv Settings, set:
+        <ul>
+            <li>Default Provider: <code>Mistral</code></li>
+            <li>Default Model: <code>mistral-medium-2508</code></li>
+            <li>Enable Tools: ✅</li>
+            <li>Enable Widget: ✅</li>
+        </ul>
+    </li>
+</ol>
+
+<h4>AI Provider Options</h4>
+<table>
+    <tr><th>Provider</th><th>Base URL</th><th>Recommended Model</th><th>Cost (approx)</th></tr>
+    <tr><td>Mistral AI</td><td>https://api.mistral.ai/v1</td><td>mistral-medium-2508</td><td>₹0.8/1K input</td></tr>
+    <tr><td>OpenAI</td><td>https://api.openai.com/v1</td><td>gpt-4o-mini</td><td>₹1.2/1K input</td></tr>
+    <tr><td>Groq</td><td>https://api.groq.com/openai/v1</td><td>llama-3.3-70b</td><td>Free tier available</td></tr>
+    <tr><td>Together AI</td><td>https://api.together.xyz/v1</td><td>meta-llama/Llama-3-70b</td><td>₹0.6/1K input</td></tr>
+    <tr><td>Ollama (local)</td><td>http://localhost:11434/v1</td><td>llama3.2</td><td>Free (your GPU)</td></tr>
+</table>
+
+<h3>Verify Installation</h3>
+<pre><code># Check all apps are installed
+bench --site your-site list-apps
+# Should show: frappe, erpnext, frappe_assistant_core, niv_ai, niv_tools
+
+# Check tools are discovered
+bench --site your-site console
+>>> from niv_ai.niv_core.mcp_client import MCPClient
+>>> client = MCPClient()
+>>> tools = client.discover_tools()
+>>> print(f"Found {len(tools)} tools")
+# Should show: Found 29 tools</code></pre>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 3: CHAT INTERFACE -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 3</div>
+    <h2>Chat Interface</h2>
+    <div class="chapter-desc">Beautiful, powerful chat UI for every user</div>
+</div>
+
+<h3>Web Chat (Desk Page)</h3>
+<p>Access the full chat interface at <code>/app/niv-chat</code>. The UI features:</p>
+
+<ul>
+    <li><strong>Dark Theme</strong> — Professional dark UI (#1a1a2e) with purple accent (#7c3aed)</li>
+    <li><strong>Conversation Sidebar</strong> — List of all chats with search and archive</li>
+    <li><strong>Tool Call Accordion</strong> — See which tools AI used, expandable for details</li>
+    <li><strong>Code Highlighting</strong> — Syntax-highlighted code blocks</li>
+    <li><strong>Markdown Rendering</strong> — Tables, lists, bold, italic, links</li>
+    <li><strong>Reactions</strong> — Thumbs up/down + emoji reactions on messages</li>
+    <li><strong>Conversation Search</strong> — Instant local search + server-side full-text search</li>
+</ul>
+
+<h4>Chat Examples</h4>
+
+<div class="prompt-box">
+    <div class="title">📊 Business Query</div>
+    <strong>User:</strong> Aaj ki total sales kitni hai?<br>
+    <strong>Niv AI:</strong> Uses <code>run_database_query</code> tool → "Today's total sales: ₹4,58,000 across 12 Sales Orders."
+</div>
+
+<div class="prompt-box">
+    <div class="title">📄 Document Creation</div>
+    <strong>User:</strong> Create a new Customer named "ABC Technologies" with billing address in Mumbai<br>
+    <strong>Niv AI:</strong> Uses <code>create_document</code> tool → Creates Customer with all fields filled.
+</div>
+
+<div class="prompt-box">
+    <div class="title">📋 Report Generation</div>
+    <strong>User:</strong> Show me top 5 customers by revenue this month<br>
+    <strong>Niv AI:</strong> Uses <code>run_database_query</code> → Returns sorted table with customer names and amounts.
+</div>
+
+<h3>Floating Widget</h3>
+<p>
+    When enabled in Niv Settings, a floating purple button (FAB) appears on the bottom-right of every ERPNext page. Click to open a chat panel without leaving your current page.
+</p>
+<p>The widget features:</p>
+<ul>
+    <li>Glassmorphism design with gradient FAB button</li>
+    <li>Full chat functionality (same as desk page)</li>
+    <li>Auto-minimizes when clicking outside</li>
+    <li>Persists conversation across page navigation</li>
+</ul>
+
+<h3>Conversations & History</h3>
+<p>Every chat creates a <strong>Niv Conversation</strong> document with:</p>
+<ul>
+    <li>Full message history (user + AI messages)</li>
+    <li>Token usage tracking per conversation</li>
+    <li>Channel identification (web, telegram, whatsapp)</li>
+    <li>Archive/unarchive capability</li>
+    <li>Auto-title generation from first message</li>
+</ul>
+
+<h3>Reactions & Search</h3>
+<h4>Reactions</h4>
+<p>React to AI messages with thumbs up/down or emoji reactions (Discord-style). Reactions are saved to the server for feedback tracking.</p>
+
+<h4>Search</h4>
+<p>Two search modes:</p>
+<ul>
+    <li><strong>Local Search</strong> — Instant, searches current conversation messages</li>
+    <li><strong>Server Search</strong> — Activated on 3+ characters, searches all conversations with debouncing</li>
+</ul>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 4: MCP TOOLS -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 4</div>
+    <h2>MCP Tools — 29 Operations</h2>
+    <div class="chapter-desc">The AI's hands and eyes into your ERPNext data</div>
+</div>
+
+<p>
+    Niv AI uses the <strong>Model Context Protocol (MCP)</strong> to interact with ERPNext. Through Frappe Assistant Core (FAC) and niv_tools, it has access to 29 tools that can read, write, search, and analyze your data.
+</p>
+
+<h3>Document Operations (8 tools)</h3>
+<table>
+    <tr><th>Tool</th><th>Description</th><th>Example Usage</th></tr>
+    <tr><td><code>create_document</code></td><td>Create any document</td><td>"Create a Sales Order for Customer X"</td></tr>
+    <tr><td><code>get_document</code></td><td>Read a specific document</td><td>"Show me Sales Order SO-001"</td></tr>
+    <tr><td><code>update_document</code></td><td>Modify document fields</td><td>"Change delivery date of SO-001 to March 15"</td></tr>
+    <tr><td><code>delete_document</code></td><td>Delete a document</td><td>"Delete the draft quotation Q-005"</td></tr>
+    <tr><td><code>submit_document</code></td><td>Submit a submittable doc</td><td>"Submit Sales Invoice INV-001"</td></tr>
+    <tr><td><code>list_documents</code></td><td>List documents with filters</td><td>"Show all draft Purchase Orders"</td></tr>
+    <tr><td><code>search_documents</code></td><td>Full-text search</td><td>"Search invoices containing 'ABC Corp'"</td></tr>
+    <tr><td><code>run_workflow</code></td><td>Execute workflow action</td><td>"Approve Leave Application LEA-001"</td></tr>
+</table>
+
+<h3>Search & Discovery (6 tools)</h3>
+<table>
+    <tr><th>Tool</th><th>Description</th><th>Example Usage</th></tr>
+    <tr><td><code>search</code></td><td>Global search across all DocTypes</td><td>"Find anything related to 'laptop'"</td></tr>
+    <tr><td><code>search_doctype</code></td><td>Search for DocType definitions</td><td>"What DocTypes are related to HR?"</td></tr>
+    <tr><td><code>search_link</code></td><td>Search link field values</td><td>"Search customers starting with 'West'"</td></tr>
+    <tr><td><code>fetch</code></td><td>Fetch specific field values</td><td>"What is the grand total of SO-001?"</td></tr>
+    <tr><td><code>get_doctype_info</code></td><td>Get DocType metadata</td><td>"What fields does Sales Order have?"</td></tr>
+    <tr><td><code>universal_search</code></td><td>Search ALL fields across ALL DocTypes</td><td>"Find '9876543210' anywhere in the system"</td></tr>
+</table>
+
+<h3>Reports & Analytics (5 tools)</h3>
+<table>
+    <tr><th>Tool</th><th>Description</th><th>Example Usage</th></tr>
+    <tr><td><code>generate_report</code></td><td>Run built-in reports</td><td>"Run Accounts Receivable report"</td></tr>
+    <tr><td><code>report_list</code></td><td>List available reports</td><td>"What reports are available for Sales?"</td></tr>
+    <tr><td><code>report_requirements</code></td><td>Get report parameters</td><td>"What filters does P&L report need?"</td></tr>
+    <tr><td><code>run_database_query</code></td><td>Execute SQL queries (read-only)</td><td>"SELECT sum(grand_total) FROM `tabSales Order`"</td></tr>
+    <tr><td><code>analyze_business_data</code></td><td>Complex business analysis</td><td>"Analyze monthly sales trend"</td></tr>
+</table>
+
+<h3>Developer Tools (8 tools)</h3>
+<table>
+    <tr><th>Tool</th><th>Description</th><th>Example Usage</th></tr>
+    <tr><td><code>run_python_code</code></td><td>Execute Python in Frappe context</td><td>"Count all active users"</td></tr>
+    <tr><td><code>explore_fields</code></td><td>Explore field metadata & data lineage</td><td>"Show all currency fields in Sales Invoice"</td></tr>
+    <tr><td><code>test_created_item</code></td><td>Verify document creation works</td><td>"Test if I can create a ToDo"</td></tr>
+    <tr><td><code>monitor_errors</code></td><td>Check Error Log for issues</td><td>"Any errors in last 24 hours?"</td></tr>
+    <tr><td><code>rollback_changes</code></td><td>Undo custom fields/scripts</td><td>"Remove the Custom Field I just created"</td></tr>
+    <tr><td><code>introspect_system</code></td><td>System overview (apps, modules, etc.)</td><td>"What apps are installed?"</td></tr>
+    <tr><td><code>extract_file_content</code></td><td>Read uploaded file contents</td><td>"Read the uploaded PDF"</td></tr>
+    <tr><td><code>create_dashboard</code></td><td>Create dashboard with charts</td><td>"Create a sales dashboard"</td></tr>
+</table>
+
+<h3>Tool Reliability Features</h3>
+<ul>
+    <li><strong>Circuit Breaker</strong> — After 3 failures, skips HTTP for 60 seconds, auto-heals</li>
+    <li><strong>Retry with Backoff</strong> — Retries on transient errors (0.5s, 1.5s delays)</li>
+    <li><strong>Argument Validation</strong> — Validates required fields and types before execution</li>
+    <li><strong>Error Recovery</strong> — Graceful error messages instead of crashes</li>
+</ul>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 5: DEVELOPER MODE -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 5</div>
+    <h2>Developer Mode</h2>
+    <div class="chapter-desc">Build entire ERPNext customizations through conversation</div>
+</div>
+
+<p>
+    Developer Mode transforms Niv AI into a <strong>full-stack Frappe developer</strong>. Toggle it on, and the AI gains deep knowledge of Frappe's architecture — DocTypes, Custom Fields, Server Scripts, Client Scripts, Workflows, Print Formats, Notifications, and more.
+</p>
+
+<h3>Enabling Developer Mode</h3>
+<ol>
+    <li>Open Niv Chat (<code>/app/niv-chat</code>)</li>
+    <li>Look for the <strong>Developer Mode toggle</strong> in the sidebar (only visible to System Managers)</li>
+    <li>Click to enable — a <strong>DEV</strong> badge appears in the header</li>
+    <li>AI now has access to 94 developer features via RAG knowledge base</li>
+</ol>
+
+<div class="warning-box">
+    <div class="title">⚠️ System Manager Only</div>
+    Developer Mode requires the System Manager role. Regular users cannot enable it. This protects your system from unauthorized customizations.
+</div>
+
+<h3>Creating DocTypes via Chat</h3>
+
+<div class="prompt-box">
+    <div class="title">💡 Example: NBFC Loan Application DocType</div>
+    <strong>User:</strong> "NBFC ke liye Loan Application DocType banao with applicant name, loan amount, interest rate, tenure, approval workflow"
+    <br><br>
+    <strong>Niv AI will:</strong>
+    <ol>
+        <li>Create the Custom DocType "Loan Application"</li>
+        <li>Add fields: applicant_name (Data), loan_amount (Currency), interest_rate (Float), tenure_months (Int)</li>
+        <li>Add naming series: LOAN-APP-.YYYY.-</li>
+        <li>Ask for confirmation before creating</li>
+        <li>Show undo option after creation</li>
+    </ol>
+</div>
+
+<h3>Custom Fields & Scripts</h3>
+
+<h4>Custom Fields</h4>
+<div class="prompt-box">
+    <div class="title">Adding a field</div>
+    <strong>User:</strong> "Sales Order mein 'Expected Delivery Date' ke baad ek 'Priority Level' field add karo — options: Low, Medium, High, Critical"
+    <br><br>
+    <strong>AI creates:</strong> Custom Field with fieldtype=Select, options="Low\nMedium\nHigh\nCritical", insert_after="expected_delivery_date"
+</div>
+
+<h4>Server Scripts</h4>
+<div class="prompt-box">
+    <div class="title">Validation Script</div>
+    <strong>User:</strong> "Sales Order submit hone se pehle check karo ki grand total 1 lakh se zyada hai toh manager approval chahiye"
+    <br><br>
+    <strong>AI creates:</strong> Server Script (Before Submit) on Sales Order:
+<pre><code>if doc.grand_total > 100000:
+    if not doc.custom_manager_approved:
+        frappe.throw("Orders above ₹1,00,000 require Manager approval. 
+        Please get the 'Manager Approved' checkbox checked.")</code></pre>
+</div>
+
+<h4>Client Scripts</h4>
+<div class="prompt-box">
+    <div class="title">UI Enhancement</div>
+    <strong>User:</strong> "Sales Invoice form mein jab customer select ho toh uska outstanding balance show karo as a message"
+    <br><br>
+    <strong>AI creates:</strong> Client Script that fetches outstanding on customer change and shows alert.
+</div>
+
+<h3>Workflows & Notifications</h3>
+
+<div class="prompt-box">
+    <div class="title">Approval Workflow</div>
+    <strong>User:</strong> "Purchase Order ke liye approval workflow banao — Draft → Pending Approval → Approved → Ordered. Amount > 50000 ho toh Director approval chahiye."
+    <br><br>
+    <strong>AI creates:</strong>
+    <ul>
+        <li>Workflow with 4 states</li>
+        <li>Transition rules based on amount</li>
+        <li>Role-based approvals (Purchase Manager → Director)</li>
+        <li>Email notifications on state change</li>
+    </ul>
+</div>
+
+<h3>Confirmation & Undo System</h3>
+<p>Developer Mode has built-in safety:</p>
+
+<h4>Confirmation Flow</h4>
+<p>Before any write operation (create, modify, delete), AI asks for confirmation:</p>
+<pre><code>AI: I'll create a Custom Field "Priority Level" on Sales Order. Proceed?
+    Type "yes", "ha", or "haan" to confirm.
+
+User: ha
+
+AI: ✅ Created Custom Field "Priority Level" on Sales Order.
+    You can say "undo" within 30 minutes to reverse this.</code></pre>
+
+<h4>Undo System</h4>
+<p>Every creation is stored in a Redis-backed undo stack (30-minute expiry). Say "undo" to reverse the last action.</p>
+
+<h3>94 Developer Features (RAG Knowledge Base)</h3>
+<p>The developer knowledge base covers 94 features across 12 phases:</p>
+
+<table>
+    <tr><th>Phase</th><th>Category</th><th>Features</th></tr>
+    <tr><td>A</td><td>Custom Fields</td><td>Add, modify, delete fields on any DocType</td></tr>
+    <tr><td>B</td><td>Server Scripts</td><td>Before/After Save, Submit, Cancel, Delete</td></tr>
+    <tr><td>C</td><td>Client Scripts</td><td>Form events, list events, validation</td></tr>
+    <tr><td>D</td><td>Property Setters</td><td>Change field properties without code</td></tr>
+    <tr><td>E</td><td>Custom DocTypes</td><td>Create entire new DocTypes</td></tr>
+    <tr><td>F</td><td>Workflows</td><td>Multi-state approval workflows</td></tr>
+    <tr><td>G</td><td>Notifications</td><td>Email/SMS alerts on events</td></tr>
+    <tr><td>H</td><td>Print Formats</td><td>Custom document printing layouts</td></tr>
+    <tr><td>I</td><td>Reports</td><td>Script Reports with filters and charts</td></tr>
+    <tr><td>J</td><td>Web Pages</td><td>Portal pages and web forms</td></tr>
+    <tr><td>K</td><td>Integrations</td><td>Webhooks, REST API connections</td></tr>
+    <tr><td>L</td><td>Debug</td><td>Error diagnosis, performance tuning</td></tr>
+</table>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 6: AUTO-PILOT TRIGGERS -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 6</div>
+    <h2>Auto-Pilot Triggers</h2>
+    <div class="chapter-desc">AI that watches your documents and acts automatically</div>
+</div>
+
+<h3>What are Niv Triggers?</h3>
+<p>
+    Niv Triggers are <strong>document event hooks</strong> that automatically run the AI when something happens in ERPNext. When a Sales Order is submitted, a Purchase Invoice is created, or an Employee record is modified — the AI can analyze, validate, and comment on the document.
+</p>
+
+<h3>Creating Triggers</h3>
+<p>Go to <strong>Niv Trigger</strong> list and create a new trigger:</p>
+
+<table>
+    <tr><th>Field</th><th>Description</th><th>Example</th></tr>
+    <tr><td>Trigger Name</td><td>Descriptive name</td><td>"Validate Sales Order on Submit"</td></tr>
+    <tr><td>Reference DocType</td><td>Which document to watch</td><td>Sales Order</td></tr>
+    <tr><td>Doc Event</td><td>When to trigger</td><td>After Submit</td></tr>
+    <tr><td>Condition</td><td>Optional Python condition</td><td><code>doc.grand_total > 100000</code></td></tr>
+    <tr><td>Prompt Template</td><td>What to tell the AI</td><td>"Analyze this Sales Order..."</td></tr>
+    <tr><td>Include Document Data</td><td>Send document fields to AI</td><td>✅ Yes</td></tr>
+    <tr><td>System Prompt</td><td>Link to Niv System Prompt</td><td>"Sales Order Validator"</td></tr>
+</table>
+
+<h4>Available Doc Events</h4>
+<ul>
+    <li><strong>Before Save</strong> — Before document is saved (can prevent save)</li>
+    <li><strong>After Save</strong> — After document is saved</li>
+    <li><strong>Before Submit</strong> — Before document is submitted</li>
+    <li><strong>After Submit</strong> — After document is submitted</li>
+    <li><strong>Before Cancel</strong> — Before document is cancelled</li>
+    <li><strong>After Cancel</strong> — After document is cancelled</li>
+    <li><strong>Before Delete</strong> — Before document is deleted</li>
+</ul>
+
+<h3>System Prompts</h3>
+<p>Create reusable AI instructions in <strong>Niv System Prompt</strong>:</p>
+
+<div class="prompt-box">
+    <div class="title">📝 Sales Order Validator</div>
+<pre><code>You are a Sales Order validation expert. Analyze the submitted 
+Sales Order and check for:
+
+1. Customer credit limit — is the order within their limit?
+2. Item availability — are all items in stock?
+3. Pricing — are there any unusual discounts (>20%)?
+4. Payment terms — are they standard or need review?
+5. Delivery date — is it realistic given current workload?
+
+Respond with:
+- ✅ APPROVED if everything looks good
+- ⚠️ WARNING if there are concerns but not blocking
+- ❌ REJECTED if there are critical issues
+
+Always explain your reasoning in 2-3 bullet points.</code></pre>
+</div>
+
+<h3>Use Cases & Examples</h3>
+
+<h4>1. Sales Order Validation</h4>
+<div class="prompt-box">
+    <div class="title">Trigger: Validate on Submit</div>
+    <strong>DocType:</strong> Sales Order<br>
+    <strong>Event:</strong> After Submit<br>
+    <strong>Condition:</strong> <code>doc.grand_total > 50000</code><br>
+    <strong>Result:</strong> AI analyzes the order, adds a comment like "⚠️ Conditionally Valid — discount is 25%, exceeds 20% threshold. Please verify with Sales Manager."
+</div>
+
+<h4>2. Purchase Invoice Audit</h4>
+<div class="prompt-box">
+    <div class="title">Trigger: Audit on Save</div>
+    <strong>DocType:</strong> Purchase Invoice<br>
+    <strong>Event:</strong> After Save<br>
+    <strong>Prompt:</strong> "Check if this purchase invoice has matching Purchase Order and GRN. Flag any discrepancies in quantities or rates."
+</div>
+
+<h4>3. Employee Onboarding Check</h4>
+<div class="prompt-box">
+    <div class="title">Trigger: Completeness Check</div>
+    <strong>DocType:</strong> Employee<br>
+    <strong>Event:</strong> Before Submit<br>
+    <strong>Prompt:</strong> "Verify all mandatory onboarding fields are filled: PAN, Aadhaar, bank details, emergency contact. List any missing fields."
+</div>
+
+<h4>4. NBFC: Loan Disbursement Check</h4>
+<div class="prompt-box">
+    <div class="title">Trigger: Pre-Disbursement Validation</div>
+    <strong>DocType:</strong> Loan<br>
+    <strong>Event:</strong> Before Submit<br>
+    <strong>Prompt:</strong> "Validate loan disbursement: check KYC completion, CIBIL score threshold (>650), co-lender approval status, and sanction letter validity. Block if any compliance check fails."
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 7: VOICE MODE -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 7</div>
+    <h2>Voice Mode</h2>
+    <div class="chapter-desc">Speak to your ERPNext and hear it respond</div>
+</div>
+
+<h3>Voice Architecture</h3>
+<pre><code>User speaks → Browser SpeechRecognition (fast, free)
+                    ↓ (if fails)
+             Mistral Voxtral STT (accurate, paid)
+                    ↓
+             Niv AI Agent (processes query)
+                    ↓
+             Piper TTS (local, free) → Audio plays
+                    ↓ (if Piper unavailable)
+             Browser speechSynthesis (fallback)</code></pre>
+
+<h3>Speech-to-Text (STT)</h3>
+<p>Niv AI uses a <strong>dual STT approach</strong>:</p>
+
+<h4>Primary: Browser SpeechRecognition</h4>
+<ul>
+    <li>Free, zero API cost</li>
+    <li>Works in Chrome, Edge (WebKit-based browsers)</li>
+    <li>Supports Hindi (hi-IN) and English (en-IN)</li>
+    <li>Real-time — shows text as you speak</li>
+</ul>
+
+<h4>Fallback: Mistral Voxtral</h4>
+<ul>
+    <li>Activated when browser STT fails or returns empty</li>
+    <li>Audio recorded as base64, uploaded to server</li>
+    <li>Uses <code>voxtral-mini-latest</code> model</li>
+    <li>Higher accuracy for noisy environments</li>
+</ul>
+
+<h3>Text-to-Speech (TTS)</h3>
+
+<h4>Primary: Piper TTS (Local)</h4>
+<ul>
+    <li>Runs entirely on your server — no API costs</li>
+    <li>Available voices: <code>en_US-lessac-medium</code> (English), <code>hi_IN-priyamvada-medium</code> (Hindi)</li>
+    <li>Fast generation (~1 second for typical responses)</li>
+    <li>Audio served as WAV file</li>
+</ul>
+
+<h4>Fallback: Browser speechSynthesis</h4>
+<ul>
+    <li>Uses system voices when Piper is unavailable</li>
+    <li>Quality varies by OS and browser</li>
+</ul>
+
+<h3>Continuous Conversation</h3>
+<p>Voice mode supports continuous conversation:</p>
+<ol>
+    <li>Press microphone button → speak your question</li>
+    <li>AI processes and speaks the answer</li>
+    <li>After AI finishes speaking, microphone auto-activates</li>
+    <li>Speak next question — no button pressing needed</li>
+    <li>Press end call button to exit voice mode</li>
+</ol>
+
+<h3>Voice UI</h3>
+<p>Pipecat-inspired design with:</p>
+<ul>
+    <li>Purple-teal gradient orb (160px) — morphs and pulses</li>
+    <li>9-bar equalizer with gradient colors</li>
+    <li>Glassmorphism control bar (mute, end call, speaker)</li>
+    <li>Animated states: listening (teal rings), processing (conic spin), speaking (blob morph)</li>
+</ul>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 8: TELEGRAM BOT -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 8</div>
+    <h2>Telegram Bot</h2>
+    <div class="chapter-desc">Full ERPNext AI access from your Telegram app</div>
+</div>
+
+<h3>Setup & Configuration</h3>
+<h4>Step 1: Create Bot</h4>
+<ol>
+    <li>Open Telegram, search for <strong>@BotFather</strong></li>
+    <li>Send <code>/newbot</code></li>
+    <li>Choose a name: "Niv AI" (display name)</li>
+    <li>Choose a username: <code>your_niv_ai_bot</code> (must end with "bot")</li>
+    <li>Copy the <strong>bot token</strong> (format: <code>123456789:AABBccDDeeFF...</code>)</li>
+</ol>
+
+<h4>Step 2: Configure Niv Settings</h4>
+<ol>
+    <li>Go to <strong>Niv Settings → 📱 Telegram Bot</strong></li>
+    <li>Paste <strong>Telegram Bot Token</strong></li>
+    <li>Set <strong>Webhook URL</strong>: Your public server URL (e.g., <code>https://yourdomain.com</code>)</li>
+    <li>Enable <strong>Enable Telegram Bot</strong> ✅</li>
+</ol>
+
+<h4>Step 3: Register Webhook</h4>
+<pre><code># From browser or curl:
+POST /api/method/niv_ai.niv_core.api.telegram.setup_webhook
+
+# Or manually via Telegram API:
+curl https://api.telegram.org/bot{TOKEN}/setWebhook \
+  -d url=https://yourdomain.com/api/method/niv_ai.niv_core.api.telegram.webhook</code></pre>
+
+<h4>Step 4: Link Users</h4>
+<p>Create <strong>Niv Telegram User</strong> records to map Telegram users to Frappe users:</p>
+<table>
+    <tr><th>Field</th><th>Description</th></tr>
+    <tr><td>Telegram User ID</td><td>User's Telegram numeric ID (get from @userinfobot)</td></tr>
+    <tr><td>Frappe User</td><td>Email of the ERPNext user</td></tr>
+    <tr><td>Enabled</td><td>Toggle access on/off</td></tr>
+</table>
+
+<h3>Progressive Updates</h3>
+<p>Unlike basic bots that go silent while processing, Niv AI's Telegram bot shows real-time progress:</p>
+<pre><code>User: "Aaj ki sales kitni?"
+
+Bot:  ⏳ Processing...                    ← Instant
+
+Bot:  ⏳ Working...                        ← Updates when tool starts
+      📊 Database query chala raha hoon...
+
+Bot:  [status message deleted]             ← Clean up
+
+Bot:  🔧 Tools used:                       ← Final response
+        • 📊 Database query
+      
+      Aaj ki total sales: ₹4,58,000
+      Total orders: 12
+      Top customer: West View Software (₹1,29,000)</code></pre>
+
+<h3>Commands & Features</h3>
+<table>
+    <tr><th>Command</th><th>Description</th></tr>
+    <tr><td><code>/start</code></td><td>Welcome message with usage examples</td></tr>
+    <tr><td><code>/help</code></td><td>List of commands and example queries</td></tr>
+    <tr><td>Any text</td><td>Sends to AI agent, gets ERPNext response</td></tr>
+</table>
+
+<h4>Features</h4>
+<ul>
+    <li>Full 29-tool access — same as web chat</li>
+    <li>Markdown formatting (bold, code blocks, lists)</li>
+    <li>Tables rendered as monospace code blocks</li>
+    <li>Automatic message splitting for long responses (>4096 chars)</li>
+    <li>Typing indicator while processing</li>
+    <li>Conversation persistence — maintains chat history per user</li>
+</ul>
+
+<div class="tip-box">
+    <div class="title">💡 Testing Locally</div>
+    Use <strong>ngrok</strong> for local testing: <code>ngrok http 8081</code> gives you a public URL. Set that as your webhook URL in Niv Settings. Free plan works fine for development.
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 9: WHATSAPP BOT -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 9</div>
+    <h2>WhatsApp Bot</h2>
+    <div class="chapter-desc">ERPNext AI on the world's most popular messaging app</div>
+</div>
+
+<h3>Meta Cloud API Setup</h3>
+<ol>
+    <li>Go to <strong>developers.facebook.com</strong> → Create App → Business type</li>
+    <li>Add <strong>WhatsApp</strong> product to your app</li>
+    <li>In WhatsApp → API Setup:
+        <ul>
+            <li>Note your <strong>Phone Number ID</strong></li>
+            <li>Generate a <strong>Permanent Access Token</strong> (System User → Generate Token)</li>
+        </ul>
+    </li>
+    <li>In Niv Settings → 💬 WhatsApp Bot:
+        <ul>
+            <li>Set Phone Number ID</li>
+            <li>Set Access Token</li>
+            <li>Set Verify Token (any secret string you choose)</li>
+        </ul>
+    </li>
+    <li>In Meta Dashboard → WhatsApp → Configuration → Webhook:
+        <ul>
+            <li>Callback URL: <code>https://yourdomain.com/api/method/niv_ai.niv_core.api.whatsapp.webhook</code></li>
+            <li>Verify Token: same string as Niv Settings</li>
+            <li>Subscribe to: <strong>messages</strong></li>
+        </ul>
+    </li>
+</ol>
+
+<h3>QR Code Onboarding</h3>
+<p>Generate a QR code that opens WhatsApp chat with your bot:</p>
+<pre><code># API call to generate QR
+POST /api/method/niv_ai.niv_core.api.whatsapp.generate_qr
+{
+    "phone_number": "918322566235",
+    "prefill_text": "Hi"
+}
+
+# Returns:
+{
+    "wa_link": "https://wa.me/918322566235?text=Hi",
+    "qr_url": "https://chart.googleapis.com/chart?cht=qr&chs=300x300&chl=...",
+    "instructions": "Print this QR or share the link..."
+}</code></pre>
+
+<p>Print the QR code or share the link. Users scan → WhatsApp opens → they type → Niv AI replies!</p>
+
+<h3>WhatsApp Message Formatting</h3>
+<p>WhatsApp has limited formatting support. Niv AI automatically converts:</p>
+<table>
+    <tr><th>Markdown</th><th>WhatsApp Output</th></tr>
+    <tr><td>Tables (|...|)</td><td>Bullet lists with key: value format</td></tr>
+    <tr><td>### Headers</td><td>*Bold text*</td></tr>
+    <tr><td>[link](url)</td><td>text: url</td></tr>
+    <tr><td>**bold**</td><td>*bold*</td></tr>
+    <tr><td>```code```</td><td>```code```</td></tr>
+</table>
+
+<div class="info-box">
+    <div class="title">ℹ️ WhatsApp Costs</div>
+    Meta provides <strong>1,000 free conversations per month</strong>. After that, costs are approximately ₹0.50 per conversation (24-hour window). Business-initiated messages cost more than user-initiated ones.
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 10: NBFC / LENDING USE CASE -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 10</div>
+    <h2>NBFC / Lending Use Case</h2>
+    <div class="chapter-desc">Complete guide for Non-Banking Financial Companies using Niv AI</div>
+</div>
+
+<h3>Growth System Overview</h3>
+<p>
+    The Growth System (<code>mdfc-test.growthsystem.in</code>) is an ERPNext v14 implementation for NBFC operations. It includes specialized modules for:
+</p>
+<ul>
+    <li><strong>LOS (Loan Origination System)</strong> — Application intake, KYC, credit scoring</li>
+    <li><strong>LMS (Loan Management System)</strong> — Disbursement, EMI, collections</li>
+    <li><strong>Co-Lending</strong> — Partner bank integrations</li>
+    <li><strong>Accounting</strong> — GL entries, P&L, balance sheet</li>
+    <li><strong>Litigation</strong> — NPA management, legal notices</li>
+    <li><strong>HR</strong> — Employee management, payroll</li>
+</ul>
+
+<h3>NBFC-Specific Prompts</h3>
+<p>Configure these system prompts in <strong>Niv System Prompt</strong> for NBFC operations:</p>
+
+<div class="prompt-box">
+    <div class="title">📋 Loan Application Processor</div>
+<pre><code>You are an NBFC loan processing assistant for Growth System. 
+You help loan officers manage applications efficiently.
+
+Your capabilities:
+- Search and retrieve loan applications
+- Check KYC document status
+- Verify CIBIL scores and eligibility
+- Calculate EMI and disbursement amounts
+- Track application status through workflow stages
+
+Rules:
+- Always verify KYC before approving any action
+- Flag applications with CIBIL score below 650
+- Ensure co-lender approval for co-lending loans
+- Never modify loan terms without proper authorization
+- Report all compliance issues immediately
+
+Respond in Hindi/Hinglish as preferred by the user.</code></pre>
+</div>
+
+<div class="prompt-box">
+    <div class="title">📊 Collection Manager</div>
+<pre><code>You are a collection management assistant for an NBFC.
+
+Your responsibilities:
+- Track overdue EMI payments
+- Generate collection reports by bucket (1-30, 31-60, 61-90, 90+ DPD)
+- Identify high-risk accounts (3+ missed payments)
+- Suggest collection strategies based on account history
+- Monitor NPA (Non-Performing Asset) classification
+- Track legal notices and litigation status
+
+Important:
+- Follow RBI guidelines for collection practices
+- Do not suggest harassment or illegal collection methods
+- Prioritize resolution and restructuring over legal action
+- Flag accounts approaching NPA classification (89 DPD)</code></pre>
+</div>
+
+<div class="prompt-box">
+    <div class="title">🏦 Co-Lending Operations</div>
+<pre><code>You are a co-lending operations assistant.
+
+Key functions:
+- Match loans to co-lending partners based on criteria
+- Track co-lender disbursement status
+- Monitor interest rate splits and fee structures
+- Generate MIS reports for partner banks
+- Reconcile co-lending transactions
+
+Partner banks may have different:
+- Minimum/maximum loan amounts
+- Interest rate requirements
+- Documentation requirements
+- Turnaround time expectations
+
+Always check partner-specific rules before processing.</code></pre>
+</div>
+
+<div class="prompt-box">
+    <div class="title">📈 NBFC Compliance Officer</div>
+<pre><code>You are an NBFC compliance and reporting assistant.
+
+Monitoring areas:
+- Capital Adequacy Ratio (CRAR) — minimum 15%
+- Asset classification (Standard/Sub-standard/Doubtful/Loss)
+- NPA recognition as per RBI norms (90 days overdue)
+- Fair Practice Code compliance
+- KYC/AML compliance status
+- CERSAI registration status
+- Credit Bureau reporting (CIBIL/Equifax/Experian)
+
+Generate reports for:
+- Monthly NPA report
+- Quarterly CRAR calculation  
+- Annual compliance checklist
+- RBI return data preparation
+
+Flag any violation immediately with severity level.</code></pre>
+</div>
+
+<h3>Loan Application Management via Chat</h3>
+
+<h4>Common Queries</h4>
+<div class="prompt-box">
+    <div class="title">Daily Operations</div>
+    <strong>"Aaj ke pending loan applications dikhao"</strong><br>
+    → Lists all applications in pending status with applicant names and amounts<br><br>
+    
+    <strong>"Ramesh Kumar ka loan application status kya hai?"</strong><br>
+    → Searches by applicant name, shows current stage, documents pending, CIBIL score<br><br>
+    
+    <strong>"Is month mein kitna disbursement hua?"</strong><br>
+    → Runs database query for total disbursement amount this month<br><br>
+    
+    <strong>"NPA classification report banao"</strong><br>
+    → Generates report with Standard/Sub-standard/Doubtful/Loss categories<br><br>
+    
+    <strong>"CIBIL score 600 se kam wale applications dikhao"</strong><br>
+    → Filters and lists high-risk applications
+</div>
+
+<h3>Co-Lending Operations</h3>
+<p>Niv AI can manage co-lending workflows:</p>
+<ul>
+    <li>Match eligible loans to partner banks based on criteria</li>
+    <li>Track approval status from co-lending partners</li>
+    <li>Calculate interest splits and fee distributions</li>
+    <li>Generate MIS reports for partner bank submissions</li>
+    <li>Reconcile disbursement and collection flows</li>
+</ul>
+
+<h3>Compliance & Reporting</h3>
+<p>NBFC-specific compliance queries Niv AI can handle:</p>
+<ul>
+    <li><strong>NPA Report</strong> — Classify assets by days past due (DPD)</li>
+    <li><strong>CRAR Calculation</strong> — Capital to risk-weighted assets ratio</li>
+    <li><strong>Collection Efficiency</strong> — Track recovery rates by bucket</li>
+    <li><strong>Disbursement MIS</strong> — Monthly disbursement trends</li>
+    <li><strong>KYC Compliance</strong> — Track KYC document completeness</li>
+</ul>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 11: BILLING -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 11</div>
+    <h2>Billing & Token Management</h2>
+    <div class="chapter-desc">Track usage, manage budgets, accept payments</div>
+</div>
+
+<h3>Shared Pool vs Per User</h3>
+
+<h4>Shared Pool Mode (Default)</h4>
+<ul>
+    <li>Company buys a pool of tokens</li>
+    <li>All users consume from the same pool</li>
+    <li>Admin can set per-user daily limits to prevent abuse</li>
+    <li>Best for: Small teams, companies with centralized budgets</li>
+</ul>
+
+<h4>Per User Mode</h4>
+<ul>
+    <li>Each user has their own token wallet</li>
+    <li>Users can purchase tokens via Razorpay</li>
+    <li>Or admin allocates tokens manually</li>
+    <li>Best for: Large organizations, pay-per-use models</li>
+</ul>
+
+<h3>Razorpay Integration</h3>
+<p>Enable real payments for token purchases:</p>
+<ol>
+    <li>Create Razorpay account at <strong>razorpay.com</strong></li>
+    <li>Get API Keys from Dashboard → Settings → API Keys</li>
+    <li>Enter in Niv Settings → 💳 Payment Gateway:
+        <ul>
+            <li>Razorpay Key ID: <code>rzp_test_...</code> (test) or <code>rzp_live_...</code> (production)</li>
+            <li>Razorpay Key Secret: Your secret key</li>
+            <li>Enable Razorpay Payments: ✅</li>
+        </ul>
+    </li>
+</ol>
+
+<div class="tip-box">
+    <div class="title">💡 Demo Mode</div>
+    Leave Razorpay keys empty for <strong>demo mode</strong> — payment flow works but no real charges. Perfect for testing and demonstrations.
+</div>
+
+<h3>Token Cost Configuration</h3>
+<table>
+    <tr><th>Setting</th><th>Description</th><th>Example (Mistral Medium)</th></tr>
+    <tr><td>Cost per 1K Input Tokens</td><td>User messages cost</td><td>₹0.80</td></tr>
+    <tr><td>Cost per 1K Output Tokens</td><td>AI response cost</td><td>₹2.40</td></tr>
+    <tr><td>Per User Daily Limit</td><td>Max tokens per day</td><td>50,000</td></tr>
+</table>
+
+<h3>Usage Tracking</h3>
+<p>Every conversation tracks:</p>
+<ul>
+    <li>Total tokens used (input + output)</li>
+    <li>Message count</li>
+    <li>Token cost in configured currency</li>
+    <li>Per-conversation breakdown</li>
+</ul>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 12: ADMINISTRATION -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 12</div>
+    <h2>Administration</h2>
+    <div class="chapter-desc">Managing and monitoring your Niv AI installation</div>
+</div>
+
+<h3>Niv Settings Reference</h3>
+<p>Complete reference for all Niv Settings fields:</p>
+
+<table>
+    <tr><th>Section</th><th>Fields</th><th>Purpose</th></tr>
+    <tr><td>🤖 AI Configuration</td><td>Provider, Model, System Prompt, Tokens, Tools</td><td>Core AI behavior</td></tr>
+    <tr><td>⏱️ Rate Limiting</td><td>Per Hour, Per Day, Custom Message</td><td>Prevent abuse</td></tr>
+    <tr><td>📱 Telegram Bot</td><td>Token, Webhook URL, Enable</td><td>Telegram integration</td></tr>
+    <tr><td>💬 WhatsApp Bot</td><td>Phone ID, Access Token, Verify Token</td><td>WhatsApp integration</td></tr>
+    <tr><td>🎨 Widget Settings</td><td>Position, Title, Color, Roles</td><td>Floating chat button</td></tr>
+    <tr><td>💰 Billing</td><td>Mode, Pool Balance, Limits, Costs</td><td>Token management</td></tr>
+    <tr><td>💳 Payment Gateway</td><td>Razorpay Keys, Currency</td><td>Real payments</td></tr>
+    <tr><td>🎤 Voice Settings</td><td>STT/TTS Engine, Voice, Language</td><td>Voice chat</td></tr>
+    <tr><td>🔊 Voice API</td><td>API Key, Base URL, Voice, Model</td><td>External TTS/STT</td></tr>
+    <tr><td>🖼️ Image Generation</td><td>Enable, API Key, URL</td><td>AI image creation</td></tr>
+</table>
+
+<h3>Rate Limiting</h3>
+<p>Protect your AI budget and API limits:</p>
+<ul>
+    <li><strong>Messages per Hour</strong> — Recommended: 30-60 per user</li>
+    <li><strong>Messages per Day</strong> — Recommended: 200-500 per user</li>
+    <li><strong>Custom Message</strong> — Friendly message shown when limit is hit</li>
+</ul>
+
+<h3>User Permissions</h3>
+<p>Control who can use Niv AI:</p>
+<ul>
+    <li><strong>Allowed Roles</strong> — Add roles that can access Niv AI (empty = all users)</li>
+    <li><strong>Developer Mode</strong> — System Manager only (enforced by role check)</li>
+    <li><strong>Per-User Tool Permissions</strong> — When enabled, tools run with user's own permissions</li>
+</ul>
+
+<h3>Error Monitoring</h3>
+<p>Monitor Niv AI health:</p>
+<ul>
+    <li>Check <strong>Error Log</strong> for "Niv AI" or "Niv Telegram" errors</li>
+    <li>Use <code>monitor_errors</code> tool via chat: "Any errors in last 24 hours?"</li>
+    <li>Check <code>/home/frappe/frappe-bench/logs/telegram.log</code> for Telegram-specific logs</li>
+    <li>MCP tool failures logged to <code>frappe_assistant_core.*.log</code></li>
+</ul>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 13: DEPLOYMENT -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 13</div>
+    <h2>Deployment Guide</h2>
+    <div class="chapter-desc">Taking Niv AI to production</div>
+</div>
+
+<h3>Production Deployment (AWS/VPS)</h3>
+
+<h4>Requirements</h4>
+<ul>
+    <li>Ubuntu 22.04+ server (2+ CPU, 4GB+ RAM)</li>
+    <li>Domain name with DNS pointing to server</li>
+    <li>SSL certificate (Let's Encrypt / Certbot)</li>
+    <li>ERPNext already running on the server</li>
+</ul>
+
+<h4>Installation Steps</h4>
+<pre><code># SSH into your server
+ssh user@your-server
+
+# Install Niv AI
+cd frappe-bench
+bench get-app https://github.com/kulharir7/niv_ai.git
+bench get-app https://github.com/buildswithpaul/Frappe_Assistant_Core.git
+bench --site your-site install-app frappe_assistant_core
+bench --site your-site install-app niv_ai
+bench build --app niv_ai
+sudo supervisorctl restart all</code></pre>
+
+<h4>Nginx SSE Configuration</h4>
+<p>Niv AI uses Server-Sent Events (SSE) for streaming. Add to your nginx config:</p>
+<pre><code># In your site's nginx config (usually /etc/nginx/conf.d/your-site.conf)
+# Add inside the location / block:
+
+location /api/method/niv_ai.niv_core.api.stream.stream_chat {
+    proxy_pass http://frappe-bench;
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_set_header Connection '';
+    proxy_http_version 1.1;
+    chunked_transfer_encoding off;
+    proxy_read_timeout 300s;
+}</code></pre>
+
+<h3>Telegram/WhatsApp Webhook Setup</h3>
+<p>On production, no ngrok needed — your server is already public:</p>
+<pre><code># Set webhook URL to your domain
+# In Niv Settings:
+Webhook URL: https://erp.yourdomain.com
+
+# Telegram webhook auto-registers at:
+https://erp.yourdomain.com/api/method/niv_ai.niv_core.api.telegram.webhook
+
+# WhatsApp webhook (set in Meta Dashboard):
+https://erp.yourdomain.com/api/method/niv_ai.niv_core.api.whatsapp.webhook</code></pre>
+
+<h3>Backup & Recovery</h3>
+<p>Niv AI data is stored in standard Frappe DocTypes:</p>
+<ul>
+    <li><strong>Niv Conversation</strong> — Chat conversations</li>
+    <li><strong>Niv Message</strong> — Individual messages</li>
+    <li><strong>Niv Trigger</strong> — Auto-pilot triggers</li>
+    <li><strong>Niv System Prompt</strong> — Reusable prompts</li>
+    <li><strong>Niv Telegram User</strong> — User mappings</li>
+    <li><strong>Niv WhatsApp User</strong> — User mappings</li>
+</ul>
+<p>All backed up with standard <code>bench backup</code>. No external databases needed.</p>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- CHAPTER 14: API REFERENCE -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Chapter 14</div>
+    <h2>API Reference</h2>
+    <div class="chapter-desc">Complete API documentation for developers</div>
+</div>
+
+<h3>Chat API</h3>
+<h4>Stream Chat (SSE)</h4>
+<pre><code>POST /api/method/niv_ai.niv_core.api.stream.stream_chat
+Content-Type: application/json
+
+{
+    "conversation_id": "abc123",
+    "message": "Show me today's sales",
+    "model": "mistral-medium-2508",     // optional
+    "provider": "mistral",              // optional
+    "dev_mode": 1                       // optional, System Manager only
+}
+
+Response: Server-Sent Events stream
+  data: {"type": "token", "content": "Today's"}
+  data: {"type": "token", "content": " total"}
+  data: {"type": "tool_call", "tool": "run_database_query", "arguments": {...}}
+  data: {"type": "tool_result", "tool": "run_database_query", "result": "..."}
+  data: {"type": "token", "content": "sales are ₹4,58,000"}
+  data: {"type": "done"}</code></pre>
+
+<h3>Conversation API</h3>
+<pre><code># List conversations
+GET /api/method/niv_ai.niv_core.api.conversation.list_conversations
+
+# Get messages
+GET /api/method/niv_ai.niv_core.api.conversation.get_messages
+    ?conversation_id=abc123&limit=50
+
+# Create conversation
+POST /api/method/niv_ai.niv_core.api.conversation.create_conversation
+
+# Delete conversation
+POST /api/method/niv_ai.niv_core.api.conversation.delete_conversation
+    {"conversation_id": "abc123"}
+
+# Search conversations
+GET /api/method/niv_ai.niv_core.api.conversation.search_conversations
+    ?query=sales&limit=10</code></pre>
+
+<h3>Voice API</h3>
+<pre><code># Text to Speech
+POST /api/method/niv_ai.niv_core.api.voice.text_to_speech
+    {"text": "Hello, how can I help?", "voice": "hi_IN-priyamvada-medium"}
+    → Returns audio file URL
+
+# Speech to Text (base64)
+POST /api/method/niv_ai.niv_core.api.voice.voice_chat_base64
+    {"audio_base64": "...", "conversation_id": "abc123"}
+    → Returns {response, audio_url, conversation_id}
+
+# TTS Status
+GET /api/method/niv_ai.niv_core.api.voice.get_tts_status
+    → Returns available engines and voices</code></pre>
+
+<h3>Telegram Webhook</h3>
+<pre><code># Webhook (called by Telegram)
+POST /api/method/niv_ai.niv_core.api.telegram.webhook
+    (allow_guest=True, receives Telegram Update JSON)
+
+# Setup webhook
+POST /api/method/niv_ai.niv_core.api.telegram.setup_webhook
+    (System Manager only)
+
+# Link user
+POST /api/method/niv_ai.niv_core.api.telegram.link_user
+    {"telegram_user_id": "123456", "frappe_user_email": "user@example.com"}</code></pre>
+
+<h3>WhatsApp Webhook</h3>
+<pre><code># Webhook (called by Meta)
+GET  /api/method/niv_ai.niv_core.api.whatsapp.webhook  (verification)
+POST /api/method/niv_ai.niv_core.api.whatsapp.webhook  (messages)
+
+# Generate QR Code
+POST /api/method/niv_ai.niv_core.api.whatsapp.generate_qr
+    {"phone_number": "918322566235", "prefill_text": "Hi"}
+
+# Link user
+POST /api/method/niv_ai.niv_core.api.whatsapp.link_user
+    {"whatsapp_number": "918322566235", "frappe_user_email": "user@example.com"}</code></pre>
+
+<h3>Billing API</h3>
+<pre><code># Get credit plans
+GET /api/method/niv_ai.niv_billing.api.payment.get_plans
+
+# Create payment order
+POST /api/method/niv_ai.niv_billing.api.payment.create_order
+    {"plan_id": "PLAN-001"}
+
+# Verify payment
+POST /api/method/niv_ai.niv_billing.api.payment.verify_payment
+    {"razorpay_order_id": "...", "razorpay_payment_id": "...", "razorpay_signature": "..."}
+
+# Usage report (Admin)
+GET /api/method/niv_ai.niv_billing.api.admin.get_usage_report</code></pre>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- APPENDIX A: PROMPT LIBRARY -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Appendix A</div>
+    <h2>Prompt Library</h2>
+    <div class="chapter-desc">Ready-to-use system prompts for different industries</div>
+</div>
+
+<h3>General Business</h3>
+
+<div class="prompt-box">
+    <div class="title">📊 Business Analyst</div>
+<pre><code>You are a business analyst assistant for ERPNext. You help users 
+understand their business metrics through data queries.
+
+Focus areas:
+- Sales trends and forecasting
+- Inventory optimization
+- Cash flow analysis
+- Customer segmentation
+- Profitability by product/customer/region
+
+Always provide:
+1. The exact numbers from the database
+2. Comparison with previous period (MoM, YoY)
+3. Brief insight or recommendation
+4. Visual representation suggestion (chart type)
+
+Use Hindi/Hinglish when the user prefers.</code></pre>
+</div>
+
+<div class="prompt-box">
+    <div class="title">🏭 Manufacturing Assistant</div>
+<pre><code>You are a manufacturing operations assistant.
+
+Capabilities:
+- Track Work Orders and their completion status
+- Monitor BOM (Bill of Materials) costs
+- Check raw material availability
+- Calculate production capacity utilization
+- Track quality inspection results
+- Generate production planning reports
+
+Rules:
+- Always check material availability before suggesting production
+- Flag Work Orders behind schedule
+- Monitor scrap/waste rates
+- Ensure quality checks are completed before marking done</code></pre>
+</div>
+
+<div class="prompt-box">
+    <div class="title">🏥 Healthcare Assistant</div>
+<pre><code>You are a healthcare facility management assistant.
+
+Areas:
+- Patient appointment scheduling
+- Practitioner availability
+- Medical records search
+- Billing and insurance claims
+- Inventory of medical supplies
+- Lab test tracking
+
+IMPORTANT: Always maintain patient confidentiality.
+Never display sensitive medical information without proper authorization.
+Follow HIPAA/local healthcare data protection guidelines.</code></pre>
+</div>
+
+<div class="prompt-box">
+    <div class="title">🎓 Education Institute</div>
+<pre><code>You are an education management assistant.
+
+Features:
+- Student enrollment tracking
+- Fee collection status
+- Attendance monitoring
+- Exam results and grade calculation
+- Course scheduling
+- Faculty workload management
+
+Help administrators with:
+- "Kitne students ki fees pending hai?"
+- "Section A ka attendance report do"
+- "Next week ke exam schedule mein conflict check karo"</code></pre>
+</div>
+
+<h3>NBFC / Finance</h3>
+
+<div class="prompt-box">
+    <div class="title">📈 Portfolio Manager</div>
+<pre><code>You are a loan portfolio management assistant for an NBFC.
+
+Key metrics to track:
+- AUM (Assets Under Management)
+- Portfolio yield
+- NPA ratio (Gross and Net)
+- Collection efficiency ratio
+- Bounce rate
+- DPD (Days Past Due) distribution
+- Provision coverage ratio
+
+Report formats:
+- Daily: Collections summary, new disbursements
+- Weekly: DPD movement, bounce analysis
+- Monthly: Portfolio quality, NPA trends
+- Quarterly: Regulatory reporting data (RBI)</code></pre>
+</div>
+
+<div class="prompt-box">
+    <div class="title">⚖️ Legal & Compliance</div>
+<pre><code>You are a legal and compliance assistant for an NBFC.
+
+Track:
+- Arbitration cases and hearing dates
+- SARFAESI notices (Section 13(2), 13(4))
+- DRT applications status
+- One-time settlement (OTS) negotiations
+- Lok Adalat case listings
+- Legal notice generation data
+
+Compliance:
+- RBI master directions adherence
+- Fair Practice Code violations
+- Ombudsman complaints
+- CERSAI charge registration
+- ROC filings
+
+Alert on:
+- Hearing dates within 7 days
+- Overdue compliance deadlines
+- High-value NPA accounts without legal action</code></pre>
+</div>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- APPENDIX B: TROUBLESHOOTING -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Appendix B</div>
+    <h2>Troubleshooting</h2>
+    <div class="chapter-desc">Common issues and their solutions</div>
+</div>
+
+<h3>Common Issues</h3>
+
+<h4>1. Chat shows "Error" or no response</h4>
+<ul>
+    <li>Check AI Provider settings — is API key valid?</li>
+    <li>Check Error Log for "Niv AI Agent" errors</li>
+    <li>Verify model name is correct for your provider</li>
+    <li>Check token balance if billing is enabled</li>
+</ul>
+
+<h4>2. Tools not working</h4>
+<ul>
+    <li>Verify Frappe Assistant Core is installed: <code>bench --site your-site list-apps</code></li>
+    <li>Check MCP tool discovery: <code>bench console → MCPClient().discover_tools()</code></li>
+    <li>Check "Enable Tools" is ON in Niv Settings</li>
+    <li>Look for MCP errors in Error Log</li>
+</ul>
+
+<h4>3. 502 Bad Gateway after restart</h4>
+<ul>
+    <li>Backend container IP changed — restart frontend: <code>docker restart frappe_docker-frontend-1</code></li>
+    <li>Re-add SSE nginx config (lost on container restart)</li>
+    <li>Use <code>scripts/full_restore.ps1</code> for complete recovery</li>
+</ul>
+
+<h4>4. Telegram bot not responding</h4>
+<ul>
+    <li>Check ngrok is running (if testing locally)</li>
+    <li>Verify webhook is set: <code>curl https://api.telegram.org/bot{TOKEN}/getWebhookInfo</code></li>
+    <li>Check Niv Telegram User exists for the sender's Telegram ID</li>
+    <li>Check Error Log for "Niv Telegram Bot Error"</li>
+</ul>
+
+<h4>5. Voice mode not working</h4>
+<ul>
+    <li>Browser STT requires HTTPS (or localhost)</li>
+    <li>Piper TTS needs pip install after container restart: <code>pip install piper-tts</code></li>
+    <li>Check voice model files exist in <code>sites/frontend/private/piper_models/</code></li>
+</ul>
+
+<h4>6. pip packages lost after Docker restart</h4>
+<pre><code># Reinstall on all containers:
+for container in backend queue-short queue-long scheduler; do
+    docker exec frappe_docker-${container}-1 pip install langchain langchain-core \
+        langgraph langchain-openai piper-tts
+done</code></pre>
+
+<h4>7. Apps.txt overwrite after bench build</h4>
+<pre><code># If niv_ai disappears from apps.txt after build:
+docker exec frappe_docker-backend-1 bash -c \
+    "echo -e 'frappe\nerpnext\nniv_ai\nfrappe_assistant_core\nniv_tools' > \
+    /home/frappe/frappe-bench/sites/apps.txt"</code></pre>
+
+
+<!-- ════════════════════════════════════════════════════════════ -->
+<!-- APPENDIX C: ROADMAP -->
+<!-- ════════════════════════════════════════════════════════════ -->
+<div class="chapter-header">
+    <div class="chapter-num">Appendix C</div>
+    <h2>Roadmap</h2>
+    <div class="chapter-desc">Where Niv AI is heading</div>
+</div>
+
+<h3>Current Version: v0.5.1</h3>
+<table>
+    <tr><th>Version</th><th>Focus</th><th>Key Features</th></tr>
+    <tr><td>v0.5 ✅</td><td>Developer Tools + Triggers</td><td>94 RAG features, auto-pilot triggers, confirmation/undo</td></tr>
+    <tr><td>v0.5.1 ✅</td><td>Multi-Channel</td><td>Telegram bot, WhatsApp bot, voice fixes, settings UI</td></tr>
+    <tr><td>v0.6</td><td>Permissions + Observability</td><td>Role-based tools, agent run logging, audit trail</td></tr>
+    <tr><td>v0.7</td><td>Production Deployment</td><td>Growth System deployment, NBFC testing, performance</td></tr>
+    <tr><td>v0.8</td><td>Mobile + Multi-language</td><td>Mobile-optimized widget, regional language prompts</td></tr>
+    <tr><td>v1.0</td><td>Stable Release</td><td>All core features stable, documentation complete</td></tr>
+    <tr><td>v1.5</td><td>Multi-Agent</td><td>Multiple specialized agents, agent orchestration</td></tr>
+    <tr><td>v2.0</td><td>Enterprise</td><td>SSO, audit trail, compliance, plugin marketplace</td></tr>
+</table>
+
+<h3>Upcoming Features</h3>
+<ul>
+    <li><strong>Bulk Operations</strong> — "Sab draft invoices submit karo" with confirmation</li>
+    <li><strong>Natural Language Reports</strong> — Charts and tables rendered in chat</li>
+    <li><strong>Document Intelligence</strong> — Upload PDF → auto-create Purchase Invoice</li>
+    <li><strong>Permission-Aware Tools</strong> — Role-based tool filtering</li>
+    <li><strong>Agent Run Logging</strong> — Track every AI action with cost and duration</li>
+    <li><strong>Self-Test Loop</strong> — AI verifies its own creations work</li>
+    <li><strong>Multi-Agent Orchestration</strong> — Specialized agents for different departments</li>
+    <li><strong>Plugin Marketplace</strong> — Community-contributed tools and prompts</li>
+</ul>
+
+<br><br>
+<div style="text-align: center; padding: 3em; color: #94a3b8;">
+    <h3 style="color: #7c3aed; border: none;">Built with ❤️ for the ERPNext Community</h3>
+    <p>Niv AI — Making ERPNext intelligent, one conversation at a time.</p>
+    <p style="font-size: 9pt; margin-top: 2em;">
+        © 2026 Ravindra Kulhari | MIT License<br>
+        github.com/kulharir7/niv_ai
+    </p>
+</div>
+
+</body>
+</html>
