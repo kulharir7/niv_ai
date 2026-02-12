@@ -119,6 +119,75 @@ bench restart
 
 </details>
 
+<details open>
+<summary><b>🦙 Recommended: Ollama Cloud — Cheapest & Best (click to expand)</b></summary>
+<br/>
+
+> **💰 Run 675B parameter models for FREE or $20/mo. No GPU needed. No local install.**
+
+Ollama Cloud gives you access to massive open-source models via a simple API — same as OpenAI/Mistral, but **dramatically cheaper**.
+
+#### Available Models
+
+| Model | Parameters | Best For |
+|-------|-----------|----------|
+| **Mistral Large 3** | 675B | 🏆 Best overall — fast, smart, tool calling |
+| DeepSeek V3.1 | 671B | Reasoning, coding |
+| Qwen3 Coder | 480B | Code generation |
+| GPT-OSS | 120B | Fast general queries |
+| GPT-OSS | 20B | Ultra-fast, lightweight |
+| Qwen3-VL | 235B | Vision + text |
+| MiniMax-M2 | — | Multilingual |
+
+#### Setup (3 minutes)
+
+**Step 1:** Create free account at [ollama.com](https://ollama.com)
+
+**Step 2:** Generate API key at [ollama.com/settings/keys](https://ollama.com/settings/keys)
+
+**Step 3:** In ERPNext, go to **Niv AI Provider** → `+ New`:
+
+```
+Provider Name  : ollama-cloud
+Provider Type  : openai_compatible
+Base URL       : https://ollama.com/v1
+API Key        : <your-ollama-api-key>
+Default Model  : mistral-large-3:675b
+```
+
+**Step 4:** In **Niv Settings** → set Default Provider to `ollama-cloud`
+
+**Done!** 🎉 Your AI assistant now runs on 675B parameter models.
+
+#### Why Ollama Cloud?
+
+```
+┌─────────────────────────────────────────────────────┐
+│  Provider Comparison (approximate)                  │
+├──────────────┬──────────┬──────────┬───────────────┤
+│ Provider     │ Model    │ Cost     │ Quality       │
+├──────────────┼──────────┼──────────┼───────────────┤
+│ OpenAI       │ GPT-4o   │ $5/M tok │ ★★★★☆        │
+│ Anthropic    │ Claude   │ $15/M    │ ★★★★★        │
+│ Mistral API  │ Medium   │ $2/M tok │ ★★★★☆        │
+│ Ollama Free  │ 675B     │ FREE     │ ★★★★☆        │
+│ Ollama Pro   │ 675B     │ $20/mo   │ ★★★★☆ (more) │
+└──────────────┴──────────┴──────────┴───────────────┘
+```
+
+> ⚡ **No local Ollama install needed.** No GPU. No Docker. No tunnels.
+> Just an API key — works on any cloud ERPNext deployment.
+
+#### Pricing
+
+| Plan | Price | Usage |
+|------|-------|-------|
+| Free | $0 | Light — chat, quick questions |
+| Pro | $20/mo | Heavy — RAG, coding, agents |
+| Max | $100/mo | Unlimited — batch, automation |
+
+</details>
+
 <details>
 <summary><b>🐳 Docker Setup (click to expand)</b></summary>
 <br/>
