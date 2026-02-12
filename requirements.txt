@@ -16,6 +16,7 @@ razorpay
 # Same-server (FAC on localhost) uses direct Python import, zero deps needed.
 # Install manually if connecting to remote MCP servers:
 #   pip install mcp langchain-mcp-adapters
-# piper-tts is optional — install manually if TTS is needed:
+edge-tts
+# piper-tts is optional — install manually for OFFLINE TTS fallback:
 #   pip install piper-tts
 # It may not work on all platforms (requires Python 3.9+ and specific OS support)

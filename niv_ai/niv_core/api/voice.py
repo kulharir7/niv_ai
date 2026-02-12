@@ -307,13 +307,70 @@ def _tts_openai(text, voice, model, response_format, config):
 
 # ─── Public APIs ─────────────────────────────────────────────────────────
 
+def _tts_edge(text, voice=None):
+    """Edge TTS — Microsoft Azure neural voices, free, unlimited, human-like."""
+    try:
+        import edge_tts
+        import asyncio
+    except ImportError:
+        return None
+
+    # Default voices based on language detection
+    if not voice:
+        # Simple Hindi detection
+        has_hindi = any(ord(c) > 0x0900 and ord(c) < 0x097F for c in text)
+        has_hindi_words = any(w in text.lower() for w in ["kya", "hai", "haan", "nahi", "aap", "main", "kaise", "mera", "tera"])
+        if has_hindi or has_hindi_words:
+            voice = "hi-IN-SwaraNeural"  # Female Hindi
+        else:
+            voice = "en-US-JennyNeural"  # Female English — natural, warm
+
+    try:
+        # Generate audio
+        output_dir = frappe.get_site_path("public", "files")
+        filename = "tts_edge_{0}.mp3".format(uuid.uuid4().hex[:12])
+        output_path = os.path.join(output_dir, filename)
+
+        # Run async edge-tts
+        async def _generate():
+            communicate = edge_tts.Communicate(text, voice)
+            await communicate.save(output_path)
+
+        # Get or create event loop
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as pool:
+                    pool.submit(asyncio.run, _generate()).result(timeout=30)
+            else:
+                loop.run_until_complete(_generate())
+        except RuntimeError:
+            asyncio.run(_generate())
+
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            audio_url = "/files/{0}".format(filename)
+            frappe.logger().info("Edge TTS: generated {0} with voice {1}".format(filename, voice))
+            return {
+                "audio_url": audio_url,
+                "engine": "edge",
+                "voice": voice,
+                "text": text,
+            }
+    except Exception as e:
+        frappe.logger().warning("Edge TTS failed: {0}".format(str(e)))
+
+    return None
+
+
 @frappe.whitelist(allow_guest=False)
 def text_to_speech(text, voice=None, model=None, response_format="wav", engine=None):
     """
     Convert text to speech. Tries engines in order:
-    1. Piper TTS (free, local, fast) — if installed
-    2. OpenAI-compatible API — if API key configured AND provider supports TTS
-    3. Returns engine='browser' signal for client-side fallback
+    1. Edge TTS (free, human-like, Microsoft Azure neural voices)
+    2. Piper TTS (free, local, offline fallback)
+    3. OpenAI-compatible API — if API key configured AND provider supports TTS
+    4. Returns engine='browser' signal for client-side fallback
     """
     check_rate_limit()
     log_api_call("text_to_speech")
@@ -328,7 +385,14 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
 
     config = _get_voice_config()
 
-    # ── Try Piper TTS (free, local) ──
+    # ── Try Edge TTS first (free, human-like, best quality) ──
+    if engine in (None, "auto", "edge"):
+        edge_voice = voice if (voice and "Neural" in str(voice)) else None
+        result = _tts_edge(text, edge_voice)
+        if result:
+            return result
+
+    # ── Try Piper TTS (free, local, offline fallback) ──
     if engine in (None, "auto", "piper"):
         piper_voice = voice or config.get("default_voice") or "en_US-lessac-medium"
         result = _tts_piper(text, piper_voice)

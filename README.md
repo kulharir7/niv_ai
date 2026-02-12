@@ -230,6 +230,46 @@ Set 3 models:
 
 </details>
 
+<details open>
+<summary><b>🎤 Voice Mode — Free Human-like Speech</b></summary>
+<br/>
+
+> **Talk to your ERP like talking to a person.** Free, no API keys, human-quality voices.
+
+#### Text-to-Speech (TTS) — Edge TTS
+
+Niv AI uses **Microsoft Edge TTS** — neural voices that sound like real humans. Completely free, unlimited, no API key needed.
+
+| Feature | Detail |
+|---------|--------|
+| **Engine** | Microsoft Azure Neural Voices |
+| **Cost** | ₹0 (free, unlimited) |
+| **Install size** | ~1 MB |
+| **Hindi voice** | `hi-IN-SwaraNeural` (auto-detected) |
+| **English voice** | `en-US-JennyNeural` (warm, natural) |
+| **Offline** | ❌ (needs internet) |
+| **Fallback** | Piper TTS (offline) → Browser TTS |
+
+Edge TTS is **auto-installed** with Niv AI (`requirements.txt`). No setup needed.
+
+#### Speech-to-Text (STT)
+
+| Engine | How | Cost |
+|--------|-----|------|
+| **Browser SpeechRecognition** (default) | Built-in, instant | Free |
+| **Groq Whisper** (optional upgrade) | `console.groq.com` → free API key | Free |
+
+#### TTS Engine Priority
+```
+1. Edge TTS      → Human-like, free (needs internet)
+2. Piper TTS     → Offline fallback (needs pip install piper-tts)
+3. Browser TTS   → Last resort
+```
+
+> 🎯 **Auto language detection** — Hindi/Hinglish text automatically uses Hindi voice, English text uses English voice.
+
+</details>
+
 <details>
 <summary><b>🐳 Docker Setup (click to expand)</b></summary>
 <br/>
