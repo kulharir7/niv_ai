@@ -304,10 +304,12 @@ def stream_chat(**kwargs):
                 _set_dev_mode(False, conversation_id)
                 set_active_dev_conversation("")
 
-        # Ensure final text exists when tools ran but model text was empty
+        # Ensure final text exists when tools ran but model text was empty or garbage
         # Force a summary LLM call (no tools) so user always gets a text answer
         # Also fires after timeout/limit errors — user still deserves a summary of what was found
-        if not saw_token and saw_tool_activity:
+        # "Garbage" = raw JSON, tool call plans, or very short text
+        _text_is_useful = saw_token and len(full_response.strip()) > 100 and not full_response.strip().startswith('{')
+        if saw_tool_activity and not _text_is_useful:
             try:
                 # Build a summary of tool results for the LLM
                 tool_summary_parts = []
