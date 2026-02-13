@@ -418,6 +418,7 @@ body.niv-widget-mode .btn-close-sidebar {
     background: var(--niv-bg);
     position: relative;
     transition: background 0.2s ease;
+    overflow: visible;
 }
 
 /* ── Chat Header — Minimal & Clean ── */
@@ -440,6 +441,12 @@ body.niv-widget-mode .btn-close-sidebar {
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.15s ease;
+    flex-shrink: 0;
+    margin-left: 2px;
+    position: relative;
+    z-index: 6;
+    min-width: 36px;
+    min-height: 36px;
 }
 .niv-chat-header .btn-toggle-sidebar:hover {
     background: var(--niv-hover);
