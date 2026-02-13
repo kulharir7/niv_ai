@@ -166,7 +166,13 @@ def get_system_prompt(conversation_id: str = None) -> str:
         "2. If a tool fails, try at most 2 alternative approaches before giving up.\n"
         "3. If a field name is wrong, use get_doctype_info to find the correct name and retry.\n"
         "4. NEVER show raw error messages or JSON to the user. Always provide a helpful answer.\n"
-        "5. For data queries, prefer: list_documents (fast) → run_database_query (powerful) → generate_report (comprehensive)\n"
+        "5. For data queries, prefer: list_documents (fast) → run_database_query (powerful) → generate_report (comprehensive)\n\n"
+        "TOOL EFFICIENCY (CRITICAL):\n"
+        "1. Use MINIMUM tool calls needed. Plan your approach BEFORE calling tools.\n"
+        "2. After getting tool results, ALWAYS write a text summary for the user. Never end with just tool calls.\n"
+        "3. Maximum 4-5 tool calls per query. If you need more, summarize what you found so far and ask if the user wants more detail.\n"
+        "4. Do NOT explore schemas unnecessarily — if you know the DocType fields, query directly.\n"
+        "5. Combine information from multiple tool results into ONE clear, formatted response.\n"
     )
 
     # Try conversation-level prompt
