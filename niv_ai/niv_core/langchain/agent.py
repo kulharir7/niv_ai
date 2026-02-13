@@ -227,6 +227,8 @@ def stream_agent(
 
     _setup_user_api_key(user)
     pending_tool_calls = {}
+    tool_call_count = 0
+    MAX_TOOL_CALLS = 4  # Hard limit — after this, model must respond with text
     try:
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
             # LangGraph yields (message, metadata) tuples
@@ -279,6 +281,7 @@ def stream_agent(
 
             # Tool results
             elif msg.type == "tool":
+                tool_call_count += 1
                 # Flush pending tool calls before yielding results
                 for idx in list(pending_tool_calls.keys()):
                     tc_data = pending_tool_calls[idx]
@@ -290,6 +293,10 @@ def stream_agent(
                     "tool": getattr(msg, "name", "unknown"),
                     "result": (str(msg.content) or "")[:2000],
                 }
+                # Hard limit: stop streaming after MAX_TOOL_CALLS to force text response
+                if tool_call_count >= MAX_TOOL_CALLS:
+                    yield {"type": "token", "content": "\n\n_(Reached tool call limit. Summarizing available data.)_\n\n"}
+                    break
 
     except Exception as e:
         try:
