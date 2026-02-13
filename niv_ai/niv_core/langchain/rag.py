@@ -28,25 +28,34 @@ def _get_embeddings():
 
     settings = get_niv_settings()
     provider = None
-    if settings.default_provider:
+
+    # For embeddings, prefer a provider that supports /v1/embeddings
+    # Mistral has mistral-embed; Ollama Cloud does NOT support embeddings
+    embedding_provider_name = getattr(settings, "embedding_provider", "") or ""
+    if embedding_provider_name:
+        try:
+            provider = frappe.get_doc("Niv AI Provider", embedding_provider_name)
+        except Exception:
+            pass
+
+    # Try providers with known embedding support (mistral first)
+    if not provider:
+        for pname in ["mistral"]:
+            try:
+                provider = frappe.get_doc("Niv AI Provider", pname)
+                break
+            except Exception:
+                continue
+
+    # Fallback to default provider
+    if not provider and settings.default_provider:
         try:
             provider = frappe.get_doc("Niv AI Provider", settings.default_provider)
         except Exception:
             pass
 
     if not provider:
-        # Fallback: try first active provider
-        providers = frappe.get_all(
-            "Niv AI Provider",
-            filters={"is_active": 1},
-            fields=["name"],
-            limit=1,
-        )
-        if providers:
-            provider = frappe.get_doc("Niv AI Provider", providers[0].name)
-
-    if not provider:
-        frappe.throw("No AI provider configured. Set up a provider in Niv Settings.")
+        frappe.throw("No AI provider configured for embeddings.")
 
     api_key = provider.get_password("api_key") if provider.api_key else ""
     base_url = (provider.base_url or "").rstrip("/")
