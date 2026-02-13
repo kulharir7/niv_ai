@@ -237,8 +237,12 @@ def stream_chat(**kwargs):
 
         try:
             # Ensure frappe.local is fully initialized (--preload + SSE can miss this)
-            if not hasattr(frappe.local, "document_cache"):
-                frappe.local.document_cache = {}
+            for _attr, _default in [
+                ("document_cache", {}), ("dev_server", 0), ("conf", frappe._dict()),
+                ("form_dict", frappe._dict()), ("flags", frappe._dict()),
+            ]:
+                if not hasattr(frappe.local, _attr):
+                    setattr(frappe.local, _attr, _default)
 
             from niv_ai.niv_core.langchain.agent import stream_agent
             from niv_ai.niv_core.langchain.tools import set_dev_mode as _set_dev_mode, set_active_dev_conversation
