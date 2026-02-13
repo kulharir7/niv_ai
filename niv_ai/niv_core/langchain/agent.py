@@ -111,7 +111,7 @@ def create_niv_agent(
     )
 
     config = {
-        "recursion_limit": 25,  # Allow self-correction retries (tool fail → fix → retry)
+        "recursion_limit": 10,  # Max ~4-5 tool calls + responses (each tool = 2 steps)
         "callbacks": all_callbacks,
     }
 
