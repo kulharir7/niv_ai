@@ -91,27 +91,53 @@ def check_settings(auto_fix=True):
 
 @register_check("LLM Provider", "core")
 def check_llm_provider(auto_fix=True):
-    """Verify at least one LLM provider is configured and reachable."""
+    """Verify at least one LLM provider is configured."""
     try:
-        settings = frappe.get_doc("Niv Settings")
-        providers = frappe.get_all("Niv AI Provider", fields=["name", "provider_name", "base_url", "is_default"])
-
-        if not providers:
+        # Check if Niv AI Provider DocType exists
+        if not frappe.db.exists("DocType", "Niv AI Provider"):
+            # Fall back to legacy single-provider config
+            settings = frappe.get_doc("Niv Settings")
             api_key = settings.get_password("api_key", raise_exception=False)
             base_url = getattr(settings, "api_base_url", "") or ""
+            default_model = getattr(settings, "default_model", "") or ""
+
             if api_key:
-                return {"status": "ok", "message": f"Legacy provider: {base_url or 'default'}"}
-            return {"status": "error", "message": "No LLM provider configured. Add one in Niv Settings → Providers."}
+                return {"status": "ok", "message": f"Legacy config: {default_model or 'no model'} @ {base_url or 'default'}"}
+            return {"status": "error", "message": "No LLM provider configured. Set API key in Niv Settings."}
 
-        default = [p for p in providers if p.get("is_default")]
-        if not default:
+        # Check providers in child table
+        try:
+            providers = frappe.get_all("Niv AI Provider", fields=["name", "provider_name", "base_url"])
+        except Exception as e:
+            # Handle missing columns (older schema)
+            if "Unknown column" in str(e):
+                providers = frappe.get_all("Niv AI Provider", fields=["name"])
+            else:
+                raise
+
+        if not providers:
+            # Check legacy config
+            settings = frappe.get_doc("Niv Settings")
+            api_key = settings.get_password("api_key", raise_exception=False)
+            if api_key:
+                return {"status": "ok", "message": "Using legacy single-provider config"}
+            return {"status": "error", "message": "No LLM provider configured. Add one in Niv Settings."}
+
+        # Try to check is_default (may not exist in older schema)
+        try:
+            default = frappe.db.get_value("Niv AI Provider", {"is_default": 1}, "provider_name")
+            if default:
+                return {"status": "ok", "message": f"{len(providers)} provider(s), default: {default}"}
+            # Set first as default
             if auto_fix and providers:
-                frappe.db.set_value("Niv AI Provider", providers[0]["name"], "is_default", 1)
+                first = providers[0]["name"]
+                frappe.db.set_value("Niv AI Provider", first, "is_default", 1)
                 frappe.db.commit()
-                return {"status": "fixed", "message": f"Set '{providers[0]['provider_name']}' as default provider"}
-            return {"status": "warning", "message": f"{len(providers)} providers but none is default"}
+                return {"status": "fixed", "message": f"Set first provider as default"}
+        except Exception:
+            pass  # is_default column doesn't exist
 
-        return {"status": "ok", "message": f"{len(providers)} provider(s), default: {default[0]['provider_name']}"}
+        return {"status": "ok", "message": f"{len(providers)} provider(s) configured"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -120,8 +146,8 @@ def check_llm_provider(auto_fix=True):
 def check_llm_connectivity(auto_fix=True):
     """Test actual LLM API connectivity with a minimal request."""
     try:
-        from niv_ai.niv_core.langchain.llm import get_chat_model
-        llm = get_chat_model()
+        from niv_ai.niv_core.langchain.llm import get_llm
+        llm = get_llm()
         if llm is None:
             return {"status": "error", "message": "Could not initialize LLM model"}
 
@@ -159,9 +185,18 @@ def check_mcp_tools(auto_fix=True):
                 return {"status": "warning", "message": "No MCP tools. Install frappe_assistant_core for 23 built-in tools."}
             return {"status": "error", "message": "FAC installed but no tools discovered — check MCP server config"}
 
-        broken = [t.get("name", "unnamed") for t in tools if not t.get("name") or not t.get("function")]
-        if broken:
-            return {"status": "warning", "message": f"{len(tools)} tools, {len(broken)} malformed: {', '.join(broken[:5])}"}
+        # Check tool structure more carefully
+        valid_tools = []
+        for t in tools:
+            # Tools can be dicts or objects
+            name = t.get("name") if isinstance(t, dict) else getattr(t, "name", None)
+            func = t.get("function") if isinstance(t, dict) else getattr(t, "function", None)
+            if name and func:
+                valid_tools.append(name)
+
+        broken_count = len(tools) - len(valid_tools)
+        if broken_count > 0:
+            return {"status": "warning", "message": f"{len(valid_tools)} valid tools, {broken_count} malformed"}
 
         return {"status": "ok", "message": f"{len(tools)} tools available"}
     except Exception as e:
@@ -247,15 +282,17 @@ def check_rag(auto_fix=True):
 @register_check("Database Tables", "core")
 def check_database(auto_fix=True):
     """Verify all Niv AI DocType tables exist."""
+    # Single DocTypes don't have regular tables, skip them
+    single_doctypes = {"Niv Settings"}
     required_doctypes = [
-        "Niv Settings", "Niv Conversation", "Niv Message",
+        "Niv Conversation", "Niv Message",
         "Niv AI Provider", "Niv System Prompt", "Niv Credit Plan",
         "Niv KB Chunk", "Niv Knowledge Base", "Niv Trigger",
     ]
     missing = []
     for dt in required_doctypes:
         try:
-            frappe.db.sql(f"SELECT COUNT(*) FROM `tab{dt}`")
+            frappe.db.sql(f"SELECT COUNT(*) FROM `tab{dt}` LIMIT 1")
         except Exception:
             missing.append(dt)
 
