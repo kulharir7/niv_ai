@@ -237,6 +237,7 @@ def stream_chat(**kwargs):
     def generate():
         full_response = ""
         tool_calls_data = []
+        tool_results_data = []
         saw_token = False
         saw_tool_activity = False
         saw_error = False
@@ -281,7 +282,9 @@ def stream_chat(**kwargs):
 
                 elif event_type == "tool_result":
                     saw_tool_activity = True
-                    yield _sse({"type": "tool_result", "tool": event.get("tool", ""), "result": event.get("result", "")})
+                    result_text = event.get("result", "")
+                    tool_results_data.append({"tool": event.get("tool", ""), "result": result_text[:500]})
+                    yield _sse({"type": "tool_result", "tool": event.get("tool", ""), "result": result_text})
 
                 elif event_type == "error":
                     saw_error = True
@@ -302,12 +305,37 @@ def stream_chat(**kwargs):
                 set_active_dev_conversation("")
 
         # Ensure final text exists when tools ran but model text was empty
+        # Force a summary LLM call (no tools) so user always gets a text answer
         if not saw_error and not saw_token and saw_tool_activity:
-            full_response = (
-                "Tools executed successfully, but response text was empty. "
-                "Please ask 'summarize results' to view a concise summary of the tool outputs."
-            )
-            yield _sse({"type": "token", "content": full_response})
+            try:
+                # Build a summary of tool results for the LLM
+                tool_summary_parts = []
+                for i, tc in enumerate(tool_calls_data):
+                    result_str = ""
+                    if i < len(tool_results_data):
+                        result_str = f"\n  Result: {tool_results_data[i].get('result', '')[:300]}"
+                    tool_summary_parts.append(f"- `{tc.get('tool', 'unknown')}`: args={json.dumps(tc.get('arguments', {}), default=str)[:150]}{result_str}")
+                tool_list_text = "\n".join(tool_summary_parts[:8]) if tool_summary_parts else "Multiple tools were called."
+
+                summary_prompt = (
+                    f"The user asked: \"{message}\"\n\n"
+                    f"Tool results:\n{tool_list_text}\n\n"
+                    "Summarize the findings for the user. Be concise, use tables/lists for data. "
+                    "If tools returned errors, explain what info you couldn't get."
+                )
+
+                from niv_ai.niv_core.langchain.llm import get_llm
+                summary_llm = get_llm(provider, model, streaming=False, callbacks=[])
+                from langchain_core.messages import HumanMessage as _HM
+                summary_result = summary_llm.invoke([_HM(content=summary_prompt)])
+                full_response = summary_result.content if hasattr(summary_result, 'content') else str(summary_result)
+                yield _sse({"type": "token", "content": full_response})
+            except Exception as e:
+                full_response = (
+                    "I gathered data using multiple tools but couldn't generate a summary. "
+                    "Please ask me to 'summarize' or rephrase your question."
+                )
+                yield _sse({"type": "token", "content": full_response})
 
         # Reconnect DB if stale before saving (gthread workers lose connections during streaming)
         try:
