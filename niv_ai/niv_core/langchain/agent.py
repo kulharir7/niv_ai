@@ -232,7 +232,7 @@ def stream_agent(
     try:
         settings = get_niv_settings()
         if dev_mode:
-            agent_id = "general"  # developer mode gets full toolset via general agent
+            agent_id = "developer"
             route_meta = {"method": "dev_mode", "confidence": 1.0}
         elif getattr(settings, "enable_agent_routing", 0):
             agent_id, route_meta = classify_query(message)
