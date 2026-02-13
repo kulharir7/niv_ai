@@ -15,6 +15,7 @@ import re
 import time
 import requests
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 from frappe import _
 
 
@@ -412,7 +413,7 @@ def _get_or_create_conversation(user, wa_id):
 def _get_setting(field):
     """Get a Niv Settings field value."""
     try:
-        settings = frappe.get_cached_doc("Niv Settings")
+        settings = get_niv_settings()
         return getattr(settings, field, None)
     except Exception:
         return None

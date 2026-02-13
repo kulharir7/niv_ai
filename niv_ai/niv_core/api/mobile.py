@@ -6,6 +6,7 @@ import json
 import secrets
 import string
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 from frappe import _
 from datetime import datetime, timedelta
 
@@ -25,7 +26,7 @@ def generate_pairing_code(user_email=None):
     code = _generate_unique_code()
 
     # Get expiry hours from settings
-    settings = frappe.get_cached_doc("Niv Settings")
+    settings = get_niv_settings()
     expiry_hours = getattr(settings, "pairing_code_expiry_hours", 24) or 24
     expires_at = datetime.now() + timedelta(hours=int(expiry_hours))
 
@@ -72,7 +73,7 @@ def my_pairing_code():
     # Generate new code
     code = _generate_unique_code()
 
-    settings = frappe.get_cached_doc("Niv Settings")
+    settings = get_niv_settings()
     expiry_hours = getattr(settings, "pairing_code_expiry_hours", 24) or 24
     expires_at = datetime.now() + timedelta(hours=int(expiry_hours))
     site_url = getattr(settings, "mobile_site_url", "") or frappe.utils.get_url()
@@ -151,7 +152,7 @@ def pair(code=None, device_name=None):
     user_doc = frappe.get_doc("User", user_email)
 
     # Get AI config
-    settings = frappe.get_cached_doc("Niv Settings")
+    settings = get_niv_settings()
 
     # Get company info
     companies = []

@@ -44,7 +44,8 @@ def get_llm(provider_name=None, model=None, streaming=True, callbacks=None):
       provider: provider_name arg → settings.default_provider
       model: model arg → provider.default_model → settings.default_model
     """
-    settings = frappe.get_cached_doc("Niv Settings")
+    from niv_ai.niv_core.utils import get_niv_settings
+    settings = get_niv_settings()
 
     provider_name = provider_name or settings.default_provider
     if not provider_name:

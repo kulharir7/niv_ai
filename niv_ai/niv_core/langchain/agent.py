@@ -4,6 +4,7 @@ Main entry point for all LangChain-powered chat.
 """
 import json
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from .llm import get_llm
@@ -130,7 +131,7 @@ def _setup_user_api_key(user: str):
         from .tools import set_current_user_api_key
         
         # Check if per-user tool permissions is enabled
-        settings = frappe.get_cached_doc("Niv Settings")
+        settings = get_niv_settings()
         if not getattr(settings, "per_user_tool_permissions", 0):
             return  # Feature disabled — use admin key (default behavior)
         
