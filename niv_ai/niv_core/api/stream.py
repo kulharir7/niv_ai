@@ -306,7 +306,8 @@ def stream_chat(**kwargs):
 
         # Ensure final text exists when tools ran but model text was empty
         # Force a summary LLM call (no tools) so user always gets a text answer
-        if not saw_error and not saw_token and saw_tool_activity:
+        # Also fires after timeout/limit errors — user still deserves a summary of what was found
+        if not saw_token and saw_tool_activity:
             try:
                 # Build a summary of tool results for the LLM
                 tool_summary_parts = []
