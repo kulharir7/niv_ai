@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from .llm import get_llm
 from .tools import get_langchain_tools
 from .memory import get_chat_history, get_system_prompt
+from .agent_router import classify_query, get_agent_tools, get_agent_prompt_suffix
 from .callbacks import NivStreamingCallback, NivBillingCallback, NivLoggingCallback
 
 
@@ -80,6 +81,7 @@ def create_niv_agent(
     conversation_id: str = None,
     user: str = None,
     streaming: bool = True,
+    agent_id: str = "general",
 ):
     """Create a LangGraph ReAct agent with MCP tools.
 
@@ -98,11 +100,15 @@ def create_niv_agent(
     # LLM (callbacks attached for streaming token capture)
     llm = get_llm(provider_name, model, streaming=streaming, callbacks=all_callbacks)
 
-    # Tools
-    tools = get_langchain_tools()
+    # Tools (agent-aware filtering)
+    all_tools = get_langchain_tools()
+    tools = get_agent_tools(agent_id, all_tools)
 
-    # System prompt
+    # System prompt (agent-aware specialization)
     system_prompt = get_system_prompt(conversation_id)
+    prompt_suffix = get_agent_prompt_suffix(agent_id)
+    if prompt_suffix:
+        system_prompt = f"{system_prompt}\n\n{prompt_suffix}"
 
     # Create agent
     agent = create_react_agent(
@@ -162,13 +168,23 @@ def run_agent(
 ) -> str:
     """Run agent synchronously — returns final response text."""
     user = user or frappe.session.user
-    
+
+    # Agent routing (feature-flagged)
+    agent_id = "general"
+    try:
+        settings = get_niv_settings()
+        if getattr(settings, "enable_agent_routing", 0):
+            agent_id, _meta = classify_query(message)
+    except Exception:
+        pass
+
     agent, config, default_system_prompt, cbs = create_niv_agent(
         provider_name=provider_name,
         model=model,
         conversation_id=conversation_id,
         user=user,
         streaming=False,
+        agent_id=agent_id,
     )
     # Use custom system_prompt if provided, else default
     final_system_prompt = system_prompt or default_system_prompt
@@ -209,13 +225,27 @@ def stream_agent(
     Handles LangGraph stream_mode="messages" output format.
     """
     user = user or frappe.session.user
-    
+
+    # Agent routing (feature-flagged, dev mode aware)
+    agent_id = "developer" if dev_mode else "general"
+    route_meta = {"method": "default", "confidence": 1.0}
+    try:
+        settings = get_niv_settings()
+        if dev_mode:
+            agent_id = "general"  # developer mode gets full toolset via general agent
+            route_meta = {"method": "dev_mode", "confidence": 1.0}
+        elif getattr(settings, "enable_agent_routing", 0):
+            agent_id, route_meta = classify_query(message)
+    except Exception:
+        pass
+
     agent, config, system_prompt, cbs = create_niv_agent(
         provider_name=provider_name,
         model=model,
         conversation_id=conversation_id,
         user=user,
         streaming=True,
+        agent_id=agent_id,
     )
 
     # Developer mode: use dev system prompt
@@ -228,9 +258,17 @@ def stream_agent(
     _setup_user_api_key(user)
     pending_tool_calls = {}
     tool_call_count = 0
-    MAX_TOOL_CALLS = 4  # Hard limit — after this, model must respond with text
+    # Dev mode supports complex multi-step builds; normal mode remains controlled.
+    MAX_TOOL_CALLS = 40 if dev_mode else 8
+    start_ts = frappe.utils.now_datetime()
     try:
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
+            # Runtime guard (avoid endless runs)
+            elapsed = (frappe.utils.now_datetime() - start_ts).total_seconds()
+            if elapsed > (90 if dev_mode else 45):
+                yield {"type": "error", "content": "Request took too long. I stopped safely. Please refine your query or continue in smaller steps."}
+                break
+
             # LangGraph yields (message, metadata) tuples
             if isinstance(event, tuple):
                 msg, _meta = event
@@ -293,10 +331,15 @@ def stream_agent(
                     "tool": getattr(msg, "name", "unknown"),
                     "result": (str(msg.content) or "")[:1000],  # Truncate to save tokens for response
                 }
-                # After MAX_TOOL_CALLS, truncate tool results heavily to save tokens for response
                 if tool_call_count >= MAX_TOOL_CALLS:
-                    # Don't break — let model generate text response, but future tool results will be minimal
-                    pass
+                    yield {
+                        "type": "error",
+                        "content": (
+                            "I reached the tool-call safety limit for this request. "
+                            "Please narrow the scope or ask me to continue from current results."
+                        ),
+                    }
+                    break
 
     except Exception as e:
         try:
