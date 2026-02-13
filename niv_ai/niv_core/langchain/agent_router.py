@@ -97,6 +97,15 @@ Always format amounts with currency symbols and proper number formatting.""",
 Be mindful of data privacy — only share information the user has permission to see.""",
     },
 
+    "developer": {
+        "name": "Developer Agent",
+        "description": "Handles full-stack Frappe development tasks with complete tool access",
+        "keywords": ["dev", "developer", "doctype", "custom field", "workflow", "script", "report", "api", "hook"],
+        "tools": None,  # Full tool access in dev mode
+        "prompt_suffix": """\n\nDeveloper mode is active. You may perform multi-step implementation with full tools.
+Before making broad changes, explain scope and impact. Prefer safe, reversible updates.""",
+    },
+
     "general": {
         "name": "General Agent",
         "description": "Handles general queries, admin tasks, and other operations",
@@ -242,15 +251,20 @@ class AgentRouter:
         """Filter tools for a specific agent."""
         config = self.get_agent_config(agent_id)
 
-        # None = all tools (general agent)
+        # None = all tools (general/developer)
         if config.get("tools") is None:
             return all_tools
 
-        # Filter tools by name
         tool_names = set(config.get("tools", []))
         filtered = [t for t in all_tools if getattr(t, "name", "") in tool_names]
 
-        # If filtering removed all tools, fall back to all tools
+        # Keep common utility tools for specialized agents (helps accuracy)
+        common = {"search", "fetch", "search_link", "search_doctype"}
+        for t in all_tools:
+            n = getattr(t, "name", "")
+            if n in common and t not in filtered:
+                filtered.append(t)
+
         if not filtered:
             frappe.logger().warning(f"AgentRouter: No tools found for {agent_id}, using all tools")
             return all_tools

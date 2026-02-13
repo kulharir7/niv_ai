@@ -237,6 +237,9 @@ def stream_chat(**kwargs):
     def generate():
         full_response = ""
         tool_calls_data = []
+        saw_token = False
+        saw_tool_activity = False
+        saw_error = False
 
         try:
             # Always re-init frappe context inside generator
@@ -265,18 +268,23 @@ def stream_chat(**kwargs):
 
                 if event_type == "token":
                     content = event.get("content", "")
-                    full_response += content
+                    if content:
+                        saw_token = True
+                        full_response += content
                     yield _sse({"type": "token", "content": content})
 
                 elif event_type == "tool_call":
+                    saw_tool_activity = True
                     tc = {"tool": event.get("tool", ""), "arguments": event.get("arguments", {})}
                     tool_calls_data.append(tc)
                     yield _sse({"type": "tool_call", **tc})
 
                 elif event_type == "tool_result":
+                    saw_tool_activity = True
                     yield _sse({"type": "tool_result", "tool": event.get("tool", ""), "result": event.get("result", "")})
 
                 elif event_type == "error":
+                    saw_error = True
                     full_response = event.get("content", "An error occurred.")
                     yield _sse(event)
 
@@ -292,6 +300,14 @@ def stream_chat(**kwargs):
             if dev_mode:
                 _set_dev_mode(False, conversation_id)
                 set_active_dev_conversation("")
+
+        # Ensure final text exists when tools ran but model text was empty
+        if not saw_error and not saw_token and saw_tool_activity:
+            full_response = (
+                "Tools executed successfully, but response text was empty. "
+                "Please ask 'summarize results' to view a concise summary of the tool outputs."
+            )
+            yield _sse({"type": "token", "content": full_response})
 
         # Reconnect DB if stale before saving (gthread workers lose connections during streaming)
         try:
