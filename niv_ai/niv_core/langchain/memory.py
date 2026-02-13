@@ -188,6 +188,19 @@ def get_system_prompt(conversation_id: str = None) -> str:
     except Exception:
         discovery_ctx = ""
 
+    # Append NBFC domain knowledge for lending/NBFC systems
+    try:
+        from ..knowledge.domain_nbfc import NBFC_DOMAIN_KNOWLEDGE
+        if discovery_ctx and ("nbfc" in discovery_ctx.lower() or "lending" in discovery_ctx.lower()):
+            discovery_ctx += "\n\n" + NBFC_DOMAIN_KNOWLEDGE
+        elif not discovery_ctx:
+            # No discovery context — check if nbfc app is installed
+            import frappe
+            if "nbfc" in frappe.get_installed_apps():
+                discovery_ctx = NBFC_DOMAIN_KNOWLEDGE
+    except Exception:
+        pass
+
     # Try settings-level prompt (text field, not Link)
     try:
         settings = get_niv_settings()
