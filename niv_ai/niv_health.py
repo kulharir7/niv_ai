@@ -185,13 +185,19 @@ def check_mcp_tools(auto_fix=True):
                 return {"status": "warning", "message": "No MCP tools. Install frappe_assistant_core for 23 built-in tools."}
             return {"status": "error", "message": "FAC installed but no tools discovered — check MCP server config"}
 
-        # Check tool structure more carefully
+        # Check tool structure — tools are in OpenAI format: {"type":"function","function":{"name":...}}
         valid_tools = []
         for t in tools:
-            # Tools can be dicts or objects
-            name = t.get("name") if isinstance(t, dict) else getattr(t, "name", None)
-            func = t.get("function") if isinstance(t, dict) else getattr(t, "function", None)
-            if name and func:
+            if isinstance(t, dict):
+                # OpenAI format: name is inside function dict
+                func = t.get("function", {})
+                name = func.get("name") if isinstance(func, dict) else None
+                # Also handle flat format: {"name": ...}
+                if not name:
+                    name = t.get("name")
+            else:
+                name = getattr(t, "name", None)
+            if name:
                 valid_tools.append(name)
 
         broken_count = len(tools) - len(valid_tools)
