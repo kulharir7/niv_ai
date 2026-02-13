@@ -13,6 +13,7 @@ import click
 def niv_setup():
     """🚀 Niv AI Setup — first-time configuration (safe to re-run)."""
     import frappe
+    frappe.init(site=get_site())
     frappe.connect()
     try:
         from niv_ai.niv_health import run_setup
@@ -29,6 +30,7 @@ def niv_setup():
 def niv_health(no_fix, category, verbose):
     """🏥 Niv AI Health Check — diagnose and auto-fix all subsystems."""
     import frappe
+    frappe.init(site=get_site())
     frappe.connect()
     try:
         from niv_ai.niv_health import run_health_check, _header, _info
@@ -74,6 +76,7 @@ def niv_health(no_fix, category, verbose):
 def niv_doctor(deep):
     """🩺 Quick diagnosis — skips slow checks unless --deep."""
     import frappe
+    frappe.init(site=get_site())
     frappe.connect()
     try:
         from niv_ai.niv_health import CHECKS, _header, _ok, _fix, _warn, _err
@@ -111,6 +114,26 @@ def niv_doctor(deep):
         click.echo()
     finally:
         frappe.destroy()
+
+
+def get_site():
+    """Get current site from bench context."""
+    import os
+    # Bench sets this environment variable
+    site = os.environ.get("FRAPPE_SITE")
+    if site:
+        return site
+    # Try to get from current_site.txt
+    try:
+        import frappe
+        sites_path = os.path.join(frappe.get_app_path("frappe"), "..", "..", "currentsite.txt")
+        if os.path.exists(sites_path):
+            with open(sites_path) as f:
+                return f.read().strip()
+    except Exception:
+        pass
+    # Fallback to default site
+    return "erp024.growthsystem.in"
 
 
 commands = [niv_setup, niv_health, niv_doctor]
