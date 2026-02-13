@@ -259,7 +259,7 @@ def stream_agent(
     pending_tool_calls = {}
     tool_call_count = 0
     # Dev mode supports complex multi-step builds; normal mode remains controlled.
-    MAX_TOOL_CALLS = 40 if dev_mode else 8
+    MAX_TOOL_CALLS = 40 if dev_mode else 12
     start_ts = frappe.utils.now_datetime()
     try:
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
