@@ -265,7 +265,7 @@ def stream_agent(
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
             # Runtime guard (avoid endless runs)
             elapsed = (frappe.utils.now_datetime() - start_ts).total_seconds()
-            if elapsed > (90 if dev_mode else 45):
+            if elapsed > (180 if dev_mode else 90):
                 yield {"type": "error", "content": "Request took too long. I stopped safely. Please refine your query or continue in smaller steps."}
                 break
 
