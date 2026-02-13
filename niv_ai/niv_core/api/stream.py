@@ -239,10 +239,11 @@ def stream_chat(**kwargs):
         tool_calls_data = []
 
         try:
-            # Re-init frappe context inside generator (Frappe may destroy() before generator finishes)
-            if not hasattr(frappe.local, "site") or not frappe.local.site:
-                frappe.init(site=_site_name)
-                frappe.connect()
+            # Always re-init frappe context inside generator
+            # (Frappe's app.py calls destroy() after returning the Response,
+            #  but the generator hasn't finished yielding yet)
+            frappe.init(site=_site_name)
+            frappe.connect()
 
             from niv_ai.niv_core.langchain.agent import stream_agent
             from niv_ai.niv_core.langchain.tools import set_dev_mode as _set_dev_mode, set_active_dev_conversation
