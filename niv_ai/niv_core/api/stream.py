@@ -73,14 +73,6 @@ def _check_rate_limit(user):
 @frappe.whitelist(methods=["GET", "POST"])
 def stream_chat(**kwargs):
     """Stream chat via LangChain agent (SSE)."""
-    # Ensure frappe.local is fully initialized (gunicorn --preload + SSE can miss attrs)
-    for _attr, _default in [
-        ("document_cache", {}), ("dev_server", 0), ("conf", frappe._dict()),
-        ("form_dict", frappe._dict()), ("flags", frappe._dict()),
-    ]:
-        if not hasattr(frappe.local, _attr):
-            setattr(frappe.local, _attr, _default)
-
     # Support both GET (legacy EventSource) and POST (new fetch)
     if frappe.request.method == "POST":
         try:
@@ -132,6 +124,9 @@ def stream_chat(**kwargs):
     settings = get_niv_settings()
     provider = provider or settings.default_provider
     model = model or settings.default_model
+
+    # Capture site for re-init inside generator (Frappe may destroy() before generator finishes)
+    _site_name = frappe.local.site
 
     # Smart Model Routing — auto-select model based on message complexity
     if not (kwargs.get("model") or (frappe.request.method == "POST" and (frappe.request.get_json(silent=True) or {}).get("model"))):
@@ -244,13 +239,10 @@ def stream_chat(**kwargs):
         tool_calls_data = []
 
         try:
-            # Ensure frappe.local is fully initialized (--preload + SSE can miss this)
-            for _attr, _default in [
-                ("document_cache", {}), ("dev_server", 0), ("conf", frappe._dict()),
-                ("form_dict", frappe._dict()), ("flags", frappe._dict()),
-            ]:
-                if not hasattr(frappe.local, _attr):
-                    setattr(frappe.local, _attr, _default)
+            # Re-init frappe context inside generator (Frappe may destroy() before generator finishes)
+            if not hasattr(frappe.local, "site") or not frappe.local.site:
+                frappe.init(site=_site_name)
+                frappe.connect()
 
             from niv_ai.niv_core.langchain.agent import stream_agent
             from niv_ai.niv_core.langchain.tools import set_dev_mode as _set_dev_mode, set_active_dev_conversation
