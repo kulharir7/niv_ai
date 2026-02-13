@@ -111,7 +111,7 @@ def create_niv_agent(
     )
 
     config = {
-        "recursion_limit": 10,  # Max ~4-5 tool calls + responses (each tool = 2 steps)
+        "recursion_limit": 8,  # Max ~3-4 tool calls (each tool = 2 recursion steps: call + result)
         "callbacks": all_callbacks,
     }
 
@@ -291,12 +291,12 @@ def stream_agent(
                 yield {
                     "type": "tool_result",
                     "tool": getattr(msg, "name", "unknown"),
-                    "result": (str(msg.content) or "")[:2000],
+                    "result": (str(msg.content) or "")[:1000],  # Truncate to save tokens for response
                 }
-                # Hard limit: stop streaming after MAX_TOOL_CALLS to force text response
+                # After MAX_TOOL_CALLS, truncate tool results heavily to save tokens for response
                 if tool_call_count >= MAX_TOOL_CALLS:
-                    yield {"type": "token", "content": "\n\n_(Reached tool call limit. Summarizing available data.)_\n\n"}
-                    break
+                    # Don't break — let model generate text response, but future tool results will be minimal
+                    pass
 
     except Exception as e:
         try:
