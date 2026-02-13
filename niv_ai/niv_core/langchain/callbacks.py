@@ -5,6 +5,7 @@ All side effects handled via callback hooks — clean separation.
 import json
 import time
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 from langchain_core.callbacks import BaseCallbackHandler
 from typing import Any, Dict, List, Optional
 from uuid import UUID
@@ -135,7 +136,7 @@ class NivBillingCallback(BaseCallbackHandler):
             except Exception:
                 frappe.db.connect()
 
-            settings = frappe.get_cached_doc("Niv Settings")
+            settings = get_niv_settings()
             if not settings.enable_billing:
                 return
 

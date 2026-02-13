@@ -8,6 +8,7 @@ Fallback: Simple keyword matching if embeddings unavailable.
 import os
 import json
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 from typing import List, Dict, Optional
 
 # Lazy singletons
@@ -25,7 +26,7 @@ def _get_embeddings():
     if _embeddings is not None:
         return _embeddings
 
-    settings = frappe.get_cached_doc("Niv Settings")
+    settings = get_niv_settings()
     provider = None
     if settings.default_provider:
         try:
@@ -219,7 +220,7 @@ def _chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> List[s
 @frappe.whitelist()
 def search_knowledge(query, k=5):
     """Search knowledge base."""
-    settings = frappe.get_cached_doc("Niv Settings")
+    settings = get_niv_settings()
     if not settings.enable_knowledge_base:
         return {"results": [], "message": "Knowledge base is disabled"}
     return {"results": search(query, k=min(int(k), 20))}
@@ -249,7 +250,7 @@ def delete_from_knowledge(source):
 def get_rag_context(query: str, k: int = 3) -> str:
     """Get RAG context to inject into agent prompt. Returns empty string if disabled."""
     try:
-        settings = frappe.get_cached_doc("Niv Settings")
+        settings = get_niv_settings()
         if not settings.enable_knowledge_base:
             return ""
 

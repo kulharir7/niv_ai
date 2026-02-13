@@ -4,6 +4,7 @@ Token-aware truncation to prevent context window overflow.
 """
 import json
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 
 
@@ -27,7 +28,7 @@ def get_chat_history(conversation_id: str, limit: int = 50, max_tokens: int = No
     """
     if max_tokens is None:
         try:
-            settings = frappe.get_cached_doc("Niv Settings")
+            settings = get_niv_settings()
             max_tokens = (settings.max_tokens_per_message or 4096) * 3  # ~3x single message limit
         except Exception:
             max_tokens = _DEFAULT_MAX_CONTEXT_TOKENS
@@ -138,7 +139,7 @@ def get_system_prompt(conversation_id: str = None) -> str:
     """
     # Dynamic branding — never say ERPNext/Frappe, use configured name
     try:
-        _settings = frappe.get_cached_doc("Niv Settings")
+        _settings = get_niv_settings()
         _brand = getattr(_settings, "brand_name", "") or "Niv"
     except Exception:
         _brand = "Niv"
@@ -189,7 +190,7 @@ def get_system_prompt(conversation_id: str = None) -> str:
 
     # Try settings-level prompt (text field, not Link)
     try:
-        settings = frappe.get_cached_doc("Niv Settings")
+        settings = get_niv_settings()
         if hasattr(settings, "system_prompt") and settings.system_prompt:
             # If it's a Link to Niv System Prompt
             if frappe.db.exists("Niv System Prompt", settings.system_prompt):
@@ -236,7 +237,7 @@ def get_dev_system_prompt() -> str:
 
     # Dynamic branding
     try:
-        _settings = frappe.get_cached_doc("Niv Settings")
+        _settings = get_niv_settings()
         _brand = getattr(_settings, "brand_name", "") or "Niv"
     except Exception:
         _brand = "Niv"

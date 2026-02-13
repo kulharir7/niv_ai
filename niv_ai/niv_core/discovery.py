@@ -3,6 +3,7 @@ Auto-Discovery Engine — Scans the ERPNext instance and builds system knowledge
 Runs on install and periodically to keep knowledge updated.
 """
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 import json
 from datetime import datetime
 
@@ -315,7 +316,7 @@ def _save_knowledge(knowledge, prompt_context):
 def get_discovery_context():
     """Get the discovery context for system prompt injection."""
     try:
-        settings = frappe.get_cached_doc("Niv Settings")
+        settings = get_niv_settings()
         ctx = getattr(settings, "discovery_context", "") or ""
         if ctx:
             return ctx

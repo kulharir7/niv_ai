@@ -4,6 +4,7 @@ Primary chat endpoint (frontend uses EventSource).
 """
 import json
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 from frappe import _
 from niv_ai.niv_core.api._helpers import validate_conversation, save_user_message, save_assistant_message, auto_title
 
@@ -49,7 +50,7 @@ def _smart_route_model(message, default_model, dev_mode, settings):
 
 def _check_rate_limit(user):
     """Check rate limits from Niv Settings. Throws if exceeded."""
-    settings = frappe.get_cached_doc("Niv Settings")
+    settings = get_niv_settings()
     limit_hour = getattr(settings, "rate_limit_per_hour", 60) or 0
     limit_day = getattr(settings, "rate_limit_per_day", 500) or 0
     custom_msg = getattr(settings, "rate_limit_message", "") or "Rate limit exceeded. Please try again later."
@@ -120,7 +121,7 @@ def stream_chat(**kwargs):
 
     save_user_message(conversation_id, message, dedup=True)
 
-    settings = frappe.get_cached_doc("Niv Settings")
+    settings = get_niv_settings()
     provider = provider or settings.default_provider
     model = model or settings.default_model
 

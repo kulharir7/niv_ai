@@ -3,6 +3,7 @@
 
 import json
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 from frappe.utils import now_datetime
 
 try:
@@ -136,7 +137,7 @@ def _execute_trigger(trigger_name, doctype, docname, prompt, system_prompt_name=
             )
         
         # Run agent directly (non-streaming for background)
-        settings = frappe.get_cached_doc("Niv Settings")
+        settings = get_niv_settings()
         provider_name = settings.default_provider
         model_name = model or settings.default_model
         

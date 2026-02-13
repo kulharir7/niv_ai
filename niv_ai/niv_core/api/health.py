@@ -3,6 +3,7 @@ Health Check API — Returns status of LLM, MCP, RAG, and billing systems.
 Endpoint: /api/method/niv_ai.niv_core.api.health.check
 """
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 from frappe import _
 
 
@@ -52,7 +53,7 @@ def _get_version():
 
 def _check_llm():
     try:
-        settings = frappe.get_cached_doc("Niv Settings")
+        settings = get_niv_settings()
         api_key = settings.get_password("api_key", raise_exception=False)
         model = getattr(settings, "default_model", "") or ""
         base_url = getattr(settings, "api_base_url", "") or ""
@@ -84,7 +85,7 @@ def _check_mcp():
 
 def _check_rag():
     try:
-        settings = frappe.get_cached_doc("Niv Settings")
+        settings = get_niv_settings()
         enabled = getattr(settings, "enable_knowledge_base", 0)
         if not enabled:
             return {"status": "disabled", "message": "Knowledge base disabled in settings"}
@@ -105,7 +106,7 @@ def _check_rag():
 
 def _check_billing():
     try:
-        settings = frappe.get_cached_doc("Niv Settings")
+        settings = get_niv_settings()
         mode = getattr(settings, "billing_mode", "Shared Pool") or "Shared Pool"
 
         if mode == "Shared Pool":

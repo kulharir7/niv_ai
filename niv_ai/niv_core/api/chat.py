@@ -3,6 +3,7 @@ Chat API — thin Frappe wrapper around LangChain agent.
 Non-streaming fallback endpoint.
 """
 import frappe
+from niv_ai.niv_core.utils import get_niv_settings
 from frappe import _
 from niv_ai.niv_core.api._helpers import validate_conversation, save_user_message, save_assistant_message, auto_title
 
@@ -25,7 +26,7 @@ def send_message(conversation_id, message, model=None, provider=None):
     save_user_message(conversation_id, message)
 
     # Resolve provider/model once
-    settings = frappe.get_cached_doc("Niv Settings")
+    settings = get_niv_settings()
     provider = provider or settings.default_provider
     model = model or settings.default_model
 
