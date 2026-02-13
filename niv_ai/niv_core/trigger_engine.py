@@ -4,7 +4,13 @@
 import json
 import frappe
 from frappe.utils import now_datetime
-from frappe.utils.safe_exec import safe_eval, get_safe_globals
+
+try:
+    from frappe.utils.safe_exec import safe_eval, get_safe_globals
+except ImportError:
+    # Frappe v14 fallback
+    from frappe import safe_eval
+    from frappe.utils.safe_exec import get_safe_globals
 
 
 def run_triggers(doc, event):

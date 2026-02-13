@@ -11,8 +11,20 @@ class DateTimeEncoder(json.JSONEncoder):
         return super().default(obj)
 
 
+def _safe_log_error(title, message):
+    """Best-effort logger that won't recurse/crash hook execution."""
+    try:
+        frappe.log_error(message, title)
+    except Exception:
+        pass
+
+
 def on_doc_event(doc, method):
     """Generic doc event handler - called for all doctypes"""
+    # Prevent recursive hook loops from log/auxiliary doctypes
+    if doc.doctype in ("Error Log", "Scheduled Job Log", "Activity Log", "Notification Log"):
+        return
+
     # Map method name to event type
     event_map = {
         "before_save": "before_save",
@@ -38,14 +50,14 @@ def on_doc_event(doc, method):
     try:
         check_auto_actions(doc, event)
     except Exception as e:
-        frappe.log_error(f"Auto action error for {doc.doctype} {doc.name}: {str(e)}", "Niv Auto Action Error")
+        _safe_log_error("Niv Auto Action Error", f"Auto action error for {doc.doctype} {doc.name}: {str(e)}")
 
     # Niv AI Triggers — run AI agent on doc events
     try:
         from niv_ai.niv_core.trigger_engine import run_triggers
         run_triggers(doc, event)
     except Exception as e:
-        frappe.log_error(f"Niv Trigger error for {doc.doctype} {doc.name}: {str(e)}", "Niv AI Trigger Error")
+        _safe_log_error("Niv AI Trigger Error", f"Niv Trigger error for {doc.doctype} {doc.name}: {str(e)}")
 
 
 def check_auto_actions(doc, event):
