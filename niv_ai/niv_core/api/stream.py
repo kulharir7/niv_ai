@@ -73,6 +73,14 @@ def _check_rate_limit(user):
 @frappe.whitelist(methods=["GET", "POST"])
 def stream_chat(**kwargs):
     """Stream chat via LangChain agent (SSE)."""
+    # Ensure frappe.local is fully initialized (gunicorn --preload + SSE can miss attrs)
+    for _attr, _default in [
+        ("document_cache", {}), ("dev_server", 0), ("conf", frappe._dict()),
+        ("form_dict", frappe._dict()), ("flags", frappe._dict()),
+    ]:
+        if not hasattr(frappe.local, _attr):
+            setattr(frappe.local, _attr, _default)
+
     # Support both GET (legacy EventSource) and POST (new fetch)
     if frappe.request.method == "POST":
         try:
