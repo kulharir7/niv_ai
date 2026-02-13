@@ -117,7 +117,7 @@ def create_niv_agent(
     )
 
     config = {
-        "recursion_limit": 8,  # Max ~3-4 tool calls (each tool = 2 recursion steps: call + result)
+        "recursion_limit": 25,  # Each tool call = 2 steps (call + result) + 1 for final response
         "callbacks": all_callbacks,
     }
 
