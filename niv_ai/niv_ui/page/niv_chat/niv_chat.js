@@ -1381,9 +1381,26 @@ ${htmlCode}
 
     render_markdown(text) {
         if (!text) return "";
+        
+        // Handle [[THOUGHT]] blocks before markdown parsing
+        let processedText = text;
+        const thoughtRegex = /\[\[THOUGHT\]\]([\s\S]*?)\[\[\/THOUGHT\]\]/gi;
+        
+        processedText = processedText.replace(thoughtRegex, (match, content) => {
+            const safeContent = frappe.utils.escape_html(content.trim());
+            return `<div class="thought-accordion">
+                <div class="thought-header" onclick="$(this).closest('.thought-accordion').toggleClass('open')">
+                    <i class="fa fa-brain thought-icon"></i>
+                    <span>Thinking...</span>
+                    <i class="fa fa-chevron-down thought-chevron"></i>
+                </div>
+                <div class="thought-content">${safeContent.replace(/\n/g, '<br>')}</div>
+            </div>`;
+        });
+
         if (window.marked) {
             try {
-                let html = marked.parse(text);
+                let html = marked.parse(processedText);
                 html = html.replace(/<a /g, '<a target="_blank" ');
                 // Render inline images with lightbox
                 html = html.replace(/<img\s+([^>]*?)src="([^"]+)"([^>]*?)>/g,
@@ -1777,15 +1794,30 @@ ${htmlCode}
                                 this.hide_typing();
                                 $msgEl = this.append_message("assistant", "");
                             }
-                            var $thought = $msgEl.find(".msg-thought");
-                            if (!$thought.length) {
-                                // Create new thought block before content
-                                $thought = $('<div class="msg-thought"></div>');
-                                $msgEl.find(".msg-body").find(".msg-content").before($thought);
+                            
+                            var $thoughtWrapper = $msgEl.find(".msg-thought-wrapper");
+                            if (!$thoughtWrapper.length) {
+                                $thoughtWrapper = $('<div class="msg-thought-wrapper"></div>');
+                                $msgEl.find(".msg-body").find(".msg-content").before($thoughtWrapper);
                             }
-                            // Append or replace content (backend sends partials or full blocks)
-                            // If it ends in newline, we assume it's a finished part
-                            $thought.append(data.content);
+
+                            var $thought = $thoughtWrapper.find(".thought-accordion");
+                            if (!$thought.length) {
+                                $thought = $(`
+                                    <div class="thought-accordion">
+                                        <div class="thought-header" onclick="$(this).closest('.thought-accordion').toggleClass('open')">
+                                            <i class="fa fa-brain thought-icon"></i>
+                                            <span>Thinking...</span>
+                                            <i class="fa fa-chevron-down thought-chevron"></i>
+                                        </div>
+                                        <div class="thought-content"></div>
+                                    </div>
+                                `);
+                                $thoughtWrapper.append($thought);
+                            }
+                            
+                            var $content = $thought.find(".thought-content");
+                            $content.append(data.content.replace(/\n/g, '<br>'));
                             this.scroll_to_bottom_if_near();
                         } else if (data.type === "tool_call") {
                             if (!$msgEl) {
