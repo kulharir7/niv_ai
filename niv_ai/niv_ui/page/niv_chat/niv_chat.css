@@ -421,6 +421,105 @@ body.niv-widget-mode .btn-close-sidebar {
     overflow: visible;
 }
 
+.niv-main.niv-artifacts-open .niv-chat-header,
+.niv-main.niv-artifacts-open .niv-chat-messages,
+.niv-main.niv-artifacts-open .niv-input-area,
+.niv-main.niv-artifacts-open .niv-search-bar,
+.niv-main.niv-artifacts-open .niv-pinned-section {
+    margin-right: 360px;
+}
+
+.niv-artifact-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: 360px;
+    border-left: 1px solid var(--niv-border);
+    background: var(--niv-bg);
+    z-index: 25;
+    display: flex;
+    flex-direction: column;
+}
+
+.niv-artifact-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 14px 8px;
+    border-bottom: 1px solid var(--niv-border);
+}
+
+.niv-artifact-title { font-size: 16px; font-weight: 700; color: var(--niv-text); }
+.niv-artifact-subtitle { font-size: 11px; color: var(--niv-text-muted); margin-top: 2px; }
+
+.niv-artifact-actions {
+    display: flex;
+    gap: 8px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--niv-border);
+}
+
+.niv-artifact-actions .btn {
+    border: 1px solid var(--niv-border);
+    background: var(--niv-hover);
+    color: var(--niv-text-secondary);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+}
+
+.niv-artifact-list {
+    padding: 8px;
+    overflow-y: auto;
+    max-height: 45%;
+    border-bottom: 1px solid var(--niv-border);
+}
+
+.niv-artifact-item {
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid transparent;
+    cursor: pointer;
+    margin-bottom: 6px;
+    background: var(--niv-hover);
+}
+
+.niv-artifact-item:hover { border-color: var(--niv-border); }
+.niv-artifact-item.active { border-color: var(--niv-primary); background: rgba(124,58,237,0.08); }
+.niv-artifact-item-title { font-size: 13px; font-weight: 600; color: var(--niv-text); }
+.niv-artifact-item-meta { font-size: 11px; color: var(--niv-text-muted); margin-top: 3px; }
+
+.niv-artifact-detail { flex: 1; padding: 10px 12px 14px; overflow-y: auto; }
+.niv-artifact-detail-title { font-size: 12px; color: var(--niv-text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: .04em; }
+.niv-artifact-preview {
+    margin: 0;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid var(--niv-border);
+    background: var(--niv-code-bg);
+    color: var(--niv-code-text);
+    font-size: 11px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+@media (max-width: 1100px) {
+    .niv-main.niv-artifacts-open .niv-chat-header,
+    .niv-main.niv-artifacts-open .niv-chat-messages,
+    .niv-main.niv-artifacts-open .niv-input-area,
+    .niv-main.niv-artifacts-open .niv-search-bar,
+    .niv-main.niv-artifacts-open .niv-pinned-section {
+        margin-right: 0;
+    }
+    .niv-artifact-panel {
+        width: 100%;
+        border-left: none;
+        border-top: 1px solid var(--niv-border);
+    }
+}
+
 /* ── Chat Header — Minimal & Clean ── */
 .niv-chat-header {
     display: flex;
@@ -481,6 +580,10 @@ body.niv-widget-mode .btn-close-sidebar {
 .niv-header-actions .btn:hover {
     background: var(--niv-hover);
     color: var(--niv-text);
+}
+.niv-header-actions .btn.active {
+    background: rgba(124, 58, 237, 0.12);
+    color: var(--niv-primary);
 }
 .niv-header-actions .btn svg {
     display: block;

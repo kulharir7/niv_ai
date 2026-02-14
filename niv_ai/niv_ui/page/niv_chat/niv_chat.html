@@ -210,6 +210,9 @@
                 <option value="">Default Model</option>
             </select>
             <div class="niv-header-actions">
+                <button class="btn btn-sm btn-artifacts-toggle" title="Artifacts">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3 7h7l-5.5 4.2L18.5 21 12 16.8 5.5 21l2-7.8L2 9h7z"/></svg>
+                </button>
                 <button class="btn btn-sm btn-share-chat" title="Share chat">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                 </button>
@@ -237,6 +240,24 @@
             <div class="niv-pinned-list"></div>
         </div>
         <div class="niv-chat-messages"></div>
+        <div class="niv-artifact-panel" style="display:none;">
+            <div class="niv-artifact-header">
+                <div>
+                    <div class="niv-artifact-title">Artifacts</div>
+                    <div class="niv-artifact-subtitle">No-code app/document drafts</div>
+                </div>
+                <button class="btn btn-xs btn-artifact-close" title="Close"><i class="fa fa-times"></i></button>
+            </div>
+            <div class="niv-artifact-actions">
+                <button class="btn btn-xs btn-artifact-new"><i class="fa fa-plus"></i> New</button>
+                <button class="btn btn-xs btn-artifact-refresh"><i class="fa fa-refresh"></i> Refresh</button>
+            </div>
+            <div class="niv-artifact-list"></div>
+            <div class="niv-artifact-detail">
+                <div class="niv-artifact-detail-title">Select an artifact</div>
+                <pre class="niv-artifact-preview">Choose from list to view details.</pre>
+            </div>
+        </div>
         <div class="niv-drag-overlay" style="display:none;">
             <div class="drag-overlay-content">
                 <i class="fa fa-cloud-upload"></i>
