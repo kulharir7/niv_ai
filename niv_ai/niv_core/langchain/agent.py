@@ -265,16 +265,16 @@ def stream_agent(
     # State for <thought> extraction
     current_thought = ""
     in_thought = False
+    message_buffer = ""
     
     try:
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
-            # Runtime guard (avoid endless runs)
+            # Runtime guard
             elapsed = (frappe.utils.now_datetime() - start_ts).total_seconds()
             if elapsed > (180 if dev_mode else 90):
-                yield {"type": "error", "content": "Request took too long. I stopped safely. Please refine your query or continue in smaller steps."}
+                yield {"type": "error", "content": "Request took too long. I stopped safely."}
                 break
 
-            # LangGraph yields (message, metadata) tuples
             if isinstance(event, tuple):
                 msg, _meta = event
             else:
@@ -283,71 +283,63 @@ def stream_agent(
             if not hasattr(msg, "type"):
                 continue
 
-            # AI message chunks (streaming tokens)
             if msg.type == "ai" or msg.type == "AIMessageChunk":
-                # Tool call chunks
                 tool_calls = getattr(msg, "tool_calls", None) or []
                 tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
                 
-                if tool_calls:
-                    # Complete tool calls (non-streaming)
-                    for idx in list(pending_tool_calls.keys()):
-                        tc_data = pending_tool_calls[idx]
-                        if tc_data["name"]:
-                            yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
-                    pending_tool_calls.clear()
-                    for tc in tool_calls:
-                        yield {
-                            "type": "tool_call",
-                            "tool": tc.get("name", ""),
-                            "arguments": tc.get("args", {}),
-                        }
-                elif tool_call_chunks:
-                    # Accumulate chunks by index
-                    for tc in tool_call_chunks:
-                        idx = tc.get("index", 0)
-                        if idx not in pending_tool_calls:
-                            pending_tool_calls[idx] = {"name": "", "args": ""}
-                        if tc.get("name"):
-                            pending_tool_calls[idx]["name"] = tc["name"]
-                        if tc.get("args"):
-                            pending_tool_calls[idx]["args"] += tc["args"]
-                # Text content
+                if tool_calls or tool_call_chunks:
+                    # Flush buffer before tools
+                    if message_buffer:
+                        yield {"type": "token", "content": message_buffer}
+                        message_buffer = ""
+                        
+                    if tool_calls:
+                        for tc in tool_calls:
+                            yield {"type": "tool_call", "tool": tc.get("name", ""), "arguments": tc.get("args", {})}
+                    else:
+                        for tc in tool_call_chunks:
+                            idx = tc.get("index", 0)
+                            if idx not in pending_tool_calls: pending_tool_calls[idx] = {"name": "", "args": ""}
+                            if tc.get("name"): pending_tool_calls[idx]["name"] = tc["name"]
+                            if tc.get("args"): pending_tool_calls[idx]["args"] += tc["args"]
+                
                 elif msg.content:
-                    # ReAct Thought Extraction
-                    content = msg.content
+                    message_buffer += msg.content
                     
-                    if "<thought>" in content:
-                        in_thought = True
-                        # Split and handle part before tag as normal token
-                        parts = content.split("<thought>", 1)
-                        if parts[0]:
-                            yield {"type": "token", "content": parts[0]}
-                        content = parts[1]
-                    
-                    if in_thought:
-                        if "</thought>" in content:
-                            parts = content.split("</thought>", 1)
-                            current_thought += parts[0]
-                            yield {"type": "thought", "content": current_thought}
-                            current_thought = ""
-                            in_thought = False
-                            if parts[1]:
-                                yield {"type": "token", "content": parts[1]}
+                    # Process buffer for thoughts
+                    while True:
+                        if not in_thought:
+                            if "<thought>" in message_buffer:
+                                parts = message_buffer.split("<thought>", 1)
+                                if parts[0]:
+                                    yield {"type": "token", "content": parts[0]}
+                                message_buffer = parts[1]
+                                in_thought = True
+                                continue
+                            break
                         else:
-                            current_thought += content
-                            # Send partial thought if it's long enough or ends in newline
-                            if len(current_thought) > 20 or "\n" in current_thought:
+                            if "</thought>" in message_buffer:
+                                parts = message_buffer.split("</thought>", 1)
+                                current_thought += parts[0]
                                 yield {"type": "thought", "content": current_thought}
                                 current_thought = ""
-                    else:
-                        # Flush any pending tool calls before yielding text
-                        for idx in list(pending_tool_calls.keys()):
-                            tc_data = pending_tool_calls[idx]
-                            if tc_data["name"]:
-                                yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
-                        pending_tool_calls.clear()
-                        yield {"type": "token", "content": content}
+                                message_buffer = parts[1]
+                                in_thought = False
+                                continue
+                            else:
+                                # Still in thought, but end tag not found yet
+                                # Keep some buffer to avoid splitting the end tag
+                                if len(message_buffer) > 10:
+                                    chunk = message_buffer[:-10]
+                                    current_thought += chunk
+                                    yield {"type": "thought", "content": chunk}
+                                    message_buffer = message_buffer[-10:]
+                            break
+                    
+                    # If not in thought, yield what's in buffer
+                    if not in_thought and message_buffer:
+                        yield {"type": "token", "content": message_buffer}
+                        message_buffer = ""
 
             # Tool results
             elif msg.type == "tool":
