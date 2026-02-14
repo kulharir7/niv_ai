@@ -518,7 +518,7 @@ class NivChat {
                 method: "niv_ai.niv_core.api.artifacts.update_artifact_content",
                 args: {
                     artifact_id: artifactId,
-                    content: code
+                    artifact_content: code
                 }
             });
             // Refresh detail view
