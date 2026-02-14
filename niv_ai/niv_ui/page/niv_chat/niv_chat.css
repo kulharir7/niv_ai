@@ -1059,6 +1059,37 @@ pre:hover .code-copy-btn { opacity: 1; }
 }
 .msg-action-btn.active { color: var(--niv-primary); }
 
+/* ── Thought Block (ReAct Reasoning) ── */
+.msg-thought {
+    background: var(--niv-hover);
+    border: 1px solid var(--niv-border);
+    border-left: 3px solid var(--niv-primary);
+    border-radius: 8px;
+    padding: 12px 16px;
+    margin: 12px 0;
+    font-size: 13.5px;
+    color: var(--niv-text-secondary);
+    line-height: 1.5;
+    position: relative;
+    font-style: italic;
+    animation: thoughtFadeIn 0.3s ease;
+}
+.msg-thought::before {
+    content: "Thinking...";
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: var(--niv-primary);
+    margin-bottom: 6px;
+    letter-spacing: 0.05em;
+    font-style: normal;
+}
+@keyframes thoughtFadeIn {
+    from { opacity: 0; transform: translateY(5px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Tool Calls Accordion ── */
 .msg-tool-calls { margin: 12px 0; }
 .tool-call-accordion {

@@ -261,6 +261,11 @@ def stream_agent(
     # Dev mode supports complex multi-step builds; normal mode remains controlled.
     MAX_TOOL_CALLS = 40 if dev_mode else 12
     start_ts = frappe.utils.now_datetime()
+    
+    # State for <thought> extraction
+    current_thought = ""
+    in_thought = False
+    
     try:
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
             # Runtime guard (avoid endless runs)
@@ -280,12 +285,12 @@ def stream_agent(
 
             # AI message chunks (streaming tokens)
             if msg.type == "ai" or msg.type == "AIMessageChunk":
-                # Tool call chunks (streaming sends tool_call_chunks, not tool_calls)
+                # Tool call chunks
                 tool_calls = getattr(msg, "tool_calls", None) or []
                 tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
                 
                 if tool_calls:
-                    # Complete tool calls (non-streaming) — flush any pending first
+                    # Complete tool calls (non-streaming)
                     for idx in list(pending_tool_calls.keys()):
                         tc_data = pending_tool_calls[idx]
                         if tc_data["name"]:
@@ -298,7 +303,7 @@ def stream_agent(
                             "arguments": tc.get("args", {}),
                         }
                 elif tool_call_chunks:
-                    # Accumulate chunks by index — first chunk has name, subsequent have args
+                    # Accumulate chunks by index
                     for tc in tool_call_chunks:
                         idx = tc.get("index", 0)
                         if idx not in pending_tool_calls:
@@ -309,13 +314,40 @@ def stream_agent(
                             pending_tool_calls[idx]["args"] += tc["args"]
                 # Text content
                 elif msg.content:
-                    # Flush any pending tool calls before yielding text
-                    for idx in list(pending_tool_calls.keys()):
-                        tc_data = pending_tool_calls[idx]
-                        if tc_data["name"]:
-                            yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
-                    pending_tool_calls.clear()
-                    yield {"type": "token", "content": msg.content}
+                    # ReAct Thought Extraction
+                    content = msg.content
+                    
+                    if "<thought>" in content:
+                        in_thought = True
+                        # Split and handle part before tag as normal token
+                        parts = content.split("<thought>", 1)
+                        if parts[0]:
+                            yield {"type": "token", "content": parts[0]}
+                        content = parts[1]
+                    
+                    if in_thought:
+                        if "</thought>" in content:
+                            parts = content.split("</thought>", 1)
+                            current_thought += parts[0]
+                            yield {"type": "thought", "content": current_thought}
+                            current_thought = ""
+                            in_thought = False
+                            if parts[1]:
+                                yield {"type": "token", "content": parts[1]}
+                        else:
+                            current_thought += content
+                            # Send partial thought if it's long enough or ends in newline
+                            if len(current_thought) > 20 or "\n" in current_thought:
+                                yield {"type": "thought", "content": current_thought}
+                                current_thought = ""
+                    else:
+                        # Flush any pending tool calls before yielding text
+                        for idx in list(pending_tool_calls.keys()):
+                            tc_data = pending_tool_calls[idx]
+                            if tc_data["name"]:
+                                yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
+                        pending_tool_calls.clear()
+                        yield {"type": "token", "content": content}
 
             # Tool results
             elif msg.type == "tool":

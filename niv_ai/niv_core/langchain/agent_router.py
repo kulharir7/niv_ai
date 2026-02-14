@@ -113,6 +113,15 @@ Before making broad changes, explain scope and impact. Prefer safe, reversible u
         "tools": None,  # None = all tools
         "prompt_suffix": "",  # No special prompt
     },
+
+    "orchestrator": {
+        "name": "Orchestrator Agent",
+        "description": "Manages complex tasks that span multiple departments (HR, Accounts, NBFC)",
+        "keywords": ["consolidated", "department", "company wide", "summary of all", "multi-department"],
+        "tools": None,
+        "prompt_suffix": """\n\nYou are the Lead Orchestrator. You handle complex requests that might involve multiple domains.
+Decompose the request into sub-tasks for different departments (HR, Accounts, NBFC) and use the necessary tools to gather information from all of them before giving a final unified response.""",
+    },
 }
 
 

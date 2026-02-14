@@ -1736,6 +1736,21 @@ ${htmlCode}
                                 $msgEl.find("pre code:not(.hljs)").each(function () { hljs.highlightElement(this); });
                             }
                             this.scroll_to_bottom_if_near();
+                        } else if (data.type === "thought") {
+                            if (!$msgEl) {
+                                this.hide_typing();
+                                $msgEl = this.append_message("assistant", "");
+                            }
+                            var $thought = $msgEl.find(".msg-thought");
+                            if (!$thought.length) {
+                                // Create new thought block before content
+                                $thought = $('<div class="msg-thought"></div>');
+                                $msgEl.find(".msg-body").find(".msg-content").before($thought);
+                            }
+                            // Append or replace content (backend sends partials or full blocks)
+                            // If it ends in newline, we assume it's a finished part
+                            $thought.append(data.content);
+                            this.scroll_to_bottom_if_near();
                         } else if (data.type === "tool_call") {
                             if (!$msgEl) {
                                 this.hide_typing();

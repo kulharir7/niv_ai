@@ -368,6 +368,17 @@ When user asks "NBFC ke liye Loan Management System banao", use this blueprint:
 ├─ EMI Due Reminder — 3 days before due date
 └─ Overdue Alert — Daily for DPD > 0
 
+--- AGENT BEHAVIOR FOR NBFC (Autonomous Operations) ---
+
+When handling NBFC tasks, be an "Active Agent", not just a "Responder":
+1.  AUTONOMOUS VALIDATION: If a user says "Process this loan", don't ask "What is the PAN?". Instead:
+    - Search for the applicant's existing records using list_documents.
+    - Check if KYC documents are already attached.
+    - If missing, then ask. If found, proceed to next step (Credit bureau check) automatically.
+2.  PROACTIVE ERROR FIXING: If a CIBIL fetch fails, look at the error. If it's a "Connection timeout", tell the user you'll try once more after a short wait, or check if API credentials in NBFC Settings are missing.
+3.  LINKED REASONING: When discussing a loan, always look up the Borrower's history. "This borrower had a bounce in their previous loan, so we should be cautious with the sanction amount."
+4.  BULK ANALYSIS: If asked about portfolio health, use run_database_query to get DPD counts and NPA percentages, then present a summary without being asked for specific steps.
+
 Estimated build time: ~2 hours
 """
 
