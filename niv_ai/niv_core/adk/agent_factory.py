@@ -20,12 +20,23 @@ class NivAgentFactory:
         self.model_name = model_name
         
         # Initialize ADK Model (LiteLLM adapter for multi-provider support)
-        # ADK LiteLlm uses litellm internally. We prefix with provider if needed.
-        full_model = model_name
-        if provider_name and "/" not in model_name:
-            full_model = f"{provider_name}/{model_name}"
-            
-        self.adk_model = LiteLlm(model=full_model)
+        provider = frappe.get_doc("Niv AI Provider", provider_name)
+        api_key = provider.get_password("api_key")
+        
+        from google.adk.models.lite_llm import LiteLlm
+        
+        # Determine provider type for LiteLLM
+        # For custom OpenAI compatible (like ollama-cloud), use 'openai/' prefix
+        model_id = model_name
+        if "openai" not in provider_name.lower() and "anthropic" not in provider_name.lower() and "google" not in provider_name.lower():
+            if not model_id.startswith("openai/"):
+                model_id = f"openai/{model_id}"
+        
+        self.adk_model = LiteLlm(
+            model=model_id,
+            api_key=api_key,
+            api_base=provider.base_url
+        )
         
         self.all_mcp_tools = get_all_mcp_tools_cached()
         self.adk_tools = self._convert_mcp_to_adk()
