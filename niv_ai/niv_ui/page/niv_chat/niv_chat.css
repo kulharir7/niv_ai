@@ -2559,6 +2559,45 @@ body.niv-dark-mode .niv-header-actions .btn:hover { color: var(--niv-text); }
 .drag-overlay-content i { font-size: 48px; opacity: 0.7; }
 
 /* ══════════════════════════════════════════════════════════
+   THOUGHT BLOCKS (RE-ACT ENGINE)
+   ══════════════════════════════════════════════════════════ */
+.thought-accordion {
+    background: rgba(124, 58, 237, 0.05);
+    border: 1px solid var(--niv-border);
+    border-radius: 12px;
+    margin-bottom: 12px;
+    overflow: hidden;
+    transition: all 0.2s ease;
+}
+.thought-header {
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    user-select: none;
+    font-size: 13px;
+    color: var(--niv-text-muted);
+}
+.thought-header:hover { background: rgba(124, 58, 237, 0.08); color: var(--niv-text); }
+.thought-icon { color: var(--niv-primary); font-size: 14px; }
+.thought-chevron { margin-left: auto; transition: transform 0.2s ease; font-size: 10px; }
+.thought-content {
+    display: none;
+    padding: 12px 14px;
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--niv-text-secondary);
+    border-top: 1px solid var(--niv-border);
+    background: rgba(0, 0, 0, 0.02);
+}
+.thought-accordion.open .thought-content { display: block; }
+.thought-accordion.open .thought-chevron { transform: rotate(180deg); }
+
+[data-theme="dark"] .thought-accordion { background: rgba(255, 255, 255, 0.03); }
+[data-theme="dark"] .thought-content { background: rgba(255, 255, 255, 0.01); }
+
+/* ══════════════════════════════════════════════════════════
    REACTIONS
    ══════════════════════════════════════════════════════════ */
 .msg-reaction-bar {
