@@ -305,6 +305,7 @@ def stream_agent(
                 
                 elif msg.content:
                     message_buffer += msg.content
+                    frappe.logger().info(f"Niv AI Buffer: {message_buffer}")
                     
                     # Process buffer for thoughts
                     while True:
