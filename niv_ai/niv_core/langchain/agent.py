@@ -284,10 +284,6 @@ def stream_agent(
                 continue
 
             if msg.type == "ai" or msg.type == "AIMessageChunk":
-                # DEBUG RAW TOKENS
-                if msg.content:
-                    frappe.logger().info(f"NIV AI RAW: {msg.content}")
-
                 tool_calls = getattr(msg, "tool_calls", None) or []
                 tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
                 
@@ -309,8 +305,6 @@ def stream_agent(
                 
                 elif msg.content:
                     message_buffer += msg.content
-                    with open("/tmp/niv_debug.log", "a") as f:
-                        f.write(f"RAW: {msg.content}\n")
                     
                     # Process buffer for thoughts
                     while True:
@@ -322,6 +316,19 @@ def stream_agent(
                                 message_buffer = parts[1]
                                 in_thought = True
                                 continue
+                            
+                            # Check if buffer ends with a partial opening tag
+                            if "<" in message_buffer:
+                                last_lt = message_buffer.rfind("<")
+                                tag_start = message_buffer[last_lt:]
+                                if "<thought>".startswith(tag_start):
+                                    if last_lt > 0:
+                                        yield {"type": "token", "content": message_buffer[:last_lt]}
+                                        message_buffer = tag_start
+                                    break
+                            
+                            yield {"type": "token", "content": message_buffer}
+                            message_buffer = ""
                             break
                         else:
                             if "</thought>" in message_buffer:
@@ -332,20 +339,22 @@ def stream_agent(
                                 message_buffer = parts[1]
                                 in_thought = False
                                 continue
-                            else:
-                                # Still in thought, but end tag not found yet
-                                # Keep some buffer to avoid splitting the end tag
-                                if len(message_buffer) > 10:
-                                    chunk = message_buffer[:-10]
-                                    current_thought += chunk
-                                    yield {"type": "thought", "content": chunk}
-                                    message_buffer = message_buffer[-10:]
+                            
+                            if "</" in message_buffer:
+                                last_slt = message_buffer.rfind("</")
+                                ctag_start = message_buffer[last_slt:]
+                                if "</thought>".startswith(ctag_start):
+                                    if last_slt > 0:
+                                        chunk = message_buffer[:last_slt]
+                                        current_thought += chunk
+                                        yield {"type": "thought", "content": chunk}
+                                        message_buffer = ctag_start
+                                    break
+                            
+                            current_thought += message_buffer
+                            yield {"type": "thought", "content": message_buffer}
+                            message_buffer = ""
                             break
-                    
-                    # If not in thought, yield what's in buffer
-                    if not in_thought and message_buffer:
-                        yield {"type": "token", "content": message_buffer}
-                        message_buffer = ""
 
             # Tool results
             elif msg.type == "tool":
