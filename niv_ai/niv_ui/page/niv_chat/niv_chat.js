@@ -67,6 +67,9 @@ class NivChat {
         this.unread_count = 0;
         this.edit_mode = false;
         this.models_list = [];
+        this.artifacts_open = false;
+        this.artifact_list = [];
+        this.active_artifact_id = null;
         this.slash_commands = [
             { cmd: "/clear", desc: "Clear chat history", icon: "🗑️" },
             { cmd: "/export", desc: "Export chat as markdown", icon: "📥" },
@@ -153,6 +156,10 @@ class NivChat {
         this.$searchBar = this.wrapper.find(".niv-search-bar");
         this.$msgSearchInput = this.wrapper.find(".niv-search-input");
         this.$inputPill = this.wrapper.find(".niv-input-pill");
+        this.$artifactPanel = this.wrapper.find(".niv-artifact-panel");
+        this.$artifactList = this.wrapper.find(".niv-artifact-list");
+        this.$artifactPreview = this.wrapper.find(".niv-artifact-preview");
+        this.$artifactDetailTitle = this.wrapper.find(".niv-artifact-detail-title");
 
         this.pending_files = [];
 
@@ -238,6 +245,11 @@ class NivChat {
         });
 
         // Header actions
+        this.wrapper.find(".btn-artifacts-toggle").on("click", () => this.toggle_artifacts_panel());
+        this.wrapper.find(".btn-artifact-close").on("click", () => this.toggle_artifacts_panel(false));
+        this.wrapper.find(".btn-artifact-refresh").on("click", () => this.load_artifacts_list());
+        this.wrapper.find(".btn-artifact-new").on("click", () => this.prompt_new_artifact());
+
         this.wrapper.find(".btn-share-chat").on("click", () => this.share_conversation());
         this.wrapper.find(".btn-delete-chat").on("click", () => this.delete_conversation());
         this.wrapper.find(".btn-rename-chat").on("click", () => this.rename_conversation());
@@ -324,6 +336,109 @@ class NivChat {
                 this.$scrollBottom.find(".scroll-unread-badge").hide();
             }
         });
+    }
+
+    // ─── Artifacts Panel ────────────────────────────────────────────
+
+    toggle_artifacts_panel(forceState) {
+        const next = typeof forceState === "boolean" ? forceState : !this.artifacts_open;
+        this.artifacts_open = next;
+        this.wrapper.find(".niv-main").toggleClass("niv-artifacts-open", next);
+        this.$artifactPanel.toggle(next);
+        this.wrapper.find(".btn-artifacts-toggle").toggleClass("active", next);
+        if (next) {
+            this.load_artifacts_list();
+        }
+    }
+
+    async load_artifacts_list() {
+        if (!this.$artifactList || !this.$artifactList.length) return;
+        this.$artifactList.html('<div class="niv-mcp-empty">Loading artifacts...</div>');
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_core.api.artifacts.list_artifacts",
+                args: { limit: 30 }
+            });
+            this.artifact_list = r.message || [];
+            if (!this.artifact_list.length) {
+                this.$artifactList.html('<div class="niv-mcp-empty">No artifacts yet. Create your first one.</div>');
+                this.$artifactDetailTitle.text("Select an artifact");
+                this.$artifactPreview.text("Choose from list to view details.");
+                return;
+            }
+
+            const html = this.artifact_list.map((a) => {
+                const active = a.name === this.active_artifact_id ? " active" : "";
+                const safeTitle = frappe.utils.escape_html(a.artifact_title || a.name);
+                const safeMeta = frappe.utils.escape_html(`${a.artifact_type || "Artifact"} • ${a.status || "Draft"} • v${a.version_count || 1}`);
+                return `<div class="niv-artifact-item${active}" data-artifact-id="${a.name}">
+                    <div class="niv-artifact-item-title">${safeTitle}</div>
+                    <div class="niv-artifact-item-meta">${safeMeta}</div>
+                </div>`;
+            }).join("");
+
+            this.$artifactList.html(html);
+            this.$artifactList.find(".niv-artifact-item").on("click", (e) => {
+                const id = $(e.currentTarget).data("artifact-id");
+                this.select_artifact(id);
+            });
+
+            if (!this.active_artifact_id && this.artifact_list.length) {
+                this.select_artifact(this.artifact_list[0].name);
+            }
+        } catch (e) {
+            this.$artifactList.html('<div class="niv-mcp-empty">Artifacts API not available yet.</div>');
+            this.$artifactDetailTitle.text("Artifacts unavailable");
+            this.$artifactPreview.text("Backend endpoint not reachable. Please check server logs.");
+        }
+    }
+
+    async select_artifact(artifactId) {
+        this.active_artifact_id = artifactId;
+        this.$artifactList.find(".niv-artifact-item").removeClass("active");
+        this.$artifactList.find(`[data-artifact-id="${artifactId}"]`).addClass("active");
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_core.api.artifacts.get_artifact",
+                args: { artifact_id: artifactId, with_versions: 1 }
+            });
+            const a = r.message || {};
+            this.$artifactDetailTitle.text(`${a.artifact_title || artifactId} (${a.status || "Draft"})`);
+            const content = (a.artifact_content || "").toString();
+            const preview = content.length > 2500 ? content.slice(0, 2500) + "\n..." : content;
+            this.$artifactPreview.text(preview || "No content yet.");
+        } catch (e) {
+            this.$artifactDetailTitle.text("Failed to load artifact");
+            this.$artifactPreview.text("Unable to fetch artifact details.");
+        }
+    }
+
+    prompt_new_artifact() {
+        frappe.prompt([
+            { fieldname: "title", label: "Artifact Title", fieldtype: "Data", reqd: 1 },
+            { fieldname: "artifact_type", label: "Type", fieldtype: "Select", options: "App\nDashboard\nForm\nDocument\nReport", default: "App" },
+            { fieldname: "source_prompt", label: "Prompt", fieldtype: "Small Text" },
+        ], async (values) => {
+            try {
+                const r = await frappe.call({
+                    method: "niv_ai.niv_core.api.artifacts.create_artifact",
+                    args: {
+                        title: values.title,
+                        artifact_type: values.artifact_type,
+                        source_prompt: values.source_prompt || "",
+                        artifact_content: "{}"
+                    }
+                });
+                const created = r.message || {};
+                frappe.show_alert({ message: "Artifact created", indicator: "green" });
+                await this.load_artifacts_list();
+                if (created.name) {
+                    this.select_artifact(created.name);
+                }
+            } catch (e) {
+                frappe.msgprint("Failed to create artifact");
+            }
+        }, "New Artifact", "Create");
     }
 
     // ─── Greeting ───────────────────────────────────────────────────
