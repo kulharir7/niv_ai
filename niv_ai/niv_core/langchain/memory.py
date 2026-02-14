@@ -29,7 +29,13 @@ def get_chat_history(conversation_id: str, limit: int = 50, max_tokens: int = No
     if max_tokens is None:
         try:
             settings = get_niv_settings()
-            max_tokens = (settings.max_tokens_per_message or 4096) * 3  # ~3x single message limit
+            # BUG-051: Account for system prompt and reserve space for response
+            # Context window estimation
+            total_limit = 32000 # Assume safe limit for most models
+            max_msg_tokens = (settings.max_tokens_per_message or 4096)
+            # Leave room for system prompt (~2000) + user prompt (~max_msg) + response (~max_msg)
+            max_tokens = total_limit - 2000 - (max_msg_tokens * 2)
+            if max_tokens < 4000: max_tokens = 8000 # Sanity floor
         except Exception:
             max_tokens = _DEFAULT_MAX_CONTEXT_TOKENS
 
@@ -173,7 +179,11 @@ def get_system_prompt(conversation_id: str = None) -> str:
         "TOOL EFFICIENCY:\n"
         "1. Use MINIMUM tool calls needed. Plan your approach BEFORE calling tools.\n"
         "2. After getting tool results, ALWAYS write a text summary for the user. Never end with just tool calls.\n"
-        "3. Maximum 5 tool calls per query. If you need more, summarize progress and ask to continue.\n"
+        "3. Maximum 5 tool calls per query. If you need more, summarize progress and ask to continue.\n\n"
+        "STRICT TRUTH (CRITICAL):\n"
+        "1. NEVER fabricate results or pretend a tool succeeded when it failed.\n"
+        "2. If a tool returns an error, hamesha sach bolo aur error user ko dikhao (in a simplified way).\n"
+        "3. Don't make up data that doesn't exist in the system. If you can't find it, say you can't find it.\n"
     ).format(brand=_brand)
 
     # Try conversation-level prompt

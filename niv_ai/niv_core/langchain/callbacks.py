@@ -84,9 +84,10 @@ class NivBillingCallback(BaseCallbackHandler):
     commits once at the end via finalize().
     """
 
-    def __init__(self, user: str, conversation_id: str):
+    def __init__(self, user: str, conversation_id: str, prompt_text: str = None):
         self.user = user
         self.conversation_id = conversation_id
+        self.prompt_text = prompt_text
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
         self._finalized = False
@@ -113,17 +114,23 @@ class NivBillingCallback(BaseCallbackHandler):
         self._finalized = True
 
         # If no usage reported by provider, estimate from stream tokens
-        if self.total_prompt_tokens == 0 and self.total_completion_tokens == 0 and stream_cb:
-            response_text = stream_cb.get_full_response()
-            if response_text:
-                # BUG-011: try tiktoken for better estimate, fallback to rough
-                estimated = _estimate_token_count(response_text)
-                self.total_completion_tokens = max(1, estimated)
-                self.total_prompt_tokens = self.total_completion_tokens  # rough prompt estimate
+        if self.total_prompt_tokens == 0 and self.total_completion_tokens == 0:
+            # Estimate completion from stream_cb
+            if stream_cb:
+                response_text = stream_cb.get_full_response()
+                if response_text:
+                    estimated_completion = _estimate_token_count(response_text)
+                    self.total_completion_tokens = max(1, estimated_completion)
+                else:
+                    self.total_completion_tokens = 1
+            
+            # Estimate prompt from prompt_text (BUG-011: estimate from chars/4)
+            if self.prompt_text:
+                estimated_prompt = _estimate_token_count(self.prompt_text)
+                self.total_prompt_tokens = max(1, estimated_prompt)
             else:
-                # BUG-016: empty string case — still bill minimum 1 token
-                self.total_completion_tokens = 1
-                self.total_prompt_tokens = 1
+                # Fallback if no prompt_text provided
+                self.total_prompt_tokens = max(1, self.total_completion_tokens)
 
         total = self.total_prompt_tokens + self.total_completion_tokens
         if total <= 0:

@@ -30,6 +30,9 @@ frappe.pages["niv-chat"].on_page_load = function (wrapper) {
         document.head.appendChild(l);
     };
 
+    loadCSS("/assets/niv_ai/css/niv_chat_premium.css");
+    loadCSS("/assets/niv_ai/css/niv_settings_premium.css");
+
     const deps = [];
     if (!window.marked) {
         deps.push(loadScript("https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js").catch(e => null));
@@ -1272,7 +1275,7 @@ ${htmlCode}
     append_message(role, content, meta = {}) {
         this.hide_empty_state();
         const isUser = role === "user";
-        const avatar = isUser ? this.get_user_avatar() : '<span style="font-size:16px;font-weight:700;">N</span>';
+        const avatar = isUser ? this.get_user_avatar() : '<div class="msg-avatar-icon">🛰️</div>';
         const time = meta.creation ? frappe.datetime.prettyDate(meta.creation) : "";
         const msgIndex = this.messages_data.length;
 
@@ -1350,6 +1353,11 @@ ${htmlCode}
             $msg.find("pre code").each(function () {
                 hljs.highlightElement(this);
             });
+        }
+
+        // Auto-open artifacts if HTML detected
+        if (!isUser && this.is_html_response(content)) {
+            this.toggle_artifacts_panel(true);
         }
 
         return $msg;
@@ -2383,6 +2391,9 @@ ${htmlCode}
                 }
                 this.current_balance = data.balance;
 
+                // Update Token Ring
+                this.update_token_ring(data.balance, data.daily_limit || 100000);
+
                 // Low balance warning
                 if (data.balance < 500 && data.balance > 0) {
                     this.$lowBalanceWarning.show();
@@ -2414,6 +2425,7 @@ ${htmlCode}
         if (balance !== undefined && balance !== null) {
             this.$credits.text(this.format_credits(balance));
             this.current_balance = balance;
+            this.update_token_ring(balance, 100000); // default limit
             if (balance < 500 && balance > 0) {
                 this.$lowBalanceWarning.show();
                 this.$credits.css("color", "#f59e0b");
@@ -2430,6 +2442,16 @@ ${htmlCode}
                 this.$input.prop("disabled", false).attr("placeholder", "Message Niv AI...");
                 this.$sendBtn.prop("disabled", false);
             }
+        }
+    }
+
+    update_token_ring(used, limit) {
+        const percent = Math.min(100, (used / limit) * 100);
+        const offset = 94.2 - (percent / 100) * 94.2;
+        this.wrapper.find(".niv-token-ring-progress").css("stroke-dashoffset", offset);
+        this.wrapper.find(".niv-token-usage-value").text(Number(used).toLocaleString() + " / " + Number(limit).toLocaleString());
+        if (percent > 90) {
+            this.wrapper.find(".niv-token-ring-progress").css("stroke", "#ef4444");
         }
     }
 

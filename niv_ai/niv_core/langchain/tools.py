@@ -43,7 +43,20 @@ _thread_local = threading.local()
 
 def set_current_user_api_key(api_key: str = None):
     """Set the API key for the current request's user.
-    Called before agent.invoke/stream, cleared in finally block."""
+    Called before agent.invoke/stream, cleared in finally block.
+    BUG-017: Validate format and log audit trail.
+    """
+    if api_key:
+        if ":" not in api_key:
+            frappe.logger().error(f"Niv AI: Invalid API key format for user {frappe.session.user}")
+            # We don't throw here to avoid breaking the agent flow, but we won't use the invalid key
+            _thread_local.user_api_key = None
+            return
+        
+        # Log audit trail (sensitive info masked)
+        key_id = api_key.split(":")[0]
+        frappe.logger().info(f"Niv AI Audit: User {frappe.session.user} using API key {key_id}")
+        
     _thread_local.user_api_key = api_key
 
 
@@ -85,16 +98,19 @@ def is_dev_mode_for(conversation_id: str) -> bool:
 # Global active dev conversation (set by stream.py, read by tool executor)
 # Safe because Gunicorn gthread handles one request at a time per worker
 _active_dev_conv_id = {"value": ""}
+_dev_lock = threading.Lock()
 
 
 def set_active_dev_conversation(conv_id: str):
     """Set the active dev mode conversation ID (global, not thread-local)."""
-    _active_dev_conv_id["value"] = conv_id
+    with _dev_lock:
+        _active_dev_conv_id["value"] = conv_id
 
 
 def is_dev_mode() -> bool:
     """Check dev mode — uses global active conversation + Redis flag."""
-    conv_id = _active_dev_conv_id.get("value", "")
+    with _dev_lock:
+        conv_id = _active_dev_conv_id.get("value", "")
     if not conv_id:
         conv_id = getattr(_thread_local, "dev_conversation_id", "")
     return is_dev_mode_for(conv_id)
@@ -102,7 +118,8 @@ def is_dev_mode() -> bool:
 
 def get_active_dev_conv_id() -> str:
     """Get the active dev conversation ID."""
-    return _active_dev_conv_id.get("value", "")
+    with _dev_lock:
+        return _active_dev_conv_id.get("value", "")
 
 
 def get_pending_dev_action(conversation_id: str):
@@ -164,7 +181,9 @@ def _execute_single_tool(tool_name, arguments):
                     else:
                         text_parts.append(str(c))
                 return "\n".join(text_parts)
-        if isinstance(result, dict):
+        
+        # BUG-012: Ensure result is always a string for the LLM
+        if isinstance(result, (dict, list)):
             return json.dumps(result, default=str, ensure_ascii=False)
         return str(result)
     except Exception as e:
@@ -195,8 +214,8 @@ def execute_pending_dev_action(conversation_id: str) -> Optional[str]:
                 result_data = json.loads(result) if isinstance(result, str) else result
                 if isinstance(result_data, dict):
                     doc_name = result_data.get("name", "")
-            except (json.JSONDecodeError, AttributeError, TypeError):
-                pass
+            except (json.JSONDecodeError, AttributeError, TypeError) as e:
+                frappe.log_error(f"Niv AI: Failed to parse tool result for undo: {e}", "Niv AI Tool")
             # Fallback: try to find "name" in result text
             if not doc_name and isinstance(result, str) and '"name"' in result:
                 import re
@@ -318,7 +337,7 @@ def _validate_arguments(tool_name: str, arguments: dict, input_schema: dict) -> 
         if field not in arguments or arguments[field] is None:
             return f"Error: '{field}' is required for tool '{tool_name}'"
 
-    # Check types
+    # Check types and apply length limits (BUG-010)
     _schema_type_map = {
         "string": str, "integer": int, "number": (int, float),
         "boolean": bool, "array": list, "object": dict,
@@ -336,6 +355,12 @@ def _validate_arguments(tool_name: str, arguments: dict, input_schema: dict) -> 
         if py_type and not isinstance(value, py_type):
             return (f"Error: '{field}' has wrong type — expected {expected_type}, "
                     f"got {type(value).__name__} for tool '{tool_name}'")
+
+        # Length limits
+        if isinstance(value, str) and len(value) > 10000:
+            return f"Error: Argument '{field}' is too long (max 10000 chars)"
+        if isinstance(value, list) and len(value) > 100:
+            return f"Error: Argument '{field}' has too many items (max 100)"
 
     return None
 
@@ -476,7 +501,8 @@ def _make_mcp_executor(tool_name: str, input_schema: dict = None):
                             text_parts.append(str(c))
                     return "\n".join(text_parts)
 
-            if isinstance(result, dict):
+            # BUG-012: Ensure result is always a string for the LLM
+            if isinstance(result, (dict, list)):
                 return json.dumps(result, default=str, ensure_ascii=False)
             return str(result)
 

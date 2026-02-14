@@ -254,34 +254,39 @@ def stream_chat(**kwargs):
 
             # ─── A2A (google-adk) Branch ───
             use_a2a = getattr(settings, "enable_a2a", 0)
+            adk_failed = False
             if use_a2a:
-                from niv_ai.niv_core.adk.stream_handler import stream_agent_adk
-                for event in stream_agent_adk(
-                    message=message,
-                    conversation_id=conversation_id,
-                    provider_name=provider,
-                    model_name=model,
-                    user=user,
-                    dev_mode=dev_mode
-                ):
-                    event_type = event.get("type", "")
-                    if event_type == "token":
-                        content = event.get("content", "")
-                        if content:
-                            saw_token = True
-                            full_response += content
-                        yield _sse(event)
-                    elif event_type in ("tool_call", "tool_result", "thought", "error"):
-                        if event_type == "tool_call":
-                            saw_tool_activity = True
-                            tool_calls_data.append({"tool": event.get("tool", ""), "arguments": event.get("arguments", {})})
-                        elif event_type == "tool_result":
-                            tool_results_data.append({"tool": event.get("tool", ""), "result": str(event.get("result", ""))[:500]})
-                        yield _sse(event)
-                # Skip the old loop
-                return
+                try:
+                    from niv_ai.niv_core.adk.stream_handler import stream_agent_adk
+                    for event in stream_agent_adk(
+                        message=message,
+                        conversation_id=conversation_id,
+                        provider_name=provider,
+                        model_name=model,
+                        user=user,
+                        dev_mode=dev_mode
+                    ):
+                        event_type = event.get("type", "")
+                        if event_type == "token":
+                            content = event.get("content", "")
+                            if content:
+                                saw_token = True
+                                full_response += content
+                            yield _sse(event)
+                        elif event_type in ("tool_call", "tool_result", "thought", "error"):
+                            if event_type == "tool_call":
+                                saw_tool_activity = True
+                                tool_calls_data.append({"tool": event.get("tool", ""), "arguments": event.get("arguments", {})})
+                            elif event_type == "tool_result":
+                                tool_results_data.append({"tool": event.get("tool", ""), "result": str(event.get("result", ""))[:500]})
+                            yield _sse(event)
+                    # Exit if ADK finished successfully
+                    return
+                except Exception as adk_err:
+                    frappe.log_error(f"Niv AI: ADK failed, falling back to LangGraph: {adk_err}", "Niv AI Stream")
+                    adk_failed = True
 
-            # ─── Legacy LangGraph Branch ───
+            # ─── Legacy LangGraph Branch (or Fallback) ───
             # Set dev mode on tools layer (Redis flag + global conv_id for cross-thread)
             if dev_mode:
                 _set_dev_mode(True, conversation_id)
@@ -313,7 +318,7 @@ def stream_chat(**kwargs):
                 elif event_type == "tool_result":
                     saw_tool_activity = True
                     result_text = event.get("result", "")
-                    tool_results_data.append({"tool": event.get("tool", ""), "result": result_text[:500]})
+                    tool_results_data.append({"tool": event.get("tool", ""), "result": result_text[:2000]})
                     yield _sse({"type": "tool_result", "tool": event.get("tool", ""), "result": result_text})
 
                 elif event_type == "error":
@@ -346,7 +351,7 @@ def stream_chat(**kwargs):
                 for i, tc in enumerate(tool_calls_data):
                     result_str = ""
                     if i < len(tool_results_data):
-                        result_str = f"\n  Result: {tool_results_data[i].get('result', '')[:300]}"
+                        result_str = f"\n  Result: {tool_results_data[i].get('result', '')[:2000]}"
                     tool_summary_parts.append(f"- `{tc.get('tool', 'unknown')}`: args={json.dumps(tc.get('arguments', {}), default=str)[:150]}{result_str}")
                 tool_list_text = "\n".join(tool_summary_parts[:8]) if tool_summary_parts else "Multiple tools were called."
 
