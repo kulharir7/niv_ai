@@ -309,8 +309,8 @@ def stream_agent(
                     # Process buffer for thoughts
                     while True:
                         if not in_thought:
-                            if "<thought>" in message_buffer:
-                                parts = message_buffer.split("<thought>", 1)
+                            if "[[THOUGHT]]" in message_buffer:
+                                parts = message_buffer.split("[[THOUGHT]]", 1)
                                 if parts[0]:
                                     yield {"type": "token", "content": parts[0]}
                                 message_buffer = parts[1]
@@ -318,10 +318,10 @@ def stream_agent(
                                 continue
                             
                             # Check if buffer ends with a partial opening tag
-                            if "<" in message_buffer:
-                                last_lt = message_buffer.rfind("<")
+                            if "[" in message_buffer:
+                                last_lt = message_buffer.rfind("[")
                                 tag_start = message_buffer[last_lt:]
-                                if "<thought>".startswith(tag_start):
+                                if "[[THOUGHT]]".startswith(tag_start):
                                     if last_lt > 0:
                                         yield {"type": "token", "content": message_buffer[:last_lt]}
                                         message_buffer = tag_start
@@ -331,8 +331,8 @@ def stream_agent(
                             message_buffer = ""
                             break
                         else:
-                            if "</thought>" in message_buffer:
-                                parts = message_buffer.split("</thought>", 1)
+                            if "[[/THOUGHT]]" in message_buffer:
+                                parts = message_buffer.split("[[/THOUGHT]]", 1)
                                 current_thought += parts[0]
                                 yield {"type": "thought", "content": current_thought}
                                 current_thought = ""
@@ -340,10 +340,10 @@ def stream_agent(
                                 in_thought = False
                                 continue
                             
-                            if "</" in message_buffer:
-                                last_slt = message_buffer.rfind("</")
+                            if "[[" in message_buffer:
+                                last_slt = message_buffer.rfind("[[")
                                 ctag_start = message_buffer[last_slt:]
-                                if "</thought>".startswith(ctag_start):
+                                if "[[/THOUGHT]]".startswith(ctag_start):
                                     if last_slt > 0:
                                         chunk = message_buffer[:last_slt]
                                         current_thought += chunk
