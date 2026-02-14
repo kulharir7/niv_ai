@@ -34,6 +34,54 @@ class MCPError(Exception):
     pass
 
 
+# ─── Circuit Breaker ──────────────────────────────────────────────
+# After 3 consecutive failures, skip server for 60s. Auto-recover.
+
+CIRCUIT_BREAKER_THRESHOLD = 3
+CIRCUIT_BREAKER_COOLDOWN = 60  # seconds
+CIRCUIT_BREAKER_PREFIX = "niv_mcp_cb:"
+
+
+def _check_circuit_breaker(server_name):
+    """Return True if server is healthy (circuit closed). False if tripped (open)."""
+    try:
+        data = _redis_get(f"cb:{server_name}")
+        if not data or not isinstance(data, dict):
+            return True
+        if data.get("failures", 0) >= CIRCUIT_BREAKER_THRESHOLD:
+            tripped_at = data.get("tripped_at", 0)
+            if time.time() - tripped_at < CIRCUIT_BREAKER_COOLDOWN:
+                return False  # circuit open — skip server
+            # Cooldown expired — allow one attempt (half-open)
+        return True
+    except Exception:
+        return True
+
+
+def _record_failure(server_name):
+    """Record a failure. Trip circuit after threshold."""
+    try:
+        data = _redis_get(f"cb:{server_name}") or {}
+        if not isinstance(data, dict):
+            data = {}
+        failures = data.get("failures", 0) + 1
+        data["failures"] = failures
+        if failures >= CIRCUIT_BREAKER_THRESHOLD:
+            data["tripped_at"] = time.time()
+            frappe.logger().warning(f"Niv MCP: Circuit breaker OPEN for '{server_name}' after {failures} failures")
+        _redis_set(f"cb:{server_name}", data, ttl=CIRCUIT_BREAKER_COOLDOWN * 2)
+    except Exception:
+        pass
+
+
+def _record_success(server_name):
+    """Reset failure count on success."""
+    try:
+        _redis_set(f"cb:{server_name}", {"failures": 0}, ttl=CIRCUIT_BREAKER_COOLDOWN * 2)
+    except Exception:
+        pass
+
+
 # ─── Cache Layer (Redis + Worker Memory) ──────────────────────────
 
 _cache_lock = threading.Lock()
@@ -209,9 +257,17 @@ def _get_event_loop():
         if _loop is not None and _loop.is_running():
             return _loop
         import asyncio
+        import atexit
         _loop = asyncio.new_event_loop()
         _loop_thread = threading.Thread(target=_loop.run_forever, daemon=True)
         _loop_thread.start()
+
+        # Clean shutdown on process exit
+        def _shutdown_loop():
+            if _loop and _loop.is_running():
+                _loop.call_soon_threadsafe(_loop.stop)
+        atexit.register(_shutdown_loop)
+
         return _loop
 
 
@@ -263,8 +319,9 @@ async def _sdk_list_tools_async(connection_config):
     for attempt in range(3):
         try:
             async with create_session(connection_config) as session:
-                await session.initialize()
-                result = await session.list_tools()
+                # Add timeouts for initialization and tool listing
+                await asyncio.wait_for(session.initialize(), timeout=30)
+                result = await asyncio.wait_for(session.list_tools(), timeout=30)
                 tools = []
                 for tool in result.tools:
                     t = {"name": tool.name}
@@ -273,6 +330,8 @@ async def _sdk_list_tools_async(connection_config):
                     t["inputSchema"] = tool.inputSchema if tool.inputSchema else {"type": "object", "properties": {}}
                     tools.append(t)
                 return tools
+        except asyncio.TimeoutError:
+            last_err = MCPError("Connection timeout while listing tools")
         except Exception as e:
             last_err = e
             if any(code in str(e).lower() for code in ("401", "403", "404")):
@@ -291,9 +350,12 @@ async def _sdk_call_tool_async(connection_config, tool_name, arguments):
     for attempt in range(3):
         try:
             async with create_session(connection_config) as session:
-                await session.initialize()
-                result = await session.call_tool(tool_name, arguments)
+                # Add timeouts for initialization and tool call
+                await asyncio.wait_for(session.initialize(), timeout=30)
+                result = await asyncio.wait_for(session.call_tool(tool_name, arguments), timeout=60)
                 return {"content": [{"type": c.type, "text": getattr(c, "text", str(c))} for c in result.content]}
+        except asyncio.TimeoutError:
+            last_err = MCPError(f"Tool call '{tool_name}' timed out after 60s")
         except Exception as e:
             last_err = e
             if any(code in str(e).lower() for code in ("401", "403", "404")):
@@ -472,18 +534,27 @@ def call_tool_fast(server_name, tool_name, arguments, user_api_key=None):
 
     GUARANTEE: Same-server calls NEVER touch SDK/pip packages.
     """
+    # Circuit breaker check
+    if not _check_circuit_breaker(server_name):
+        raise MCPError(f"Server '{server_name}' is temporarily unavailable (circuit breaker open). Retry in ~60s.")
+
     doc = _get_server_config(server_name)
     same_server = doc.transport_type != "stdio" and _is_same_server(server_name, doc.server_url)
 
     if same_server:
         # ── SAME-SERVER: Direct Python call. Period. ──
         try:
-            return _direct_call_tool(tool_name, arguments)
+            result = _direct_call_tool(tool_name, arguments)
+            _record_success(server_name)
+            return result
         except ImportError:
+            _record_failure(server_name)
             raise MCPError(f"FAC app not installed — cannot call tool '{tool_name}'")
         except MCPError:
+            _record_failure(server_name)
             raise
         except Exception as e:
+            _record_failure(server_name)
             raise MCPError(f"Tool '{tool_name}' failed (direct): {e}")
     else:
         # ── REMOTE: SDK ──
@@ -493,8 +564,11 @@ def call_tool_fast(server_name, tool_name, arguments, user_api_key=None):
                 "but MCP SDK is not installed. Run: pip install mcp langchain-mcp-adapters"
             )
         try:
-            return _sdk_call_tool(doc, tool_name, arguments, user_api_key)
+            result = _sdk_call_tool(doc, tool_name, arguments, user_api_key)
+            _record_success(server_name)
+            return result
         except Exception as e:
+            _record_failure(server_name)
             raise MCPError(f"Tool '{tool_name}' failed (SDK): {e}")
 
 

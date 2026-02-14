@@ -22,7 +22,8 @@ def _parse_tc_args(args_str):
         return {}
     try:
         return json.loads(args_str)
-    except (json.JSONDecodeError, TypeError):
+    except (json.JSONDecodeError, TypeError) as e:
+        frappe.log_error(f"Niv AI: Failed to parse tool call arguments: {e}\nArgs: {args_str}", "Niv AI Agent")
         return {}
 
 
@@ -82,6 +83,7 @@ def create_niv_agent(
     user: str = None,
     streaming: bool = True,
     agent_id: str = "general",
+    prompt_text: str = None,
 ):
     """Create a LangGraph ReAct agent with MCP tools.
 
@@ -93,7 +95,7 @@ def create_niv_agent(
 
     # Callbacks
     stream_cb = NivStreamingCallback(conversation_id or "")
-    billing_cb = NivBillingCallback(user, conversation_id or "")
+    billing_cb = NivBillingCallback(user, conversation_id or "", prompt_text=prompt_text)
     logging_cb = NivLoggingCallback(user, conversation_id or "")
     all_callbacks = [stream_cb, billing_cb, logging_cb]
 
@@ -185,6 +187,7 @@ def run_agent(
         user=user,
         streaming=False,
         agent_id=agent_id,
+        prompt_text=message,
     )
     # Use custom system_prompt if provided, else default
     final_system_prompt = system_prompt or default_system_prompt
@@ -246,6 +249,7 @@ def stream_agent(
         user=user,
         streaming=True,
         agent_id=agent_id,
+        prompt_text=message,
     )
 
     # Developer mode: use dev system prompt
@@ -383,7 +387,7 @@ def stream_agent(
                 yield {
                     "type": "tool_result",
                     "tool": getattr(msg, "name", "unknown"),
-                    "result": (str(msg.content) or "")[:1000],
+                    "result": (str(msg.content) or "")[:2000],
                 }
                 if tool_call_count >= MAX_TOOL_CALLS:
                     yield {"type": "error", "content": "I reached the tool-call safety limit."}

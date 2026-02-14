@@ -314,27 +314,37 @@ def _save_knowledge(knowledge, prompt_context):
 
 
 def get_discovery_context():
-    """Get the discovery context for system prompt injection."""
+    """Get the discovery context for system prompt injection.
+    BUG-012: Add TTL (5 min) via Redis cache.
+    """
+    cache_key = "niv_discovery_context_cache"
+    cached = frappe.cache().get_value(cache_key)
+    if cached:
+        return cached
+
+    ctx = ""
     try:
         settings = get_niv_settings()
         ctx = getattr(settings, "discovery_context", "") or ""
-        if ctx:
-            return ctx
     except Exception:
         pass
 
-    # Try file fallback
-    try:
-        import os
-        path = frappe.get_site_path("private", "niv_ai_knowledge.json")
-        if os.path.exists(path):
-            with open(path) as f:
-                data = json.load(f)
-                return data.get("prompt_context", "")
-    except Exception:
-        pass
+    if not ctx:
+        # Try file fallback
+        try:
+            import os
+            path = frappe.get_site_path("private", "niv_ai_knowledge.json")
+            if os.path.exists(path):
+                with open(path) as f:
+                    data = json.load(f)
+                    ctx = data.get("prompt_context", "")
+        except Exception:
+            pass
 
-    return ""
+    if ctx:
+        frappe.cache().set_value(cache_key, ctx, expires_in_sec=300)
+
+    return ctx
 
 
 @frappe.whitelist()
