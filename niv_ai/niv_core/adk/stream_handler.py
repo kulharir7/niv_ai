@@ -28,9 +28,10 @@ def stream_agent_adk(
     session_id = conversation_id
     
     try:
+        from google.genai import types
         # Use runner.run() which is a synchronous generator
         for event in runner.run(
-            new_message=message,
+            new_message=types.Content(role="user", parts=[types.Part(text=message)]),
             user_id=user,
             session_id=session_id
         ):
