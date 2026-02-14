@@ -396,12 +396,12 @@ class NivChat {
     }
 
     show_artifact_empty() {
-        this.$artifactIframe.attr("srcdoc", `
-            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#666;font-family:system-ui;">
-                <div style="font-size:48px;margin-bottom:16px;">✨</div>
-                <p style="margin:0;font-size:14px;">Type "app banao" in chat to create your first artifact</p>
-            </div>
-        `);
+        const emptyHtml = `<!DOCTYPE html><html><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;color:#666;font-family:system-ui;background:#fafafa;">
+            <div style="font-size:48px;margin-bottom:16px;">✨</div>
+            <p style="margin:0;font-size:14px;">Type "app banao" in chat to create</p>
+        </body></html>`;
+        const blob = new Blob([emptyHtml], { type: "text/html;charset=utf-8" });
+        this.$artifactIframe.attr("src", URL.createObjectURL(blob));
         this.$artifactCode.text("// No artifact selected");
         this.current_artifact_content = "";
     }
@@ -428,13 +428,13 @@ class NivChat {
             
             // Update preview iframe
             if (content && (content.includes("<") || content.includes("function"))) {
-                this.render_artifact_preview(content);
+                this.show_live_preview(content);
             } else {
-                this.$artifactIframe.attr("srcdoc", `
-                    <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;font-family:system-ui;">
-                        <p>No preview available</p>
-                    </div>
-                `);
+                const noPreviewHtml = `<!DOCTYPE html><html><body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#666;font-family:system-ui;background:#fafafa;">
+                    <p>No preview available</p>
+                </body></html>`;
+                const blob = new Blob([noPreviewHtml], { type: "text/html;charset=utf-8" });
+                this.$artifactIframe.attr("src", URL.createObjectURL(blob));
             }
         } catch (e) {
             this.$artifactCode.text("// Error loading artifact");
@@ -605,8 +605,33 @@ class NivChat {
     show_live_preview(htmlCode) {
         if (!this.$artifactIframe || !this.$artifactIframe.length) return;
         
-        // Use srcdoc for cleaner rendering
-        this.$artifactIframe.attr("srcdoc", htmlCode);
+        // Ensure complete HTML document
+        let finalHtml = htmlCode;
+        if (!htmlCode.includes("<!DOCTYPE") && !htmlCode.includes("<html")) {
+            finalHtml = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>* { box-sizing: border-box; } body { margin: 0; padding: 20px; font-family: system-ui, sans-serif; }</style>
+</head>
+<body>
+${htmlCode}
+</body>
+</html>`;
+        }
+        
+        // Use blob URL for reliable script execution
+        const blob = new Blob([finalHtml], { type: "text/html;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        
+        // Revoke previous blob URL to prevent memory leak
+        if (this._currentBlobUrl) {
+            URL.revokeObjectURL(this._currentBlobUrl);
+        }
+        this._currentBlobUrl = url;
+        
+        this.$artifactIframe.attr("src", url);
     }
 
     extract_code_from_response(content) {
