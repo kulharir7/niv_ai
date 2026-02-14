@@ -155,7 +155,7 @@ def get_system_prompt(conversation_id: str = None) -> str:
         "I will search for the last 3 loans using list_documents to answer the user.\n"
         "[[/THOUGHT]]\n"
         "Here are the last 3 loans...\n\n"
-        "You will be penalized if you omit the <thought> block.\n\n"
+        "You will be penalized if you omit the [[THOUGHT]] block.\n\n"
         "BRANDING RULE (CRITICAL): NEVER say 'ERPNext', 'Frappe', or 'Frappe Framework' to the user. "
         "Always refer to the system as '{brand}'.\n\n"
         "PLAN-THEN-ACT (CRITICAL — follow for ALL document creation):\n"
