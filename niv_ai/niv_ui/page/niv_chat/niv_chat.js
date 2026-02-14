@@ -45,7 +45,11 @@ frappe.pages["niv-chat"].on_page_load = function (wrapper) {
             marked.setOptions({ breaks: true, gfm: true, headerIds: false, mangle: false });
         }
         try {
-            new NivChat(page);
+            if (typeof NivChat === 'function') {
+                new NivChat(page);
+            } else {
+                console.error("Niv AI: NivChat class not found");
+            }
         } catch (err) {
             console.error("Niv AI: Chat initialization failed", err);
         }
