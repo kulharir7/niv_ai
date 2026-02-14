@@ -329,11 +329,13 @@ def stream_agent(
                                 active_end_tag = "[[/THOUGHT]]" if tag == "[[THOUGHT]]" else "</THOUGHT>"
                                 continue
                             
-                            # Check for partial tags
+                            # Check for partial tags (only if NOT a full tag yet)
                             if "[" in message_buffer or "<" in message_buffer:
                                 last_idx = max(message_buffer.rfind("["), message_buffer.rfind("<"))
                                 tag_start = message_buffer[last_idx:].upper()
-                                if "[[THOUGHT]]".startswith(tag_start) or "<THOUGHT>".startswith(tag_start):
+                                # Only break if it's a partial match and NOT the full tag
+                                if ("[[THOUGHT]]".startswith(tag_start) and tag_start != "[[THOUGHT]]") or \
+                                   ("<THOUGHT>".startswith(tag_start) and tag_start != "<THOUGHT>"):
                                     if last_idx > 0:
                                         yield {"type": "token", "content": message_buffer[:last_idx]}
                                         message_buffer = message_buffer[last_idx:]
@@ -359,7 +361,9 @@ def stream_agent(
                             if "[[" in message_buffer or "</" in message_buffer:
                                 last_idx = max(message_buffer.rfind("[["), message_buffer.rfind("</"))
                                 ctag_start = message_buffer[last_idx:].upper()
-                                if "[[/THOUGHT]]".startswith(ctag_start) or "</THOUGHT>".startswith(ctag_start):
+                                # Only break if it's a partial match and NOT the full tag
+                                if ("[[/THOUGHT]]".startswith(ctag_start) and ctag_start != "[[/THOUGHT]]") or \
+                                   ("</THOUGHT>".startswith(ctag_start) and ctag_start != "</THOUGHT>"):
                                     if last_idx > 0:
                                         chunk = message_buffer[:last_idx]
                                         current_thought += chunk
