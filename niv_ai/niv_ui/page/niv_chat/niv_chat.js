@@ -76,7 +76,10 @@ class NivChat {
             "dashboard bana", "page banao", "page bana", "widget banao",
             "tool banao", "tool bana", "ui banao", "ui bana",
             "build an app", "create an app", "make an app", "build a calculator",
-            "create a form", "create a dashboard", "build a tool"
+            "create a form", "create a dashboard", "build a tool",
+            "counter app", "simple app", "html app", "web app",
+            "create a simple", "build a simple", "make a simple",
+            "with buttons", "interactive", "clickable"
         ];
         this.slash_commands = [
             { cmd: "/clear", desc: "Clear chat history", icon: "🗑️" },
