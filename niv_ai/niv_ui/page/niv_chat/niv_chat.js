@@ -32,23 +32,23 @@ frappe.pages["niv-chat"].on_page_load = function (wrapper) {
 
     const deps = [];
     if (!window.marked) {
-        deps.push(loadScript("https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"));
+        deps.push(loadScript("https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js").catch(e => null));
     }
     if (!window.hljs) {
-        deps.push(loadScript("https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"));
+        deps.push(loadScript("https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js").catch(e => null));
         loadCSS("https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css");
         loadCSS("https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css");
     }
-    if (!window.Chart) {
-        // Load frappe-charts for artifact support
-        deps.push(loadScript("https://cdn.jsdelivr.net/npm/frappe-charts@1.6.2/dist/frappe-charts.min.iife.js"));
-    }
 
     Promise.all(deps).then(() => {
-        if (window.marked) {
+        if (window.marked && typeof marked.setOptions === 'function') {
             marked.setOptions({ breaks: true, gfm: true, headerIds: false, mangle: false });
         }
-        new NivChat(page);
+        try {
+            new NivChat(page);
+        } catch (err) {
+            console.error("Niv AI: Chat initialization failed", err);
+        }
     });
 };
 
@@ -309,10 +309,10 @@ class NivChat {
             // Mobile/Widget mode: use .open and backdrop
             if (nextState) {
                 this.$sidebar.addClass("open").removeClass("collapsed");
-                this.$sidebarBackdrop.addClass("visible");
+                this.$sidebarBackdrop.show().addClass("visible");
             } else {
                 this.$sidebar.removeClass("open");
-                this.$sidebarBackdrop.removeClass("visible");
+                this.$sidebarBackdrop.removeClass("visible").hide();
             }
         } else {
             // Desktop mode: use .collapsed
@@ -321,7 +321,7 @@ class NivChat {
             } else {
                 this.$sidebar.addClass("collapsed").removeClass("open");
             }
-            this.$sidebarBackdrop.removeClass("visible");
+            this.$sidebarBackdrop.removeClass("visible").hide();
         }
     }
 
@@ -645,10 +645,6 @@ class NivChat {
                 if (this.$artifactCode) {
                     this.$artifactCode.text(htmlContent);
                 }
-                
-                // Small bounce animation to show it's updated
-                this.$artifactPanel.addClass("artifact-bounce");
-                setTimeout(() => this.$artifactPanel.removeClass("artifact-bounce"), 500);
             }
         } catch (e) {
             console.error("Failed to auto-create artifact", e);
