@@ -4,9 +4,9 @@ import json
 def check_data():
     frappe.connect()
     # Check schema
-    meta = frappe.get_meta("Loan Repayment Schedule")
+    meta = frappe.get_meta("Repayment Schedule")
     print(f"DocType: {meta.name}")
-    print("Fields in Loan Repayment Schedule:")
+    print("Fields in Repayment Schedule:")
     for f in meta.fields:
         if f.fieldtype in ('Currency', 'Float', 'Date', 'Select'):
             print(f"- {f.fieldname} ({f.fieldtype})")
@@ -14,7 +14,7 @@ def check_data():
     # Check some data
     res = frappe.db.sql("""
         SELECT parent, payment_date, principal_amount, interest_amount, total_payment 
-        FROM `tabLoan Repayment Schedule` 
+        FROM `tabRepayment Schedule` 
         WHERE total_payment > 0 
         LIMIT 5
     """, as_dict=1)
