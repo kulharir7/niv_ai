@@ -78,10 +78,10 @@ class NivAgentFactory:
             model=self.adk_model,
             instruction=(
                 "You are an expert Frappe/ERPNext developer. "
+                "CRITICAL: Never hallucinate or provide mock data. If you need to know about a DocType, use 'get_doctype_info'. "
                 "Your job is to create DocTypes, write Server Scripts, and build UI components. "
-                "For data visualization, you can create 'Artifacts' using HTML/JS and the 'frappe-charts' library. "
-                "The library is already available globally as 'frappe.Chart'. "
-                "Always follow Frappe coding standards. Use get_doctype_info before modifying anything."
+                "For data visualization, use 'frappe-charts' library in HTML artifacts. "
+                "Always verify existing fields before adding new ones."
             ),
             tools=tools
         )
@@ -90,7 +90,7 @@ class NivAgentFactory:
         """Specialized for Reports and Queries."""
         data_tool_names = [
             "run_database_query", "analyze_business_data", "generate_report", 
-            "report_list", "list_documents", "fetch"
+            "report_list", "list_documents", "fetch", "get_document"
         ]
         tools = [self.adk_tools[name] for name in data_tool_names if name in self.adk_tools]
 
@@ -98,29 +98,16 @@ class NivAgentFactory:
             name="data_analyst",
             model=self.adk_model,
             instruction=(
-                "You are a Business Intelligence specialist for ERPNext. "
-                "You analyze data, run SQL queries safely, and generate reports. "
-                "Always verify table names using run_database_query (DESC commands) if unsure."
+                "You are a Business Intelligence specialist. "
+                "CRITICAL: Never provide mock or example data. You MUST use 'run_database_query' or 'list_documents' to fetch real data from the system. "
+                "If a table name is unknown, use 'run_database_query' with 'SHOW TABLES' or 'DESC'. "
+                "Always provide real numbers from the database."
             ),
             tools=tools
         )
 
-    def create_discovery_agent(self):
-        """Specialized for System Scan and Onboarding."""
-        return LlmAgent(
-            name="system_discovery",
-            model=self.adk_model,
-            instruction=(
-                "You are the System Discovery Specialist. "
-                "Your job is to scan the Frappe instance and build a mental map of custom DocTypes, "
-                "Workflows, and Data patterns. Always provide a clear summary of what you find."
-            ),
-            tools=[self.adk_tools[n] for n in ["introspect_system", "get_doctype_info"] if n in self.adk_tools]
-        )
-
     def create_nbfc_agent(self):
         """Specialized for NBFC operations (LOS, LMS, Growth System)."""
-        # Load NBFC context from discovery cache
         nbfc_ctx = {}
         try:
             cache = frappe.cache().get_value("niv_system_discovery_map")
@@ -135,12 +122,12 @@ class NivAgentFactory:
             name="nbfc_specialist",
             model=self.adk_model,
             instruction=(
-                "You are an expert in NBFC (Non-Banking Financial Company) operations for Growth System. "
-                "You understand LOS (Loan Origination), LMS (Loan Management), and Co-Lending. "
-                f"Relevant DocTypes you should know: {nbfc_dt}. "
-                "Always check for specific interest calculation rules or repayment schedules before answering."
+                "You are an expert in NBFC operations for Growth System. "
+                f"Relevant DocTypes: {nbfc_dt}. "
+                "CRITICAL: Do not invent loan numbers or amounts. Use 'list_documents' or 'run_database_query' to find real borrower records. "
+                "Always check interest calculation rules using 'get_doctype_info' on 'Loan Type' or similar."
             ),
-            tools=[self.adk_tools[n] for n in ["run_database_query", "list_documents", "get_doctype_info"] if n in self.adk_tools]
+            tools=[self.adk_tools[n] for n in ["run_database_query", "list_documents", "get_doctype_info", "get_document"] if n in self.adk_tools]
         )
 
     def create_orchestrator(self):
@@ -150,9 +137,9 @@ class NivAgentFactory:
         discovery = self.create_discovery_agent()
         nbfc = self.create_nbfc_agent()
 
-        # Orchestrator tools
-        universal_search = self.adk_tools.get("universal_search")
-        tools = [universal_search] if universal_search else []
+        # Orchestrator tools: allow basic discovery and reading
+        orc_tool_names = ["universal_search", "list_documents", "get_doctype_info"]
+        tools = [self.adk_tools[n] for n in orc_tool_names if n in self.adk_tools]
         
         # Transfers
         transfer_tool = TransferToAgentTool(agent_names=[coder.name, data.name, discovery.name, nbfc.name])
@@ -161,13 +148,13 @@ class NivAgentFactory:
             name="niv_orchestrator",
             model=self.adk_model,
             instruction=(
-                "You are Niv Orchestrator, the central brain of Niv AI. "
-                "Your job is to understand the user's intent and delegate to specialized agents. "
-                "If the user wants to build something, transfer to 'frappe_coder'. "
-                "If the user wants data analysis or reports, transfer to 'data_analyst'. "
-                "If the user is asking about system capabilities or 'Discovery', transfer to 'system_discovery'. "
-                "If the user asks about Loans, Borrowers, Interest, or NBFC logic, transfer to 'nbfc_specialist'. "
-                "Use 'universal_search' to find context before delegating."
+                "You are Niv Orchestrator. "
+                "CRITICAL: Never provide mock data. If the user asks for data, you MUST either use your tools or transfer to a specialist. "
+                "- For Coding/DocTypes: transfer to 'frappe_coder'. "
+                "- For complex SQL/Reports: transfer to 'data_analyst'. "
+                "- For NBFC/Loan specific queries: transfer to 'nbfc_specialist'. "
+                "- For System logic/Workflows: transfer to 'system_discovery'. "
+                "Always use 'universal_search' if the request is vague."
             ),
             tools=tools + [transfer_tool],
             sub_agents=[coder, data, discovery, nbfc]
