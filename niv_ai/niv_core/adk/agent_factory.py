@@ -106,6 +106,19 @@ class NivAgentFactory:
             tools=tools
         )
 
+    def create_discovery_agent(self):
+        """Specialized for System Scan and Onboarding."""
+        return LlmAgent(
+            name="system_discovery",
+            model=self.adk_model,
+            instruction=(
+                "You are the System Discovery Specialist. "
+                "Your job is to scan the Frappe instance and build a mental map of custom DocTypes, "
+                "Workflows, and Data patterns. Always provide a clear summary of what you find."
+            ),
+            tools=[self.adk_tools[n] for n in ["introspect_system", "get_doctype_info"] if n in self.adk_tools]
+        )
+
     def create_nbfc_agent(self):
         """Specialized for NBFC operations (LOS, LMS, Growth System)."""
         nbfc_ctx = {}
