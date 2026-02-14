@@ -3120,8 +3120,17 @@ ${htmlCode}
 
         this.wrapper.find(".niv-dev-mode-section").show();
         this.$devModeToggle = this.wrapper.find(".btn-dev-mode-toggle");
+        this.$a2aToggle = this.wrapper.find(".btn-a2a-toggle");
+        
         this.dev_mode = localStorage.getItem("niv-dev-mode") === "true";
         this.$devModeToggle.prop("checked", this.dev_mode);
+
+        // Load A2A state from DB
+        frappe.db.get_value("Niv Settings", "Niv Settings", "enable_a2a").then((r) => {
+            if (r && r.message) {
+                this.$a2aToggle.prop("checked", !!r.message.enable_a2a);
+            }
+        });
 
         this.$devModeToggle.on("change", () => {
             this.dev_mode = this.$devModeToggle.is(":checked");
@@ -3132,6 +3141,13 @@ ${htmlCode}
             } else {
                 frappe.show_alert({message: "Developer Mode OFF — Normal assistant mode.", indicator: "green"}, 3);
             }
+        });
+
+        this.$a2aToggle.on("change", () => {
+            const val = this.$a2aToggle.is(":checked") ? 1 : 0;
+            frappe.db.set_value("Niv Settings", "Niv Settings", "enable_a2a", val).then(() => {
+                frappe.show_alert({ message: val ? "A2A Protocol Enabled" : "A2A Protocol Disabled", indicator: val ? "green" : "orange" });
+            });
         });
 
         this.update_dev_mode_indicator();
