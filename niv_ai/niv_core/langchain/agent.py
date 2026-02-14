@@ -263,42 +263,37 @@ def stream_agent(
     start_ts = frappe.utils.now_datetime()
     
     # State for ReAct thought extraction
-    current_thought = ""
-    in_thought = False
-    message_buffer = ""
-    active_end_tag = ""
+    # Using mutable dict for state to be shared with generator helper
+    state = {
+        "in_thought": False,
+        "current_thought": "",
+        "message_buffer": "",
+        "active_end_tag": ""
+    }
     
-    def process_buffer(buffer, is_flushing=False):
-        nonlocal in_thought, current_thought, active_end_tag
+    def process_and_yield(buffer, is_flushing=False):
         remaining = buffer
-        
         while remaining:
             upper = remaining.upper()
-            if not in_thought:
+            if not state["in_thought"]:
                 # Find any starting tag
                 idx1 = upper.find("[[THOUGHT]]")
                 idx2 = upper.find("<THOUGHT>")
                 
-                # Pick the earliest tag
-                tag = None
-                idx = -1
+                tag, idx = None, -1
                 if idx1 != -1 and (idx2 == -1 or idx1 < idx2):
                     tag, idx = "[[THOUGHT]]", idx1
                 elif idx2 != -1:
                     tag, idx = "<THOUGHT>", idx2
                 
                 if idx != -1:
-                    # Yield text before tag
                     if idx > 0:
                         yield {"type": "token", "content": remaining[:idx]}
-                    
-                    # Enter thought state
-                    in_thought = True
-                    active_end_tag = "[[/THOUGHT]]" if tag == "[[THOUGHT]]" else "</THOUGHT>"
+                    state["in_thought"] = True
+                    state["active_end_tag"] = "[[/THOUGHT]]" if tag == "[[THOUGHT]]" else "</THOUGHT>"
                     remaining = remaining[idx + len(tag):]
                     continue
                 
-                # Check for partial start tag at end of buffer
                 if not is_flushing:
                     last_lt = max(remaining.rfind("["), remaining.rfind("<"))
                     if last_lt != -1:
@@ -306,39 +301,37 @@ def stream_agent(
                         if "[[THOUGHT]]".startswith(tail) or "<THOUGHT>".startswith(tail):
                             if last_lt > 0:
                                 yield {"type": "token", "content": remaining[:last_lt]}
-                            return remaining[last_lt:]
+                            state["message_buffer"] = remaining[last_lt:]
+                            return
                 
-                # No tags, yield all
                 yield {"type": "token", "content": remaining}
-                return ""
+                state["message_buffer"] = ""
+                return
             else:
-                # In thought, look for matching end tag
-                idx = upper.find(active_end_tag)
+                idx = upper.find(state["active_end_tag"])
                 if idx != -1:
-                    # Append and yield full thought
-                    current_thought += remaining[:idx]
-                    yield {"type": "thought", "content": current_thought}
-                    current_thought = ""
-                    in_thought = False
-                    remaining = remaining[idx + len(active_end_tag):]
+                    state["current_thought"] += remaining[:idx]
+                    yield {"type": "thought", "content": state["current_thought"]}
+                    state["current_thought"] = ""
+                    state["in_thought"] = False
+                    remaining = remaining[idx + len(state["active_end_tag"]):]
                     continue
                 
-                # Check for partial end tag at end of buffer
                 if not is_flushing:
                     last_lt = max(remaining.rfind("["), remaining.rfind("<"))
                     if last_lt != -1:
                         tail = remaining[last_lt:].upper()
-                        if active_end_tag.startswith(tail):
+                        if state["active_end_tag"].startswith(tail):
                             if last_lt > 0:
-                                current_thought += remaining[:last_lt]
+                                state["current_thought"] += remaining[:last_lt]
                                 yield {"type": "thought", "content": remaining[:last_lt]}
-                            return remaining[last_lt:]
+                            state["message_buffer"] = remaining[last_lt:]
+                            return
                 
-                # Still in thought, yield as thought
-                current_thought += remaining
+                state["current_thought"] += remaining
                 yield {"type": "thought", "content": remaining}
-                return ""
-        return ""
+                state["message_buffer"] = ""
+                return
 
     try:
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
@@ -361,19 +354,14 @@ def stream_agent(
                 tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
                 
                 if msg.content:
-                    message_buffer += msg.content
-                    for chunk in process_buffer(message_buffer):
-                        if isinstance(chunk, str):
-                            message_buffer = chunk
-                        else:
-                            yield chunk
+                    state["message_buffer"] += msg.content
+                    yield from process_and_yield(state["message_buffer"])
                 
                 if tool_calls or tool_call_chunks:
                     # Flush buffer before tools
-                    if message_buffer:
-                        for chunk in process_buffer(message_buffer, is_flushing=True):
-                            yield chunk
-                        message_buffer = ""
+                    if state["message_buffer"]:
+                        yield from process_and_yield(state["message_buffer"], is_flushing=True)
+                        state["message_buffer"] = ""
                         
                     if tool_calls:
                         for tc in tool_calls:
