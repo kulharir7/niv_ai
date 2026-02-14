@@ -39,6 +39,10 @@ frappe.pages["niv-chat"].on_page_load = function (wrapper) {
         loadCSS("https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github.min.css");
         loadCSS("https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/github-dark.min.css");
     }
+    if (!window.Chart) {
+        // Load frappe-charts for artifact support
+        deps.push(loadScript("https://cdn.jsdelivr.net/npm/frappe-charts@1.6.2/dist/frappe-charts.min.iife.js"));
+    }
 
     Promise.all(deps).then(() => {
         if (window.marked) {
@@ -75,11 +79,10 @@ class NivChat {
             "form banao", "form bana", "form create", "dashboard banao",
             "dashboard bana", "page banao", "page bana", "widget banao",
             "tool banao", "tool bana", "ui banao", "ui bana",
+            "chart dikhao", "graph banao", "analysis dikhao", "report chart",
             "build an app", "create an app", "make an app", "build a calculator",
             "create a form", "create a dashboard", "build a tool",
-            "counter app", "simple app", "html app", "web app",
-            "create a simple", "build a simple", "make a simple",
-            "with buttons", "interactive", "clickable"
+            "show chart", "create graph", "visualize data"
         ];
         this.slash_commands = [
             { cmd: "/clear", desc: "Clear chat history", icon: "🗑️" },
@@ -171,6 +174,7 @@ class NivChat {
         this.$artifactSelect = this.wrapper.find(".niv-artifact-select");
         this.$artifactIframe = this.wrapper.find(".niv-artifact-iframe");
         this.$artifactCode = this.wrapper.find(".niv-artifact-code code");
+        this.$sidebarBackdrop = this.wrapper.find(".niv-sidebar-backdrop");
 
         this.pending_files = [];
 
@@ -282,35 +286,43 @@ class NivChat {
 
         // Toggle sidebar
         this.wrapper.find(".btn-toggle-sidebar").on("click", () => {
-            if (this.isWidgetMode) {
-                // Widget mode: sidebar is absolute overlay, use collapsed class
-                const isCollapsed = this.$sidebar.hasClass("collapsed");
-                if (isCollapsed) {
-                    this.$sidebar.removeClass("collapsed");
-                } else {
-                    this.$sidebar.addClass("collapsed");
-                }
-            } else {
-                // Desktop: use open class for mobile overlay
-                const isOpen = this.$sidebar.hasClass("open");
-                if (isOpen) {
-                    this.$sidebar.removeClass("open");
-                } else if (this.$sidebar.hasClass("collapsed") || this.$sidebar.css("transform") !== "none") {
-                    this.$sidebar.removeClass("collapsed").addClass("open");
-                } else {
-                    this.$sidebar.addClass("collapsed");
-                }
-            }
+            this.toggle_sidebar();
         });
 
         // Close sidebar button (inside sidebar)
         this.wrapper.find(".btn-close-sidebar").on("click", () => {
-            if (this.isWidgetMode) {
-                this.$sidebar.addClass("collapsed");
-            } else {
-                this.$sidebar.removeClass("open").addClass("collapsed");
-            }
+            this.toggle_sidebar(false);
         });
+
+        // Backdrop click to close
+        this.$sidebarBackdrop.on("click", () => {
+            this.toggle_sidebar(false);
+        });
+    }
+
+    toggle_sidebar(forceState) {
+        const isMobile = window.innerWidth <= 768;
+        const currentOpen = isMobile ? this.$sidebar.hasClass("open") : !this.$sidebar.hasClass("collapsed");
+        const nextState = typeof forceState === "boolean" ? forceState : !currentOpen;
+
+        if (isMobile || this.isWidgetMode) {
+            // Mobile/Widget mode: use .open and backdrop
+            if (nextState) {
+                this.$sidebar.addClass("open").removeClass("collapsed");
+                this.$sidebarBackdrop.addClass("visible");
+            } else {
+                this.$sidebar.removeClass("open");
+                this.$sidebarBackdrop.removeClass("visible");
+            }
+        } else {
+            // Desktop mode: use .collapsed
+            if (nextState) {
+                this.$sidebar.removeClass("collapsed").removeClass("open");
+            } else {
+                this.$sidebar.addClass("collapsed").removeClass("open");
+            }
+            this.$sidebarBackdrop.removeClass("visible");
+        }
     }
 
     setup_user_profile() {
@@ -601,6 +613,12 @@ class NivChat {
         const titleMatch = htmlContent.match(/<title>([^<]+)<\/title>/i);
         if (titleMatch && titleMatch[1]) {
             title = titleMatch[1].trim();
+        } else {
+            // Try to find first H1 or H2
+            const hMatch = htmlContent.match(/<h[12][^>]*>([^<]+)<\/h[12]>/i);
+            if (hMatch && hMatch[1]) {
+                title = hMatch[1].trim();
+            }
         }
         
         try {
@@ -618,11 +636,19 @@ class NivChat {
                 this.active_artifact_id = created.name;
                 this.current_artifact_content = htmlContent;
                 await this.load_artifacts_list();
+                
+                // Switch to Preview tab
+                this.switch_artifact_tab("preview");
+                
                 // Show preview immediately
                 this.show_live_preview(htmlContent);
                 if (this.$artifactCode) {
                     this.$artifactCode.text(htmlContent);
                 }
+                
+                // Small bounce animation to show it's updated
+                this.$artifactPanel.addClass("artifact-bounce");
+                setTimeout(() => this.$artifactPanel.removeClass("artifact-bounce"), 500);
             }
         } catch (e) {
             console.error("Failed to auto-create artifact", e);
@@ -677,12 +703,20 @@ class NivChat {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <style>* { box-sizing: border-box; } body { margin: 0; padding: 20px; font-family: system-ui, sans-serif; }</style>
+    <script src="https://cdn.jsdelivr.net/npm/frappe-charts@1.6.2/dist/frappe-charts.min.iife.js"></script>
+    <style>
+        * { box-sizing: border-box; } 
+        body { margin: 0; padding: 20px; font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #1a1a1a; }
+        .chart-container { margin-bottom: 20px; }
+    </style>
 </head>
 <body>
 ${htmlCode}
 </body>
 </html>`;
+        } else if (!htmlCode.includes("frappe-charts")) {
+            // Inject frappe-charts if missing but it's a full HTML
+            finalHtml = htmlCode.replace("</head>", '<script src="https://cdn.jsdelivr.net/npm/frappe-charts@1.6.2/dist/frappe-charts.min.iife.js"></script></head>');
         }
         
         // Use blob URL for reliable script execution

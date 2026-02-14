@@ -252,6 +252,36 @@ def stream_chat(**kwargs):
             from niv_ai.niv_core.langchain.agent import stream_agent
             from niv_ai.niv_core.langchain.tools import set_dev_mode as _set_dev_mode, set_active_dev_conversation
 
+            # ─── A2A (google-adk) Branch ───
+            use_a2a = getattr(settings, "enable_a2a", 0)
+            if use_a2a:
+                from niv_ai.niv_core.adk.stream_handler import stream_agent_adk
+                for event in stream_agent_adk(
+                    message=message,
+                    conversation_id=conversation_id,
+                    provider_name=provider,
+                    model_name=model,
+                    user=user,
+                    dev_mode=dev_mode
+                ):
+                    event_type = event.get("type", "")
+                    if event_type == "token":
+                        content = event.get("content", "")
+                        if content:
+                            saw_token = True
+                            full_response += content
+                        yield _sse(event)
+                    elif event_type in ("tool_call", "tool_result", "thought", "error"):
+                        if event_type == "tool_call":
+                            saw_tool_activity = True
+                            tool_calls_data.append({"tool": event.get("tool", ""), "arguments": event.get("arguments", {})})
+                        elif event_type == "tool_result":
+                            tool_results_data.append({"tool": event.get("tool", ""), "result": str(event.get("result", ""))[:500]})
+                        yield _sse(event)
+                # Skip the old loop
+                return
+
+            # ─── Legacy LangGraph Branch ───
             # Set dev mode on tools layer (Redis flag + global conv_id for cross-thread)
             if dev_mode:
                 _set_dev_mode(True, conversation_id)

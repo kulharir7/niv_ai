@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Niv AI Chart Prototype</title>
+    <script src="https://cdn.jsdelivr.net/npm/frappe-charts@1.6.2/dist/frappe-charts.min.iife.js"></script>
+    <style>
+        body { font-family: -apple-system, sans-serif; padding: 20px; background: #fff; }
+        .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .title { font-size: 18px; font-weight: 600; color: #1e293b; margin-bottom: 20px; }
+        #chart { height: 300px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="title">Loan Applications Trend (Last 6 Months)</div>
+        <div id="chart"></div>
+    </div>
+
+    <script>
+        const data = {
+            labels: ["Sep", "Oct", "Nov", "Dec", "Jan", "Feb"],
+            datasets: [
+                {
+                    name: "Applications",
+                    type: "line",
+                    values: [45, 52, 38, 65, 82, 95]
+                },
+                {
+                    name: "Disbursements",
+                    type: "bar",
+                    values: [30, 40, 25, 50, 70, 85]
+                }
+            ]
+        };
+
+        const chart = new frappe.Chart("#chart", {
+            title: "Performance Overview",
+            data: data,
+            type: 'axis-mixed',
+            height: 300,
+            colors: ['#7c3aed', '#10b981']
+        });
+    </script>
+</body>
+</html>

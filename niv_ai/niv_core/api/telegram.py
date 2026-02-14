@@ -80,8 +80,9 @@ def webhook(**kwargs):
         # Run agent with streaming for progressive updates
         frappe.set_user(frappe_user)
         
-        from niv_ai.niv_core.langchain.agent import stream_agent
-        from niv_ai.niv_core.api._helpers import save_user_message, save_assistant_message
+        from niv_ai.niv_core.utils import get_niv_settings
+        settings = get_niv_settings()
+        use_a2a = getattr(settings, "enable_a2a", 0)
 
         # Prepend Telegram formatting hint to user message
         telegram_hint = "[TELEGRAM BOT — Format rules: Use markdown tables with | pipes. Use bullet lists instead of wide tables. Keep responses concise. Use bold (*text*) for emphasis. Hindi/Hinglish reply preferred.]\n\n"
@@ -91,41 +92,49 @@ def webhook(**kwargs):
         tool_calls_shown = set()
         last_status_update = time.time()
 
-        try:
-            for event in stream_agent(
-                message=agent_message,
-                conversation_id=conversation_id,
-                user=frappe_user,
-            ):
-                event_type = event.get("type")
+        def _handle_event(event):
+            nonlocal full_response, status_msg_id
+            event_type = event.get("type")
 
-                if event_type == "tool_call":
-                    tool_name = event.get("tool", "unknown")
-                    if tool_name not in tool_calls_shown:
-                        tool_calls_shown.add(tool_name)
-                        label = TOOL_LABELS.get(tool_name, "🔧 {} chala raha hoon...".format(tool_name))
-                        # Update status message
-                        if status_msg_id:
-                            tools_text = "\n".join([
-                                TOOL_LABELS.get(t, "🔧 {}".format(t)) 
-                                for t in tool_calls_shown
-                            ])
-                            _edit_telegram(chat_id, status_msg_id, "⏳ Working...\n\n{}".format(tools_text))
-                        else:
-                            _send_telegram(chat_id, label)
-                        # Keep typing indicator alive
-                        _send_chat_action(chat_id, "typing")
-
-                elif event_type == "tool_result":
-                    # Tool finished — update status
+            if event_type == "tool_call":
+                tool_name = event.get("tool", "unknown")
+                if tool_name not in tool_calls_shown:
+                    tool_calls_shown.add(tool_name)
+                    label = TOOL_LABELS.get(tool_name, "🔧 {} chala raha hoon...".format(tool_name))
+                    # Update status message
+                    if status_msg_id:
+                        tools_text = "\n".join([
+                            TOOL_LABELS.get(t, "🔧 {}".format(t)) 
+                            for t in tool_calls_shown
+                        ])
+                        _edit_telegram(chat_id, status_msg_id, "⏳ Working...\n\n{}".format(tools_text))
+                    # Keep typing indicator alive
                     _send_chat_action(chat_id, "typing")
 
-                elif event_type == "token":
-                    content = event.get("content", "")
-                    full_response += content
+            elif event_type == "token":
+                content = event.get("content", "")
+                full_response += content
 
-                elif event_type == "error":
-                    full_response = "⚠️ Error: {}".format(event.get("content", "Unknown error"))
+            elif event_type == "error":
+                full_response = "⚠️ Error: {}".format(event.get("content", "Unknown error"))
+
+        try:
+            if use_a2a:
+                from niv_ai.niv_core.adk.stream_handler import stream_agent_adk
+                for event in stream_agent_adk(
+                    message=agent_message,
+                    conversation_id=conversation_id,
+                    user=frappe_user,
+                ):
+                    _handle_event(event)
+            else:
+                from niv_ai.niv_core.langchain.agent import stream_agent
+                for event in stream_agent(
+                    message=agent_message,
+                    conversation_id=conversation_id,
+                    user=frappe_user,
+                ):
+                    _handle_event(event)
 
         except Exception as e:
             frappe.log_error("Telegram Stream Error", frappe.get_traceback())
