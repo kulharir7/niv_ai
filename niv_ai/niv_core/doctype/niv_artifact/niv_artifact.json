@@ -1,0 +1,124 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-02-14 10:10:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "artifact_title",
+  "artifact_type",
+  "status",
+  "owner_user",
+  "section_break_content",
+  "source_prompt",
+  "artifact_content",
+  "preview_html",
+  "section_break_meta",
+  "version_count",
+  "last_generated_on",
+  "is_published"
+ ],
+ "fields": [
+  {
+   "fieldname": "artifact_title",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Artifact Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "artifact_type",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Artifact Type",
+   "options": "App\nDashboard\nForm\nDocument\nReport",
+   "reqd": 1
+  },
+  {
+   "default": "Draft",
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Status",
+   "options": "Draft\nReady\nPublished\nArchived"
+  },
+  {
+   "default": "Administrator",
+   "fieldname": "owner_user",
+   "fieldtype": "Link",
+   "label": "Owner User",
+   "options": "User"
+  },
+  {
+   "fieldname": "section_break_content",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "source_prompt",
+   "fieldtype": "Long Text",
+   "label": "Source Prompt"
+  },
+  {
+   "fieldname": "artifact_content",
+   "fieldtype": "Long Text",
+   "label": "Artifact Content (JSON)"
+  },
+  {
+   "fieldname": "preview_html",
+   "fieldtype": "Code",
+   "label": "Preview HTML",
+   "options": "HTML"
+  },
+  {
+   "fieldname": "section_break_meta",
+   "fieldtype": "Section Break"
+  },
+  {
+   "default": "1",
+   "fieldname": "version_count",
+   "fieldtype": "Int",
+   "label": "Version Count",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_generated_on",
+   "fieldtype": "Datetime",
+   "label": "Last Generated On",
+   "read_only": 1
+  },
+  {
+   "default": "0",
+   "fieldname": "is_published",
+   "fieldtype": "Check",
+   "label": "Is Published"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-02-14 10:10:00.000000",
+ "modified_by": "Administrator",
+ "module": "Niv Core",
+ "name": "Niv Artifact",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "All"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "track_changes": 1
+}
