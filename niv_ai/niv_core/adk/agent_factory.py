@@ -69,7 +69,7 @@ class NivAgentFactory:
         """Specialized for DocTypes, Scripts, and UI."""
         coder_tool_names = [
             "create_document", "update_document", "delete_document", 
-            "get_doctype_info", "search_doctype", "run_python_code"
+            "get_document", "get_doctype_info", "search_doctype", "run_python_code"
         ]
         tools = [self.adk_tools[name] for name in coder_tool_names if name in self.adk_tools]
         

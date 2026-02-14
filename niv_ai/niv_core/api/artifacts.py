@@ -117,7 +117,7 @@ def get_artifact(artifact_id, with_versions=1):
 
 
 @frappe.whitelist(allow_guest=False)
-def update_artifact_content(artifact_id, artifact_content, preview_html=None, change_summary=None):
+def update_artifact_content(artifact_id, artifact_content=None, preview_html=None, change_summary=None):
     """Update artifact content and auto-create a new version row."""
     doc = frappe.get_doc("Niv Artifact", artifact_id)
     _ensure_access(doc)
@@ -125,7 +125,8 @@ def update_artifact_content(artifact_id, artifact_content, preview_html=None, ch
     next_version = _as_int(doc.version_count, 1) + 1
     user = frappe.session.user
 
-    doc.artifact_content = artifact_content or "{}"
+    content = artifact_content or doc.artifact_content or "{}"
+    doc.artifact_content = content
     if preview_html is not None:
         doc.preview_html = preview_html
     doc.version_count = next_version
