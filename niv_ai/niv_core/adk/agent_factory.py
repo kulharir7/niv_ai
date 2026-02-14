@@ -116,8 +116,9 @@ class NivAgentFactory:
             model=self.adk_model,
             instruction=(
                 "You are a Business Intelligence specialist. "
-                "CRITICAL: Never provide mock or example data. You MUST use 'run_database_query' or 'list_documents' to fetch real data from the system. "
-                "If a table name is unknown, use 'run_database_query' with 'SHOW TABLES' or 'DESC'. "
+                "CRITICAL: Never provide mock or example data. You MUST fetch real data. "
+                "For financial queries, always calculate the true 'Due' amount by subtracting 'paid_amount' from 'total_payment'. "
+                "If a table name is unknown, use 'run_database_query' with 'SHOW TABLES'. "
                 "Always provide real numbers from the database."
             ),
             tools=tools
@@ -146,7 +147,7 @@ class NivAgentFactory:
         except Exception:
             pass
 
-        nbfc_dt = ", ".join(nbfc_ctx.get("relevant_doctypes", ["Loan", "Borrower", "EMI"]))
+        nbfc_dt = ", ".join(nbfc_ctx.get("relevant_doctypes", ["Loan", "Borrower", "Repayment Schedule"]))
         
         return LlmAgent(
             name="nbfc_specialist",
@@ -154,7 +155,10 @@ class NivAgentFactory:
             instruction=(
                 "You are an expert in NBFC operations for Growth System. "
                 f"Relevant DocTypes: {nbfc_dt}. "
-                "CRITICAL: Do not invent loan numbers or amounts. Use 'list_documents' or 'run_database_query' to find real borrower records. "
+                "CRITICAL: Always provide REAL data. Never invent loan numbers or amounts. "
+                "For 'Due Loans': Check the 'Repayment Schedule' DocType. "
+                "A loan entry is 'Due' if 'total_payment' > 0 and 'status' is NOT 'Cleared'. "
+                "If 'due_amount' is 0.0 but status is 'Presented' or 'Bounced', it means the payment is pending or failed. "
                 "Always check interest calculation rules using 'get_doctype_info' on 'Loan Type' or similar."
             ),
             tools=[self.adk_tools[n] for n in ["run_database_query", "list_documents", "get_doctype_info", "get_document"] if n in self.adk_tools]
