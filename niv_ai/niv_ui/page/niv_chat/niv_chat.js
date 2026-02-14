@@ -526,6 +526,7 @@ class NivChat {
     open_settings_panel() {
         this.$settingsOverlay.show().addClass("visible");
         this.$settingsPanel.show().addClass("open");
+        $("body").addClass("niv-settings-open");
         this.show_settings_tab("general");
         this.load_mcp_servers();
     }
@@ -533,10 +534,11 @@ class NivChat {
     close_settings_panel() {
         this.$settingsPanel.removeClass("open");
         this.$settingsOverlay.removeClass("visible");
+        $("body").removeClass("niv-settings-open");
         setTimeout(() => {
             this.$settingsPanel.hide();
             this.$settingsOverlay.hide();
-        }, 300);
+        }, 220);
     }
 
     async load_mcp_servers() {

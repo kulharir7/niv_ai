@@ -2661,30 +2661,28 @@ body.niv-dark-mode .niv-header-actions .btn:hover { color: var(--niv-text); }
 .niv-settings-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    background: rgba(8, 11, 20, 0.82);
     z-index: 998;
     opacity: 0;
-    transition: opacity 0.25s ease;
+    transition: opacity 0.2s ease;
 }
 .niv-settings-overlay.visible { opacity: 1; }
 
 .niv-settings-panel {
     position: fixed;
-    inset: 18px;
+    inset: 0;
     background: #ffffff;
-    border-radius: 18px;
-    box-shadow: 0 32px 100px rgba(0, 0, 0, 0.22);
+    border-radius: 0;
+    box-shadow: none;
     z-index: 999;
     opacity: 0;
-    transform: scale(0.98);
-    transition: transform 0.25s ease, opacity 0.25s ease;
+    transform: translateY(8px);
+    transition: transform 0.2s ease, opacity 0.2s ease;
     overflow: hidden;
 }
 .niv-settings-panel.open {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(0);
 }
 
 .niv-settings-layout {
@@ -2938,6 +2936,10 @@ body.niv-dark-mode .niv-settings-link-btn { background: #16213e; border-color: #
 body.niv-dark-mode .niv-settings-link-btn:hover { background: #1e293b; color: #e2e8f0; }
 body.niv-dark-mode .niv-settings-panel .niv-sidebar-model-btn { background: #16213e; border-color: #2d3748; color: #e2e8f0; }
 body.niv-dark-mode .niv-settings-panel .niv-sidebar-model-btn:hover { border-color: #7c3aed; box-shadow: 0 0 0 2px rgba(124,58,237,0.15); }
+
+body.niv-settings-open .niv-sidebar {
+    visibility: hidden;
+}
 
 @media (max-width: 900px) {
     .niv-settings-panel { inset: 0; border-radius: 0; }
