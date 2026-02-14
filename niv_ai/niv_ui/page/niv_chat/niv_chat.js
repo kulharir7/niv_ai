@@ -524,8 +524,9 @@ class NivChat {
     }
 
     open_settings_panel() {
-        this.$settingsOverlay.show().addClass("visible");
-        this.$settingsPanel.show().addClass("open");
+        const sidebarWidth = this.wrapper.find(".niv-sidebar:visible").outerWidth() || 260;
+        this.$settingsOverlay.css({ left: sidebarWidth + "px" }).show().addClass("visible");
+        this.$settingsPanel.css({ left: sidebarWidth + "px" }).show().addClass("open");
         $("body").addClass("niv-settings-open");
         this.show_settings_tab("general");
         this.load_mcp_servers();
@@ -536,8 +537,8 @@ class NivChat {
         this.$settingsOverlay.removeClass("visible");
         $("body").removeClass("niv-settings-open");
         setTimeout(() => {
-            this.$settingsPanel.hide();
-            this.$settingsOverlay.hide();
+            this.$settingsPanel.hide().css({ left: "" });
+            this.$settingsOverlay.hide().css({ left: "" });
         }, 220);
     }
 
