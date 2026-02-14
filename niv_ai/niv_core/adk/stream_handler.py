@@ -22,7 +22,20 @@ def stream_agent_adk(
     
     orchestrator = get_orchestrator(conversation_id, provider_name, model_name)
     app = App(name="NivAI", root_agent=orchestrator)
-    runner = InMemoryRunner(app=app, auto_create_session=True)
+    
+    # Use base Runner to enable auto_create_session (InMemoryRunner doesn't expose it in __init__)
+    from google.adk.runners import Runner
+    from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
+    from google.adk.sessions.in_memory_session_service import InMemorySessionService
+    from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
+    
+    runner = Runner(
+        app=app,
+        artifact_service=InMemoryArtifactService(),
+        session_service=InMemorySessionService(),
+        memory_service=InMemoryMemoryService(),
+        auto_create_session=True
+    )
     
     # ADK sessions are separate from Niv Conversations but linked by ID
     session_id = conversation_id
