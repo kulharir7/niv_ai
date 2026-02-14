@@ -266,6 +266,7 @@ def stream_agent(
     current_thought = ""
     in_thought = False
     message_buffer = ""
+    active_end_tag = ""
     
     try:
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
@@ -308,38 +309,46 @@ def stream_agent(
                     
                     # Process buffer for thoughts
                     while True:
+                        upper_buffer = message_buffer.upper()
                         if not in_thought:
-                            # Support multiple tag styles for robustness
+                            # Support multiple tag styles for robustness (Case-insensitive check)
                             tag = None
-                            if "[[THOUGHT]]" in message_buffer: tag = "[[THOUGHT]]"
-                            elif "<thought>" in message_buffer: tag = "<thought>"
+                            if "[[THOUGHT]]" in upper_buffer: tag = "[[THOUGHT]]"
+                            elif "<THOUGHT>" in upper_buffer: tag = "<THOUGHT>"
                             
                             if tag:
-                                parts = message_buffer.split(tag, 1)
+                                # Find actual case-sensitive tag position
+                                tag_idx = upper_buffer.find(tag)
+                                actual_tag = message_buffer[tag_idx:tag_idx+len(tag)]
+                                
+                                parts = message_buffer.split(actual_tag, 1)
                                 if parts[0]:
                                     yield {"type": "token", "content": parts[0]}
                                 message_buffer = parts[1]
                                 in_thought = True
-                                active_end_tag = "[[/THOUGHT]]" if tag == "[[THOUGHT]]" else "</thought>"
+                                active_end_tag = "[[/THOUGHT]]" if tag == "[[THOUGHT]]" else "</THOUGHT>"
                                 continue
                             
                             # Check for partial tags
                             if "[" in message_buffer or "<" in message_buffer:
                                 last_idx = max(message_buffer.rfind("["), message_buffer.rfind("<"))
-                                tag_start = message_buffer[last_idx:]
-                                if "[[THOUGHT]]".startswith(tag_start) or "<thought>".startswith(tag_start):
+                                tag_start = message_buffer[last_idx:].upper()
+                                if "[[THOUGHT]]".startswith(tag_start) or "<THOUGHT>".startswith(tag_start):
                                     if last_idx > 0:
                                         yield {"type": "token", "content": message_buffer[:last_idx]}
-                                        message_buffer = tag_start
+                                        message_buffer = message_buffer[last_idx:]
                                     break
                             
                             yield {"type": "token", "content": message_buffer}
                             message_buffer = ""
                             break
                         else:
-                            # Use the matching end tag
-                            if active_end_tag in message_buffer:
-                                parts = message_buffer.split(active_end_tag, 1)
+                            # Use the matching end tag (Case-insensitive)
+                            if active_end_tag in upper_buffer:
+                                tag_idx = upper_buffer.find(active_end_tag)
+                                actual_end_tag = message_buffer[tag_idx:tag_idx+len(active_end_tag)]
+                                
+                                parts = message_buffer.split(actual_end_tag, 1)
                                 current_thought += parts[0]
                                 yield {"type": "thought", "content": current_thought}
                                 current_thought = ""
@@ -349,13 +358,13 @@ def stream_agent(
                             
                             if "[[" in message_buffer or "</" in message_buffer:
                                 last_idx = max(message_buffer.rfind("[["), message_buffer.rfind("</"))
-                                ctag_start = message_buffer[last_idx:]
-                                if "[[/THOUGHT]]".startswith(ctag_start) or "</thought>".startswith(ctag_start):
+                                ctag_start = message_buffer[last_idx:].upper()
+                                if "[[/THOUGHT]]".startswith(ctag_start) or "</THOUGHT>".startswith(ctag_start):
                                     if last_idx > 0:
                                         chunk = message_buffer[:last_idx]
                                         current_thought += chunk
                                         yield {"type": "thought", "content": chunk}
-                                        message_buffer = ctag_start
+                                        message_buffer = message_buffer[last_idx:]
                                     break
                             
                             current_thought += message_buffer
