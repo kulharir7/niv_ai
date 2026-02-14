@@ -18,6 +18,7 @@ class NivAgentFactory:
         self.conversation_id = conversation_id
         self.provider_name = provider_name
         self.model_name = model_name
+        self.site = frappe.local.site
         
         # Initialize ADK Model (LiteLLM adapter for multi-provider support)
         provider = frappe.get_doc("Niv AI Provider", provider_name)
@@ -51,8 +52,13 @@ class NivAgentFactory:
 
             description = func_def.get("description", "")
             
-            def make_executor(t_name, t_doc):
+            def make_executor(t_name, t_doc, site):
                 def tool_func(**kwargs):
+                    # Re-init Frappe context in background thread
+                    if not getattr(frappe.local, "site", None):
+                        frappe.init(site=site)
+                        frappe.connect()
+                    
                     server_name = find_tool_server(t_name)
                     if not server_name:
                         return f"Error: Tool {t_name} not found."
@@ -72,7 +78,7 @@ class NivAgentFactory:
                 tool_func.__doc__ = str(t_doc)
                 return tool_func
 
-            tool = FunctionTool(func=make_executor(name, description))
+            tool = FunctionTool(func=make_executor(name, description, self.site))
             adk_tools[name] = tool
         return adk_tools
 
