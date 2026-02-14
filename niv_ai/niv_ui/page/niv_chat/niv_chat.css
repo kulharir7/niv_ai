@@ -2104,40 +2104,45 @@ pre:hover .code-copy-btn { opacity: 1; }
    MARKDOWN CONTENT
    ══════════════════════════════════════════════════════════ */
 .msg-content table {
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     width: 100%;
-    margin: 14px 0;
-    font-size: 13px;
-    overflow-x: auto;
-    display: block;
-    border-radius: 8px;
+    margin: 16px 0;
+    font-size: 13.5px;
+    overflow: hidden;
+    border-radius: 12px;
     border: 1px solid var(--niv-border);
+    background: rgba(0, 0, 0, 0.02);
 }
 .msg-content thead th {
-    background: var(--niv-hover);
+    background: #f1f5f9;
     font-weight: 600;
     text-align: left;
-    padding: 10px 14px;
-    border-bottom: 2px solid var(--niv-border);
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--niv-border);
     border-right: 1px solid var(--niv-border);
     white-space: nowrap;
-    font-size: 12px;
+    font-size: 11px;
     text-transform: uppercase;
-    letter-spacing: 0.3px;
-    color: var(--niv-text-muted);
+    letter-spacing: 0.05em;
+    color: #475569;
 }
 .msg-content thead th:last-child { border-right: none; }
 .msg-content tbody td {
-    padding: 9px 14px;
+    padding: 12px 14px;
     border-bottom: 1px solid var(--niv-border);
     border-right: 1px solid var(--niv-border);
+    color: var(--niv-text);
 }
 .msg-content tbody td:last-child { border-right: none; }
 .msg-content tbody tr:last-child td { border-bottom: none; }
-.msg-content tbody tr:nth-child(even) { background: rgba(0, 0, 0, 0.015); }
-.msg-content tbody tr:hover { background: rgba(124, 58, 237, 0.03); }
-[data-theme="dark"] .msg-content tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.03); }
-[data-theme="dark"] .msg-content tbody tr:hover { background: rgba(124, 58, 237, 0.06); }
+.msg-content tbody tr:nth-child(even) { background: rgba(0, 0, 0, 0.01); }
+.msg-content tbody tr:hover { background: rgba(124, 58, 237, 0.04); }
+
+[data-theme="dark"] .msg-content table { background: rgba(255, 255, 255, 0.01); }
+[data-theme="dark"] .msg-content thead th { background: #1e1e2e; color: #94a3b8; }
+[data-theme="dark"] .msg-content tbody tr:nth-child(even) { background: rgba(255, 255, 255, 0.02); }
+[data-theme="dark"] .msg-content tbody tr:hover { background: rgba(255, 255, 255, 0.03); }
 
 .msg-content h1, .msg-content h2, .msg-content h3, .msg-content h4 {
     margin: 20px 0 8px;
