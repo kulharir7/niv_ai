@@ -511,9 +511,31 @@ class NivChat {
     }
 
     is_artifact_prompt(text) {
+        // Now we detect artifacts from AI response, not user prompt
+        // This is called on user prompt for early panel open hint only
         if (!text) return false;
         const lower = text.toLowerCase();
-        return this.artifact_keywords.some(kw => lower.includes(kw));
+        // Broad detection - any request that might result in code
+        const codeKeywords = [
+            "app", "calculator", "counter", "form", "dashboard", "page", "widget", "tool",
+            "banao", "bana", "create", "build", "make", "generate", "write", "code",
+            "html", "website", "interface", "ui"
+        ];
+        const actionKeywords = ["banao", "bana", "create", "build", "make", "generate", "write", "show", "give"];
+        
+        const hasCode = codeKeywords.some(kw => lower.includes(kw));
+        const hasAction = actionKeywords.some(kw => lower.includes(kw));
+        
+        return hasCode && hasAction;
+    }
+
+    is_html_response(content) {
+        // Detect if AI response contains renderable HTML
+        if (!content) return false;
+        return content.includes("<!DOCTYPE") || 
+               content.includes("<html") || 
+               (content.includes("<head") && content.includes("<body")) ||
+               (content.includes("<style>") && content.includes("<script>"));
     }
 
     extract_artifact_title(text) {
@@ -543,10 +565,6 @@ class NivChat {
         if (!this.artifacts_open) {
             this.toggle_artifacts_panel(true);
         }
-        
-        // Show loading state
-        this.$artifactDetailTitle.text("Generating artifact...");
-        this.$artifactPreview.text("AI is creating your app. Please wait...");
 
         const title = this.extract_artifact_title(prompt);
         
@@ -569,6 +587,45 @@ class NivChat {
         } catch (e) {
             console.error("Failed to create artifact", e);
             return null;
+        }
+    }
+
+    async auto_create_artifact_from_response(htmlContent) {
+        // Auto-open panel
+        if (!this.artifacts_open) {
+            this.toggle_artifacts_panel(true);
+        }
+
+        // Extract title from HTML <title> tag or generate one
+        let title = "Generated App";
+        const titleMatch = htmlContent.match(/<title>([^<]+)<\/title>/i);
+        if (titleMatch && titleMatch[1]) {
+            title = titleMatch[1].trim();
+        }
+        
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_core.api.artifacts.create_artifact",
+                args: {
+                    title: title,
+                    artifact_type: "App",
+                    source_prompt: "",
+                    artifact_content: htmlContent
+                }
+            });
+            const created = r.message || {};
+            if (created.name) {
+                this.active_artifact_id = created.name;
+                this.current_artifact_content = htmlContent;
+                await this.load_artifacts_list();
+                // Show preview immediately
+                this.show_live_preview(htmlContent);
+                if (this.$artifactCode) {
+                    this.$artifactCode.text(htmlContent);
+                }
+            }
+        } catch (e) {
+            console.error("Failed to auto-create artifact", e);
         }
     }
 
@@ -1730,14 +1787,18 @@ ${htmlCode}
                             if (data.remaining_balance !== undefined) {
                                 this.update_balance_from_response(data.remaining_balance);
                             }
-                            // Auto-update artifact with generated code
-                            if (this._pendingArtifactId && fullContent) {
-                                const extractedCode = this.extract_code_from_response(fullContent);
-                                if (extractedCode) {
+                            // Auto-create/update artifact if HTML detected in response
+                            const extractedCode = this.extract_code_from_response(fullContent);
+                            if (extractedCode && this.is_html_response(extractedCode)) {
+                                if (this._pendingArtifactId) {
+                                    // Update existing artifact
                                     this.update_artifact_with_code(this._pendingArtifactId, extractedCode);
+                                } else {
+                                    // Auto-create new artifact from HTML response
+                                    this.auto_create_artifact_from_response(extractedCode);
                                 }
-                                this._pendingArtifactId = null;
                             }
+                            this._pendingArtifactId = null;
                             resolve();
                         } else if (data.type === "error") {
                             this._abortController = null;
