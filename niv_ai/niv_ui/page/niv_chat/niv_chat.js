@@ -1718,9 +1718,11 @@ ${htmlCode}
 
                         try {
                             var data = JSON.parse(jsonStr);
+                            console.log("NIV SSE:", data);
                         } catch (e) { continue; }
 
                         if (data.type === "token" || data.type === "chunk") {
+                            console.log("NIV TOKEN:", data.content);
                             if (!$msgEl) {
                                 this.hide_typing();
                                 $msgEl = this.append_message("assistant", "", {
