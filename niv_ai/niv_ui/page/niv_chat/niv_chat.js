@@ -493,8 +493,26 @@ class NivChat {
         this.$settingsPanel.find(".btn-settings-close").on("click", () => this.close_settings_panel());
         this.$settingsOverlay.on("click", () => this.close_settings_panel());
 
+        this.init_settings_tabs();
+
         // Load MCP servers into settings
         this.load_mcp_servers();
+    }
+
+    init_settings_tabs() {
+        const $navItems = this.$settingsPanel.find(".niv-settings-nav-item");
+        $navItems.on("click", (e) => {
+            const tab = $(e.currentTarget).data("settings-tab");
+            this.show_settings_tab(tab);
+        });
+        this.show_settings_tab("general");
+    }
+
+    show_settings_tab(tab) {
+        this.$settingsPanel.find(".niv-settings-nav-item").removeClass("active");
+        this.$settingsPanel.find(`.niv-settings-nav-item[data-settings-tab="${tab}"]`).addClass("active");
+        this.$settingsPanel.find(".niv-settings-tab-content").hide();
+        this.$settingsPanel.find(`.niv-settings-tab-content[data-settings-content="${tab}"]`).show();
     }
 
     toggle_settings_panel() {
@@ -508,6 +526,7 @@ class NivChat {
     open_settings_panel() {
         this.$settingsOverlay.show().addClass("visible");
         this.$settingsPanel.show().addClass("open");
+        this.show_settings_tab("general");
         this.load_mcp_servers();
     }
 
@@ -524,7 +543,7 @@ class NivChat {
         try {
             const r = await frappe.call({ method: "niv_ai.niv_core.api.mcp.get_mcp_servers" });
             const servers = r.message || [];
-            const $list = this.wrapper.find(".niv-mcp-server-list");
+            const $list = this.$settingsPanel.find(".niv-mcp-server-list");
             $list.empty();
             if (!servers.length) {
                 $list.html('<div class="niv-mcp-empty">No MCP servers configured</div>');

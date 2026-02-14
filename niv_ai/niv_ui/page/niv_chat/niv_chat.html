@@ -25,77 +25,123 @@
         </div>
         <div class="niv-settings-overlay" style="display:none;"></div>
         <div class="niv-settings-panel" style="display:none;">
-            <div class="niv-settings-header">
-                <span class="niv-settings-title">Settings</span>
-                <button class="btn-settings-close"><i class="fa fa-times"></i></button>
-            </div>
-            <div class="niv-settings-body">
-                <div class="niv-settings-section">
-                    <div class="niv-settings-section-title">Credits</div>
-                    <div class="niv-settings-credits-row">
-                        <div class="niv-settings-credit-info">
-                            <span class="niv-settings-credit-icon">💎</span>
-                            <span class="credit-amount">--</span>
-                            <span class="credit-label">credits</span>
+            <div class="niv-settings-layout">
+                <div class="niv-settings-sidebar">
+                    <div class="niv-settings-sidebar-title">Settings</div>
+                    <button class="niv-settings-nav-item active" data-settings-tab="general"><i class="fa fa-sliders"></i> General</button>
+                    <button class="niv-settings-nav-item" data-settings-tab="appearance"><i class="fa fa-paint-brush"></i> Appearance</button>
+                    <button class="niv-settings-nav-item" data-settings-tab="capabilities"><i class="fa fa-code"></i> Capabilities</button>
+                    <button class="niv-settings-nav-item" data-settings-tab="connectors"><i class="fa fa-plug"></i> Connectors</button>
+                    <button class="niv-settings-nav-item" data-settings-tab="usage"><i class="fa fa-bar-chart"></i> Usage</button>
+                </div>
+                <div class="niv-settings-main">
+                    <div class="niv-settings-header">
+                        <span class="niv-settings-title">Niv Chat Settings</span>
+                        <button class="btn-settings-close"><i class="fa fa-times"></i></button>
+                    </div>
+                    <div class="niv-settings-header-line"></div>
+                    <div class="niv-settings-body">
+                        <div class="niv-settings-tab-content" data-settings-content="general">
+                            <div class="niv-settings-section niv-settings-section-credits">
+                                <div class="niv-settings-section-title">
+                                    <i class="fa fa-diamond niv-settings-section-icon"></i> Credits
+                                </div>
+                                <div class="niv-settings-credits-row">
+                                    <div class="niv-settings-credit-info">
+                                        <span class="niv-settings-credit-icon">💎</span>
+                                        <span class="credit-amount">--</span>
+                                        <span class="credit-label">credits remaining</span>
+                                    </div>
+                                    <button class="btn btn-sm btn-recharge" onclick="frappe.set_route(&quot;niv-credits&quot;);">Recharge</button>
+                                </div>
+                                <div class="niv-low-balance-warning" style="display:none;">
+                                    <i class="fa fa-exclamation-triangle"></i>
+                                    <span>Low balance! <a href="#" class="recharge-link">Recharge now</a></span>
+                                </div>
+                            </div>
+                            <div class="niv-settings-section niv-settings-section-model">
+                                <div class="niv-settings-section-title">
+                                    <i class="fa fa-microchip niv-settings-section-icon"></i> Model
+                                </div>
+                                <div class="niv-settings-section-desc">Choose the AI model for your conversations</div>
+                                <div class="niv-sidebar-model-selector">
+                                    <button class="niv-sidebar-model-btn" title="Change model">
+                                        <span class="sidebar-model-icon">✦</span>
+                                        <span class="sidebar-model-text">Default Model</span>
+                                        <i class="fa fa-chevron-down sidebar-model-chevron"></i>
+                                    </button>
+                                    <div class="niv-sidebar-model-popover" style="display:none;">
+                                        <div class="sidebar-model-popover-list"></div>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <button class="btn btn-sm btn-recharge" onclick="frappe.set_route(&quot;niv-credits&quot;);">Recharge</button>
-                    </div>
-                    <div class="niv-low-balance-warning" style="display:none;">
-                        <i class="fa fa-exclamation-triangle"></i>
-                        <span>Low balance! <a href="#" class="recharge-link">Recharge now</a></span>
-                    </div>
-                </div>
-                <div class="niv-settings-section">
-                    <div class="niv-settings-section-title">Model</div>
-                    <div class="niv-sidebar-model-selector">
-                        <button class="niv-sidebar-model-btn" title="Change model">
-                            <span class="sidebar-model-icon">✦</span>
-                            <span class="sidebar-model-text">Default Model</span>
-                            <i class="fa fa-chevron-down sidebar-model-chevron"></i>
-                        </button>
-                        <div class="niv-sidebar-model-popover" style="display:none;">
-                            <div class="sidebar-model-popover-list"></div>
+
+                        <div class="niv-settings-tab-content" data-settings-content="appearance" style="display:none;">
+                            <div class="niv-settings-section niv-settings-section-appearance">
+                                <div class="niv-settings-section-title">
+                                    <i class="fa fa-paint-brush niv-settings-section-icon"></i> Appearance
+                                </div>
+                                <div class="niv-settings-card">
+                                    <div class="niv-settings-card-label">Theme</div>
+                                    <div class="niv-theme-selector">
+                                        <div class="niv-theme-dot active" data-theme-id="default" title="Default (Purple)"></div>
+                                        <div class="niv-theme-dot" data-theme-id="ocean" title="Ocean (Blue)"></div>
+                                        <div class="niv-theme-dot" data-theme-id="forest" title="Forest (Green)"></div>
+                                        <div class="niv-theme-dot" data-theme-id="sunset" title="Sunset (Orange)"></div>
+                                        <div class="niv-theme-dot" data-theme-id="rose" title="Rose (Pink)"></div>
+                                        <div class="niv-theme-dot" data-theme-id="midnight" title="Midnight (Blue)"></div>
+                                    </div>
+                                </div>
+                                <div class="niv-settings-card niv-settings-row">
+                                    <div class="niv-settings-card-row-left">
+                                        <div class="niv-settings-card-label">Dark Mode</div>
+                                        <div class="niv-settings-card-desc">Switch between light and dark themes</div>
+                                    </div>
+                                    <label class="niv-toggle-switch">
+                                        <input type="checkbox" class="btn-dark-mode-toggle" />
+                                        <span class="niv-toggle-slider"></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="niv-settings-tab-content" data-settings-content="capabilities" style="display:none;">
+                            <div class="niv-settings-section niv-settings-row niv-dev-mode-section niv-settings-section-capabilities" style="display:none;">
+                                <div class="niv-settings-card-row-left">
+                                    <div class="niv-settings-section-title" style="margin-bottom:0;">
+                                        <i class="fa fa-code niv-settings-section-icon"></i> Developer Mode
+                                    </div>
+                                    <div class="niv-settings-card-desc">Create DocTypes, scripts, fields directly via AI</div>
+                                </div>
+                                <label class="niv-toggle-switch">
+                                    <input type="checkbox" class="btn-dev-mode-toggle" />
+                                    <span class="niv-toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="niv-settings-tab-content" data-settings-content="connectors" style="display:none;">
+                            <div class="niv-settings-section niv-settings-mcp-section niv-settings-section-connectors">
+                                <div class="niv-settings-section-title">
+                                    <i class="fa fa-plug niv-settings-section-icon"></i> Connectors
+                                </div>
+                                <div class="niv-settings-section-desc">External tools and MCP servers</div>
+                                <div class="niv-mcp-server-list"></div>
+                                <a href="/app/niv-mcp-server" class="niv-settings-link-btn niv-mcp-manage-link" onclick="event.preventDefault(); frappe.set_route(&quot;niv-mcp-server&quot;);">
+                                    <i class="fa fa-cogs"></i> Manage MCP Servers
+                                </a>
+                            </div>
+                        </div>
+
+                        <div class="niv-settings-tab-content" data-settings-content="usage" style="display:none;">
+                            <div class="niv-settings-section niv-settings-section-usage">
+                                <button class="btn btn-sm btn-usage-stats niv-settings-link-btn niv-settings-usage-btn">
+                                    <i class="fa fa-bar-chart"></i> View Usage Stats
+                                </button>
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="niv-settings-section">
-                    <div class="niv-settings-section-title">Theme</div>
-                    <div class="niv-theme-selector">
-                        <div class="niv-theme-dot active" data-theme-id="default" title="Default (Purple)"></div>
-                        <div class="niv-theme-dot" data-theme-id="ocean" title="Ocean (Blue)"></div>
-                        <div class="niv-theme-dot" data-theme-id="forest" title="Forest (Green)"></div>
-                        <div class="niv-theme-dot" data-theme-id="sunset" title="Sunset (Orange)"></div>
-                        <div class="niv-theme-dot" data-theme-id="rose" title="Rose (Pink)"></div>
-                        <div class="niv-theme-dot" data-theme-id="midnight" title="Midnight (Blue)"></div>
-                    </div>
-                </div>
-                <div class="niv-settings-section niv-settings-row">
-                    <div class="niv-settings-section-title">Dark Mode</div>
-                    <label class="niv-toggle-switch">
-                        <input type="checkbox" class="btn-dark-mode-toggle" />
-                        <span class="niv-toggle-slider"></span>
-                    </label>
-                </div>
-                <div class="niv-settings-section niv-settings-row niv-dev-mode-section" style="display:none;">
-                    <div class="niv-settings-section-title">
-                        <i class="fa fa-code" style="margin-right:4px;"></i> Developer Mode
-                    </div>
-                    <label class="niv-toggle-switch">
-                        <input type="checkbox" class="btn-dev-mode-toggle" />
-                        <span class="niv-toggle-slider"></span>
-                    </label>
-                </div>
-                <div class="niv-settings-section">
-                    <button class="btn btn-sm btn-usage-stats niv-settings-link-btn">
-                        <i class="fa fa-bar-chart"></i> View Usage Stats
-                    </button>
-                </div>
-                <div class="niv-settings-section niv-settings-mcp-section">
-                    <div class="niv-settings-section-title">MCP Servers</div>
-                    <div class="niv-mcp-server-list"></div>
-                    <a href="/app/niv-mcp-server" class="niv-settings-link-btn niv-mcp-manage-link" onclick="event.preventDefault(); frappe.set_route(&quot;niv-mcp-server&quot;);">
-                        <i class="fa fa-cogs"></i> Manage MCP Servers
-                    </a>
                 </div>
             </div>
         </div>
