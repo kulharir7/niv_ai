@@ -25,7 +25,7 @@ class NivAgentFactory:
         if provider_name and "/" not in model_name:
             full_model = f"{provider_name}/{model_name}"
             
-        self.adk_model = LiteLlm(model_name=full_model)
+        self.adk_model = LiteLlm(model=full_model)
         
         self.all_mcp_tools = get_all_mcp_tools_cached()
         self.adk_tools = self._convert_mcp_to_adk()
