@@ -22,7 +22,7 @@ def stream_agent_adk(
     
     orchestrator = get_orchestrator(conversation_id, provider_name, model_name)
     app = App(name="NivAI", root_agent=orchestrator)
-    runner = InMemoryRunner(app=app)
+    runner = InMemoryRunner(app=app, auto_create_session=True)
     
     # ADK sessions are separate from Niv Conversations but linked by ID
     session_id = conversation_id
