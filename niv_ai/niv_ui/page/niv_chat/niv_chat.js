@@ -165,9 +165,9 @@ class NivChat {
         this.$msgSearchInput = this.wrapper.find(".niv-search-input");
         this.$inputPill = this.wrapper.find(".niv-input-pill");
         this.$artifactPanel = this.wrapper.find(".niv-artifact-panel");
-        this.$artifactList = this.wrapper.find(".niv-artifact-list");
-        this.$artifactPreview = this.wrapper.find(".niv-artifact-preview");
-        this.$artifactDetailTitle = this.wrapper.find(".niv-artifact-detail-title");
+        this.$artifactSelect = this.wrapper.find(".niv-artifact-select");
+        this.$artifactIframe = this.wrapper.find(".niv-artifact-iframe");
+        this.$artifactCode = this.wrapper.find(".niv-artifact-code code");
 
         this.pending_files = [];
 
@@ -255,8 +255,12 @@ class NivChat {
         // Header actions
         this.wrapper.find(".btn-artifacts-toggle").on("click", () => this.toggle_artifacts_panel());
         this.wrapper.find(".btn-artifact-close").on("click", () => this.toggle_artifacts_panel(false));
-        this.wrapper.find(".btn-artifact-refresh").on("click", () => this.load_artifacts_list());
         this.wrapper.find(".btn-artifact-new").on("click", () => this.prompt_new_artifact());
+        this.wrapper.find(".btn-artifact-fullscreen").on("click", () => this.toggle_artifact_fullscreen());
+        this.wrapper.find(".btn-artifact-copy").on("click", () => this.copy_artifact_code());
+        this.wrapper.find(".btn-artifact-download").on("click", () => this.download_artifact());
+        this.$artifactSelect.on("change", (e) => this.select_artifact(e.target.value));
+        this.wrapper.find(".niv-artifact-tab").on("click", (e) => this.switch_artifact_tab($(e.currentTarget).data("tab")));
 
         this.wrapper.find(".btn-share-chat").on("click", () => this.share_conversation());
         this.wrapper.find(".btn-delete-chat").on("click", () => this.delete_conversation());
@@ -360,65 +364,115 @@ class NivChat {
     }
 
     async load_artifacts_list() {
-        if (!this.$artifactList || !this.$artifactList.length) return;
-        this.$artifactList.html('<div class="niv-mcp-empty">Loading artifacts...</div>');
+        if (!this.$artifactSelect || !this.$artifactSelect.length) return;
         try {
             const r = await frappe.call({
                 method: "niv_ai.niv_core.api.artifacts.list_artifacts",
                 args: { limit: 30 }
             });
             this.artifact_list = r.message || [];
-            if (!this.artifact_list.length) {
-                this.$artifactList.html('<div class="niv-mcp-empty">No artifacts yet. Create your first one.</div>');
-                this.$artifactDetailTitle.text("Select an artifact");
-                this.$artifactPreview.text("Choose from list to view details.");
-                return;
-            }
-
-            const html = this.artifact_list.map((a) => {
-                const active = a.name === this.active_artifact_id ? " active" : "";
+            
+            // Populate select dropdown
+            let options = '<option value="">Select artifact...</option>';
+            for (const a of this.artifact_list) {
+                const selected = a.name === this.active_artifact_id ? " selected" : "";
                 const safeTitle = frappe.utils.escape_html(a.artifact_title || a.name);
-                const safeMeta = frappe.utils.escape_html(`${a.artifact_type || "Artifact"} • ${a.status || "Draft"} • v${a.version_count || 1}`);
-                return `<div class="niv-artifact-item${active}" data-artifact-id="${a.name}">
-                    <div class="niv-artifact-item-title">${safeTitle}</div>
-                    <div class="niv-artifact-item-meta">${safeMeta}</div>
-                </div>`;
-            }).join("");
+                options += `<option value="${a.name}"${selected}>${safeTitle}</option>`;
+            }
+            this.$artifactSelect.html(options);
 
-            this.$artifactList.html(html);
-            this.$artifactList.find(".niv-artifact-item").on("click", (e) => {
-                const id = $(e.currentTarget).data("artifact-id");
-                this.select_artifact(id);
-            });
-
-            if (!this.active_artifact_id && this.artifact_list.length) {
+            if (this.active_artifact_id) {
+                this.select_artifact(this.active_artifact_id);
+            } else if (this.artifact_list.length) {
                 this.select_artifact(this.artifact_list[0].name);
+                this.$artifactSelect.val(this.artifact_list[0].name);
+            } else {
+                this.show_artifact_empty();
             }
         } catch (e) {
-            this.$artifactList.html('<div class="niv-mcp-empty">Artifacts API not available yet.</div>');
-            this.$artifactDetailTitle.text("Artifacts unavailable");
-            this.$artifactPreview.text("Backend endpoint not reachable. Please check server logs.");
+            this.$artifactSelect.html('<option value="">Error loading...</option>');
+            this.show_artifact_empty();
         }
     }
 
+    show_artifact_empty() {
+        this.$artifactIframe.attr("srcdoc", `
+            <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#666;font-family:system-ui;">
+                <div style="font-size:48px;margin-bottom:16px;">✨</div>
+                <p style="margin:0;font-size:14px;">Type "app banao" in chat to create your first artifact</p>
+            </div>
+        `);
+        this.$artifactCode.text("// No artifact selected");
+        this.current_artifact_content = "";
+    }
+
     async select_artifact(artifactId) {
+        if (!artifactId) {
+            this.show_artifact_empty();
+            return;
+        }
         this.active_artifact_id = artifactId;
-        this.$artifactList.find(".niv-artifact-item").removeClass("active");
-        this.$artifactList.find(`[data-artifact-id="${artifactId}"]`).addClass("active");
+        this.$artifactSelect.val(artifactId);
+        
         try {
             const r = await frappe.call({
                 method: "niv_ai.niv_core.api.artifacts.get_artifact",
                 args: { artifact_id: artifactId, with_versions: 1 }
             });
             const a = r.message || {};
-            this.$artifactDetailTitle.text(`${a.artifact_title || artifactId} (${a.status || "Draft"})`);
             const content = (a.artifact_content || "").toString();
-            const preview = content.length > 2500 ? content.slice(0, 2500) + "\n..." : content;
-            this.$artifactPreview.text(preview || "No content yet.");
+            this.current_artifact_content = content;
+            
+            // Update code view
+            this.$artifactCode.text(content || "// No code yet");
+            
+            // Update preview iframe
+            if (content && (content.includes("<") || content.includes("function"))) {
+                this.render_artifact_preview(content);
+            } else {
+                this.$artifactIframe.attr("srcdoc", `
+                    <div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;font-family:system-ui;">
+                        <p>No preview available</p>
+                    </div>
+                `);
+            }
         } catch (e) {
-            this.$artifactDetailTitle.text("Failed to load artifact");
-            this.$artifactPreview.text("Unable to fetch artifact details.");
+            this.$artifactCode.text("// Error loading artifact");
+            this.current_artifact_content = "";
         }
+    }
+
+    switch_artifact_tab(tab) {
+        this.wrapper.find(".niv-artifact-tab").removeClass("active");
+        this.wrapper.find(`.niv-artifact-tab[data-tab="${tab}"]`).addClass("active");
+        this.wrapper.find(".niv-artifact-tab-content").removeClass("active");
+        this.wrapper.find(`.niv-artifact-tab-content[data-content="${tab}"]`).addClass("active");
+    }
+
+    toggle_artifact_fullscreen() {
+        this.$artifactPanel.toggleClass("fullscreen");
+        const icon = this.$artifactPanel.hasClass("fullscreen") ? "fa-compress" : "fa-expand";
+        this.wrapper.find(".btn-artifact-fullscreen i").attr("class", "fa " + icon);
+    }
+
+    copy_artifact_code() {
+        if (this.current_artifact_content) {
+            navigator.clipboard.writeText(this.current_artifact_content).then(() => {
+                frappe.show_alert({ message: "Code copied!", indicator: "green" });
+            });
+        }
+    }
+
+    download_artifact() {
+        if (!this.current_artifact_content) return;
+        const blob = new Blob([this.current_artifact_content], { type: "text/html" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `artifact-${this.active_artifact_id || "export"}.html`;
+        a.click();
+        URL.revokeObjectURL(url);
+        frappe.show_alert({ message: "Downloaded!", indicator: "green" });
     }
 
     prompt_new_artifact() {
@@ -521,40 +575,38 @@ class NivChat {
                     artifact_content: code
                 }
             });
-            // Refresh detail view
-            this.select_artifact(artifactId);
-            // Render preview
-            this.render_artifact_preview(code);
+            // Store current content
+            this.current_artifact_content = code;
+            // Update code view
+            if (this.$artifactCode) {
+                this.$artifactCode.text(code);
+            }
+            // Render live preview
+            this.show_live_preview(code);
+            // Reload dropdown
+            await this.load_artifacts_list();
         } catch (e) {
             console.error("Failed to update artifact", e);
         }
     }
 
     render_artifact_preview(code) {
-        // Show code in preview and render in iframe
-        if (!this.$artifactPreview) return;
+        if (!code) return;
         
-        // Truncate for display
-        const displayCode = code.length > 2500 ? code.slice(0, 2500) + "\n..." : code;
-        this.$artifactPreview.text(displayCode);
-        
-        // If it's HTML, show live preview
-        if (code.includes("<html") || code.includes("<!DOCTYPE") || code.includes("<body")) {
-            this.show_live_preview(code);
+        // Update code view
+        if (this.$artifactCode) {
+            this.$artifactCode.text(code);
         }
+        
+        // Render in iframe
+        this.show_live_preview(code);
     }
 
     show_live_preview(htmlCode) {
-        // Create or update iframe for live preview
-        let $iframe = this.$artifactPanel.find(".niv-artifact-iframe");
-        if (!$iframe.length) {
-            $iframe = $('<iframe class="niv-artifact-iframe" sandbox="allow-scripts"></iframe>');
-            this.$artifactPanel.find(".niv-artifact-detail").append($iframe);
-        }
+        if (!this.$artifactIframe || !this.$artifactIframe.length) return;
         
-        // Write HTML to iframe
-        const blob = new Blob([htmlCode], { type: "text/html" });
-        $iframe.attr("src", URL.createObjectURL(blob));
+        // Use srcdoc for cleaner rendering
+        this.$artifactIframe.attr("srcdoc", htmlCode);
     }
 
     extract_code_from_response(content) {

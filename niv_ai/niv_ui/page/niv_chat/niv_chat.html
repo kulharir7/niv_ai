@@ -242,20 +242,32 @@
         <div class="niv-chat-messages"></div>
         <div class="niv-artifact-panel" style="display:none;">
             <div class="niv-artifact-header">
-                <div>
-                    <div class="niv-artifact-title">Artifacts</div>
-                    <div class="niv-artifact-subtitle">No-code app/document drafts</div>
+                <div class="niv-artifact-header-left">
+                    <select class="niv-artifact-select">
+                        <option value="">Select artifact...</option>
+                    </select>
                 </div>
-                <button class="btn btn-xs btn-artifact-close" title="Close"><i class="fa fa-times"></i></button>
+                <div class="niv-artifact-header-right">
+                    <button class="btn btn-xs btn-artifact-fullscreen" title="Fullscreen"><i class="fa fa-expand"></i></button>
+                    <button class="btn btn-xs btn-artifact-close" title="Close"><i class="fa fa-times"></i></button>
+                </div>
             </div>
-            <div class="niv-artifact-actions">
+            <div class="niv-artifact-tabs">
+                <button class="niv-artifact-tab active" data-tab="preview">Preview</button>
+                <button class="niv-artifact-tab" data-tab="code">Code</button>
+            </div>
+            <div class="niv-artifact-content">
+                <div class="niv-artifact-tab-content active" data-content="preview">
+                    <iframe class="niv-artifact-iframe" sandbox="allow-scripts allow-forms"></iframe>
+                </div>
+                <div class="niv-artifact-tab-content" data-content="code">
+                    <pre class="niv-artifact-code"><code></code></pre>
+                </div>
+            </div>
+            <div class="niv-artifact-footer">
+                <button class="btn btn-xs btn-artifact-copy"><i class="fa fa-copy"></i> Copy</button>
+                <button class="btn btn-xs btn-artifact-download"><i class="fa fa-download"></i> Download</button>
                 <button class="btn btn-xs btn-artifact-new"><i class="fa fa-plus"></i> New</button>
-                <button class="btn btn-xs btn-artifact-refresh"><i class="fa fa-refresh"></i> Refresh</button>
-            </div>
-            <div class="niv-artifact-list"></div>
-            <div class="niv-artifact-detail">
-                <div class="niv-artifact-detail-title">Select an artifact</div>
-                <pre class="niv-artifact-preview">Choose from list to view details.</pre>
             </div>
         </div>
         <div class="niv-drag-overlay" style="display:none;">
