@@ -291,77 +291,47 @@ def stream_agent(
                 if msg.content:
                     message_buffer += msg.content
 
-                # Process buffer for thoughts
-                while True:
-                    upper_buffer = message_buffer.upper()
-                    if not in_thought:
-                        tag = None
-                        if "[[THOUGHT]]" in upper_buffer: tag = "[[THOUGHT]]"
-                        elif "<THOUGHT>" in upper_buffer: tag = "<THOUGHT>"
-                        
-                        if tag:
-                            tag_idx = upper_buffer.find(tag)
-                            actual_tag = message_buffer[tag_idx:tag_idx+len(tag)]
-                            parts = message_buffer.split(actual_tag, 1)
-                            if parts[0]:
-                                yield {"type": "token", "content": parts[0]}
-                            message_buffer = parts[1]
-                            in_thought = True
-                            active_end_tag = "[[/THOUGHT]]" if tag == "[[THOUGHT]]" else "</THOUGHT>"
-                            continue
-                        
-                        if "[" in message_buffer or "<" in message_buffer:
-                            last_idx = max(message_buffer.rfind("["), message_buffer.rfind("<"))
-                            tag_start = message_buffer[last_idx:].upper()
-                            if ("[[THOUGHT]]".startswith(tag_start) and tag_start != "[[THOUGHT]]") or \
-                               ("<THOUGHT>".startswith(tag_start) and tag_start != "<THOUGHT>"):
-                                if last_idx > 0:
-                                    yield {"type": "token", "content": message_buffer[:last_idx]}
-                                    message_buffer = message_buffer[last_idx:]
-                                break
-                        
-                        if tool_calls or tool_call_chunks:
-                            if message_buffer:
+                if tool_calls or tool_call_chunks:
+                    # Process buffer for thoughts before flushing for tools
+                    if message_buffer:
+                        while True:
+                            upper_buffer = message_buffer.upper()
+                            if not in_thought:
+                                tag = None
+                                if "[[THOUGHT]]" in upper_buffer: tag = "[[THOUGHT]]"
+                                elif "<THOUGHT>" in upper_buffer: tag = "<THOUGHT>"
+                                
+                                if tag:
+                                    tag_idx = upper_buffer.find(tag)
+                                    actual_tag = message_buffer[tag_idx:tag_idx+len(tag)]
+                                    parts = message_buffer.split(actual_tag, 1)
+                                    if parts[0]:
+                                        yield {"type": "token", "content": parts[0]}
+                                    message_buffer = parts[1]
+                                    in_thought = True
+                                    active_end_tag = "[[/THOUGHT]]" if tag == "[[THOUGHT]]" else "</THOUGHT>"
+                                    continue
+                                
                                 yield {"type": "token", "content": message_buffer}
                                 message_buffer = ""
-                        break
-                    else:
-                        if active_end_tag in upper_buffer:
-                            tag_idx = upper_buffer.find(active_end_tag)
-                            actual_end_tag = message_buffer[tag_idx:tag_idx+len(active_end_tag)]
-                            parts = message_buffer.split(actual_end_tag, 1)
-                            current_thought += parts[0]
-                            yield {"type": "thought", "content": current_thought}
-                            current_thought = ""
-                            message_buffer = parts[1]
-                            in_thought = False
-                            continue
-                        
-                        if "[[" in message_buffer or "</" in message_buffer:
-                            last_idx = max(message_buffer.rfind("[["), message_buffer.rfind("</"))
-                            ctag_start = message_buffer[last_idx:].upper()
-                            if ("[[/THOUGHT]]".startswith(ctag_start) and ctag_start != "[[/THOUGHT]]") or \
-                               ("</THOUGHT>".startswith(ctag_start) and ctag_start != "</THOUGHT>"):
-                                if last_idx > 0:
-                                    chunk = message_buffer[:last_idx]
-                                    current_thought += chunk
-                                    yield {"type": "thought", "content": chunk}
-                                    message_buffer = message_buffer[last_idx:]
                                 break
-                        
-                        if tool_calls or tool_call_chunks:
-                             current_thought += message_buffer
-                             yield {"type": "thought", "content": message_buffer}
-                             message_buffer = ""
-                        
-                        if not message_buffer: break
-                        
-                        current_thought += message_buffer
-                        yield {"type": "thought", "content": message_buffer}
-                        message_buffer = ""
-                        break
+                            else:
+                                if active_end_tag in upper_buffer:
+                                    tag_idx = upper_buffer.find(active_end_tag)
+                                    actual_end_tag = message_buffer[tag_idx:tag_idx+len(active_end_tag)]
+                                    parts = message_buffer.split(actual_end_tag, 1)
+                                    current_thought += parts[0]
+                                    yield {"type": "thought", "content": current_thought}
+                                    current_thought = ""
+                                    message_buffer = parts[1]
+                                    in_thought = False
+                                    continue
+                                
+                                current_thought += message_buffer
+                                yield {"type": "thought", "content": message_buffer}
+                                message_buffer = ""
+                                break
 
-                if tool_calls or tool_call_chunks:
                     if tool_calls:
                         for tc in tool_calls:
                             yield {"type": "tool_call", "tool": tc.get("name", ""), "arguments": tc.get("args", {})}
@@ -371,7 +341,71 @@ def stream_agent(
                             if idx not in pending_tool_calls: pending_tool_calls[idx] = {"name": "", "args": ""}
                             if tc.get("name"): pending_tool_calls[idx]["name"] = tc["name"]
                             if tc.get("args"): pending_tool_calls[idx]["args"] += tc["args"]
+                
+                elif message_buffer:
+                    # Process buffer for thoughts during text generation
+                    while True:
+                        upper_buffer = message_buffer.upper()
+                        if not in_thought:
+                            tag = None
+                            if "[[THOUGHT]]" in upper_buffer: tag = "[[THOUGHT]]"
+                            elif "<THOUGHT>" in upper_buffer: tag = "<THOUGHT>"
+                            
+                            if tag:
+                                tag_idx = upper_buffer.find(tag)
+                                actual_tag = message_buffer[tag_idx:tag_idx+len(tag)]
+                                parts = message_buffer.split(actual_tag, 1)
+                                if parts[0]:
+                                    yield {"type": "token", "content": parts[0]}
+                                message_buffer = parts[1]
+                                in_thought = True
+                                active_end_tag = "[[/THOUGHT]]" if tag == "[[THOUGHT]]" else "</THOUGHT>"
+                                continue
+                            
+                            # Check for partial tags
+                            if "[" in message_buffer or "<" in message_buffer:
+                                last_idx = max(message_buffer.rfind("["), message_buffer.rfind("<"))
+                                tag_start = message_buffer[last_idx:].upper()
+                                if ("[[THOUGHT]]".startswith(tag_start) and tag_start != "[[THOUGHT]]") or \
+                                   ("<THOUGHT>".startswith(tag_start) and tag_start != "<THOUGHT>"):
+                                    if last_idx > 0:
+                                        yield {"type": "token", "content": message_buffer[:last_idx]}
+                                        message_buffer = message_buffer[last_idx:]
+                                    break
+                            
+                            yield {"type": "token", "content": message_buffer}
+                            message_buffer = ""
+                            break
+                        else:
+                            if active_end_tag in upper_buffer:
+                                tag_idx = upper_buffer.find(active_end_tag)
+                                actual_end_tag = message_buffer[tag_idx:tag_idx+len(active_end_tag)]
+                                parts = message_buffer.split(actual_end_tag, 1)
+                                current_thought += parts[0]
+                                yield {"type": "thought", "content": current_thought}
+                                current_thought = ""
+                                message_buffer = parts[1]
+                                in_thought = False
+                                continue
+                            
+                            if "[[" in message_buffer or "</" in message_buffer:
+                                last_idx = max(message_buffer.rfind("[["), message_buffer.rfind("</"))
+                                ctag_start = message_buffer[last_idx:].upper()
+                                if ("[[/THOUGHT]]".startswith(ctag_start) and ctag_start != "[[/THOUGHT]]") or \
+                                   ("</THOUGHT>".startswith(ctag_start) and ctag_start != "</THOUGHT>"):
+                                    if last_idx > 0:
+                                        chunk = message_buffer[:last_idx]
+                                        current_thought += chunk
+                                        yield {"type": "thought", "content": chunk}
+                                        message_buffer = message_buffer[last_idx:]
+                                    break
+                            
+                            current_thought += message_buffer
+                            yield {"type": "thought", "content": message_buffer}
+                            message_buffer = ""
+                            break
 
+            # Tool results
             elif msg.type == "tool":
                 tool_call_count += 1
                 for idx in list(pending_tool_calls.keys()):
@@ -387,10 +421,7 @@ def stream_agent(
                 if tool_call_count >= MAX_TOOL_CALLS:
                     yield {
                         "type": "error",
-                        "content": (
-                            "I reached the tool-call safety limit for this request. "
-                            "Please narrow the scope or ask me to continue from current results."
-                        ),
+                        "content": "I reached the tool-call safety limit for this request.",
                     }
                     break
 
