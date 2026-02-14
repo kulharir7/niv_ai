@@ -284,6 +284,10 @@ def stream_agent(
                 continue
 
             if msg.type == "ai" or msg.type == "AIMessageChunk":
+                # DEBUG RAW TOKENS
+                if msg.content:
+                    frappe.logger().info(f"NIV AI RAW: {msg.content}")
+
                 tool_calls = getattr(msg, "tool_calls", None) or []
                 tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
                 
