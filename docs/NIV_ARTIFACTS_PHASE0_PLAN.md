@@ -22,10 +22,16 @@ Create the base data model for Artifacts without touching existing chat/tool beh
    - change summary
    - snapshot
 
-## Next (Phase 1)
-- API endpoints for create/get/list artifact
-- Basic right-pane preview in chat UI (feature flag)
-- Version write on regenerate
+## Phase 1 (in progress)
+- [x] API endpoints scaffolded in `niv_core/api/artifacts.py`
+  - `create_artifact`
+  - `list_artifacts`
+  - `get_artifact`
+  - `update_artifact_content`
+  - `set_artifact_publish_state`
+  - `get_artifact_version`
+- [ ] Basic right-pane preview in chat UI (feature flag)
+- [x] Version write on every content update (auto version row)
 
 ## Test Gate Before Server
 - `bench --site <site> migrate` clean
