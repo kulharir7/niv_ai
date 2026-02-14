@@ -75,14 +75,13 @@ def _seed_default_plans():
 def _run_auto_discovery():
     """Run auto-discovery to scan and learn the system."""
     try:
-        from niv_ai.niv_core.discovery import auto_discover_system
-        result = auto_discover_system()
-        apps = len(result.get("apps", []))
-        modules = len(result.get("modules", {}))
-        domain = result.get("domain", {}).get("primary", "General")
-        print("  → Auto-discovery complete: {0} apps, {1} modules, domain: {2}".format(apps, modules, domain))
+        from niv_ai.niv_core.adk.discovery import trigger_discovery
+        result = trigger_discovery()
+        doctypes = len(result.get("custom_doctypes", []))
+        workflows = len(result.get("active_workflows", []))
+        print(f"  → System Discovery complete: {doctypes} Custom DocTypes, {workflows} Workflows mapped.")
     except Exception as e:
-        print("  → Auto-discovery skipped: {0}".format(str(e)))
+        print("  → System Discovery skipped: {0}".format(str(e)))
 
 
 def _preload_piper_voice():
