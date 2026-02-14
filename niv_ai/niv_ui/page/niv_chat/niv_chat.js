@@ -70,6 +70,14 @@ class NivChat {
         this.artifacts_open = false;
         this.artifact_list = [];
         this.active_artifact_id = null;
+        this.artifact_keywords = [
+            "app banao", "app bana", "calculator banao", "calculator bana",
+            "form banao", "form bana", "form create", "dashboard banao",
+            "dashboard bana", "page banao", "page bana", "widget banao",
+            "tool banao", "tool bana", "ui banao", "ui bana",
+            "build an app", "create an app", "make an app", "build a calculator",
+            "create a form", "create a dashboard", "build a tool"
+        ];
         this.slash_commands = [
             { cmd: "/clear", desc: "Clear chat history", icon: "🗑️" },
             { cmd: "/export", desc: "Export chat as markdown", icon: "📥" },
@@ -439,6 +447,180 @@ class NivChat {
                 frappe.msgprint("Failed to create artifact");
             }
         }, "New Artifact", "Create");
+    }
+
+    is_artifact_prompt(text) {
+        if (!text) return false;
+        const lower = text.toLowerCase();
+        return this.artifact_keywords.some(kw => lower.includes(kw));
+    }
+
+    extract_artifact_title(text) {
+        // Try to extract a meaningful title from the prompt
+        const lower = text.toLowerCase();
+        // Common patterns: "EMI calculator banao", "loan form create karo"
+        const patterns = [
+            /(?:banao|bana|create|build|make)\s+(?:a\s+)?(.+?)(?:\s+app|\s+form|\s+calculator|\s+dashboard|\s+tool)?$/i,
+            /^(.+?)\s+(?:banao|bana|create|build|make)/i,
+            /(?:app|form|calculator|dashboard|tool)\s+(?:for\s+)?(.+)/i
+        ];
+        for (const p of patterns) {
+            const m = text.match(p);
+            if (m && m[1]) {
+                let title = m[1].trim();
+                if (title.length > 3 && title.length < 50) {
+                    return title.charAt(0).toUpperCase() + title.slice(1);
+                }
+            }
+        }
+        // Fallback: first 30 chars
+        return text.substring(0, 30).trim() + (text.length > 30 ? "..." : "");
+    }
+
+    async auto_create_artifact(prompt) {
+        // Auto-open panel
+        if (!this.artifacts_open) {
+            this.toggle_artifacts_panel(true);
+        }
+        
+        // Show loading state
+        this.$artifactDetailTitle.text("Generating artifact...");
+        this.$artifactPreview.text("AI is creating your app. Please wait...");
+
+        const title = this.extract_artifact_title(prompt);
+        
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_core.api.artifacts.create_artifact",
+                args: {
+                    title: title,
+                    artifact_type: "App",
+                    source_prompt: prompt,
+                    artifact_content: "<!-- Generating... -->"
+                }
+            });
+            const created = r.message || {};
+            if (created.name) {
+                this.active_artifact_id = created.name;
+                await this.load_artifacts_list();
+            }
+            return created.name;
+        } catch (e) {
+            console.error("Failed to create artifact", e);
+            return null;
+        }
+    }
+
+    async update_artifact_with_code(artifactId, code) {
+        if (!artifactId || !code) return;
+        try {
+            await frappe.call({
+                method: "niv_ai.niv_core.api.artifacts.update_artifact_content",
+                args: {
+                    artifact_id: artifactId,
+                    content: code
+                }
+            });
+            // Refresh detail view
+            this.select_artifact(artifactId);
+            // Render preview
+            this.render_artifact_preview(code);
+        } catch (e) {
+            console.error("Failed to update artifact", e);
+        }
+    }
+
+    render_artifact_preview(code) {
+        // Show code in preview and render in iframe
+        if (!this.$artifactPreview) return;
+        
+        // Truncate for display
+        const displayCode = code.length > 2500 ? code.slice(0, 2500) + "\n..." : code;
+        this.$artifactPreview.text(displayCode);
+        
+        // If it's HTML, show live preview
+        if (code.includes("<html") || code.includes("<!DOCTYPE") || code.includes("<body")) {
+            this.show_live_preview(code);
+        }
+    }
+
+    show_live_preview(htmlCode) {
+        // Create or update iframe for live preview
+        let $iframe = this.$artifactPanel.find(".niv-artifact-iframe");
+        if (!$iframe.length) {
+            $iframe = $('<iframe class="niv-artifact-iframe" sandbox="allow-scripts"></iframe>');
+            this.$artifactPanel.find(".niv-artifact-detail").append($iframe);
+        }
+        
+        // Write HTML to iframe
+        const blob = new Blob([htmlCode], { type: "text/html" });
+        $iframe.attr("src", URL.createObjectURL(blob));
+    }
+
+    extract_code_from_response(content) {
+        if (!content) return null;
+        
+        // Try to extract code from markdown code blocks
+        // Pattern: ```html ... ``` or ```javascript ... ``` or just ``` ... ```
+        const codeBlockRegex = /```(?:html|javascript|js|css)?\s*([\s\S]*?)```/gi;
+        const matches = [...content.matchAll(codeBlockRegex)];
+        
+        if (matches.length > 0) {
+            // If multiple code blocks, try to combine HTML/CSS/JS
+            let html = "", css = "", js = "";
+            for (const m of matches) {
+                const code = m[1].trim();
+                if (code.includes("<html") || code.includes("<!DOCTYPE") || code.includes("<body") || code.includes("<div")) {
+                    html = code;
+                } else if (code.includes("{") && code.includes("}") && !code.includes("function") && !code.includes("const ")) {
+                    css += code + "\n";
+                } else if (code.includes("function") || code.includes("const ") || code.includes("let ") || code.includes("document.")) {
+                    js += code + "\n";
+                } else {
+                    // Assume HTML if contains tags
+                    if (code.includes("<")) {
+                        html = code;
+                    } else {
+                        js += code + "\n";
+                    }
+                }
+            }
+            
+            // If we have standalone HTML, return it
+            if (html && (html.includes("<html") || html.includes("<!DOCTYPE"))) {
+                return html;
+            }
+            
+            // Otherwise, wrap in a complete HTML document
+            if (html || css || js) {
+                return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artifact Preview</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 20px; background: #f5f5f5; }
+        ${css}
+    </style>
+</head>
+<body>
+    ${html}
+    <script>
+        ${js}
+    </script>
+</body>
+</html>`;
+            }
+        }
+        
+        // If no code blocks found, check if content itself looks like HTML
+        if (content.includes("<html") || content.includes("<!DOCTYPE")) {
+            return content;
+        }
+        
+        return null;
     }
 
     // ─── Greeting ───────────────────────────────────────────────────
@@ -1238,12 +1420,19 @@ class NivChat {
         this.append_message("user", text);
         this.scroll_to_bottom();
 
+        // Auto-detect artifact prompts and create artifact
+        let pendingArtifactId = null;
+        if (this.is_artifact_prompt(text)) {
+            pendingArtifactId = await this.auto_create_artifact(text);
+        }
+
         const attachments = this.pending_files.map((f) => ({ file_url: f.file_url }));
         this.pending_files = [];
         this.$attachPreview.empty().hide();
 
         this.show_typing();
         this.is_streaming = true;
+        this._pendingArtifactId = pendingArtifactId;
         this.$sendBtn.hide();
         this.$stopBtn.show();
 
@@ -1456,6 +1645,14 @@ class NivChat {
                             }
                             if (data.remaining_balance !== undefined) {
                                 this.update_balance_from_response(data.remaining_balance);
+                            }
+                            // Auto-update artifact with generated code
+                            if (this._pendingArtifactId && fullContent) {
+                                const extractedCode = this.extract_code_from_response(fullContent);
+                                if (extractedCode) {
+                                    this.update_artifact_with_code(this._pendingArtifactId, extractedCode);
+                                }
+                                this._pendingArtifactId = null;
                             }
                             resolve();
                         } else if (data.type === "error") {
