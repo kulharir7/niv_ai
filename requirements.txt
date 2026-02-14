@@ -12,10 +12,11 @@ Pillow
 pandas
 openpyxl
 razorpay
-# MCP SDK is OPTIONAL — only needed for REMOTE MCP servers (non-localhost).
-# Same-server (FAC on localhost) uses direct Python import, zero deps needed.
-# Install manually if connecting to remote MCP servers:
-#   pip install mcp langchain-mcp-adapters
+google-adk[extensions]
+google-genai==1.3.0
+mcp
+langchain-mcp-adapters
+# MCP SDK is included in [extensions] but listed explicitly for clarity.
 edge-tts
 # piper-tts is optional — install manually for OFFLINE TTS fallback:
 #   pip install piper-tts
