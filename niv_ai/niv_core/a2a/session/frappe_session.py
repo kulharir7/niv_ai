@@ -148,17 +148,10 @@ class FrappeSessionService:
         state: Dict[str, Any] = None,
         session_id: str = None,
     ) -> FrappeSession:
-        self._ensure_context()
-        session_id = session_id or str(uuid.uuid4())
-        # ...
-        session_id: str = None,
-    ) -> FrappeSession:
         """
         Create a new session or return existing.
-        
-        If session_id exists, returns that session.
-        This enables SESSION REUSE across requests.
         """
+        self._ensure_context()
         session_id = session_id or str(uuid.uuid4())
         
         # Check existing
@@ -195,6 +188,9 @@ class FrappeSessionService:
         user_id: str,
         session_id: str,
     ) -> Optional[FrappeSession]:
+        """
+        Retrieve existing session by ID.
+        """
         self._ensure_context()
         cache_key = self._cache_key(app_name, user_id, session_id)
         
@@ -222,13 +218,7 @@ class FrappeSessionService:
         app_name: str,
         user_id: str,
     ) -> List[FrappeSession]:
-        """
-        List all sessions for a user.
-        
-        NOTE: Expensive operation, use sparingly.
-        """
-        # Would require scanning Redis keys
-        # For now, return empty list
+        """List all sessions for a user."""
         return []
     
     async def delete_session(
@@ -238,6 +228,7 @@ class FrappeSessionService:
         session_id: str,
     ) -> bool:
         """Delete a session and all its data."""
+        self._ensure_context()
         try:
             self._redis_delete(f"{_PREFIX_SESSION}{session_id}")
             self._redis_delete(f"{_PREFIX_STATE}{session_id}")
@@ -257,26 +248,15 @@ class FrappeSessionService:
         session: FrappeSession,
         event: Any,
     ) -> None:
-        """
-        Append event to session history.
-        
-        Keeps only last _MAX_EVENTS events.
-        """
+        """Append event to session history."""
+        self._ensure_context()
         session._events.append(event)
         session.last_update_time = time.time()
         
-        # Trim to max
         if len(session._events) > _MAX_EVENTS:
             session._events = session._events[-_MAX_EVENTS:]
         
-        # Persist
-        self._redis_set(
-            f"{_PREFIX_EVENTS}{session.id}",
-            session._events,
-            ttl=_EVENTS_TTL,
-        )
-        
-        # Update session metadata
+        self._redis_set(f"{_PREFIX_EVENTS}{session.id}", session._events, ttl=_EVENTS_TTL)
         await self._save_session(session)
     
     # ─────────────────────────────────────────────────────────────
@@ -288,11 +268,8 @@ class FrappeSessionService:
         session: FrappeSession,
         state_delta: Dict[str, Any],
     ) -> None:
-        """
-        Update session state with delta.
-        
-        Called when agent sets output_key or updates state.
-        """
+        """Update session state with delta."""
+        self._ensure_context()
         session.state.update(state_delta)
         session.last_update_time = time.time()
         await self._save_state(session.id, session.state)
@@ -304,6 +281,7 @@ class FrappeSessionService:
         default: Any = None,
     ) -> Any:
         """Get single state value."""
+        self._ensure_context()
         state = self._redis_get(f"{_PREFIX_STATE}{session_id}") or {}
         return state.get(key, default)
     
@@ -314,6 +292,7 @@ class FrappeSessionService:
         value: Any,
     ) -> None:
         """Set single state value."""
+        self._ensure_context()
         state = self._redis_get(f"{_PREFIX_STATE}{session_id}") or {}
         state[key] = value
         await self._save_state(session_id, state)
@@ -324,6 +303,7 @@ class FrappeSessionService:
     
     def get_session_sync(self, app_name: str, user_id: str, session_id: str) -> Optional[FrappeSession]:
         """Sync version of get_session."""
+        self._ensure_context()
         data = self._redis_get(f"{_PREFIX_SESSION}{session_id}")
         if not data:
             return None
@@ -342,6 +322,7 @@ class FrappeSessionService:
     
     def create_session_sync(self, app_name: str, user_id: str, session_id: str, state: Dict[str, Any] = None) -> FrappeSession:
         """Sync version of create_session."""
+        self._ensure_context()
         session = FrappeSession(
             session_id=session_id,
             app_name=app_name,
@@ -354,8 +335,8 @@ class FrappeSessionService:
 
     def update_session_sync(self, app_name: str, user_id: str, session_id: str, state: Dict[str, Any]) -> None:
         """Sync version of update state."""
+        self._ensure_context()
         self._redis_set(f"{_PREFIX_STATE}{session_id}", state, ttl=_STATE_TTL)
-        # Update metadata too
         data = self._redis_get(f"{_PREFIX_SESSION}{session_id}")
         if data:
             data["last_update_time"] = time.time()
@@ -367,19 +348,11 @@ class FrappeSessionService:
     
     async def _save_session(self, session: FrappeSession) -> None:
         """Save session metadata to Redis."""
-        self._redis_set(
-            f"{_PREFIX_SESSION}{session.id}",
-            session.to_dict(),
-            ttl=_SESSION_TTL,
-        )
+        self._redis_set(f"{_PREFIX_SESSION}{session.id}", session.to_dict(), ttl=_SESSION_TTL)
     
     async def _save_state(self, session_id: str, state: Dict[str, Any]) -> None:
         """Save session state to Redis."""
-        self._redis_set(
-            f"{_PREFIX_STATE}{session_id}",
-            state,
-            ttl=_STATE_TTL,
-        )
+        self._redis_set(f"{_PREFIX_STATE}{session_id}", state, ttl=_STATE_TTL)
     
     # ─────────────────────────────────────────────────────────────
     # REDIS HELPERS (v14 + v15 compatible)
@@ -391,10 +364,8 @@ class FrappeSessionService:
         try:
             data = json.dumps(value, default=str)
             try:
-                # v15 style
                 frappe.cache().set_value(key, data, expires_in_sec=ttl)
             except TypeError:
-                # v14 fallback
                 frappe.cache().set_value(key, data)
         except Exception as e:
             frappe.log_error(f"Redis set failed [{key}]: {e}", "Niv AI A2A")
@@ -406,24 +377,20 @@ class FrappeSessionService:
             data = frappe.cache().get_value(key)
             if data is None:
                 return None
-            
-            # Handle bytes (v14)
             if isinstance(data, bytes):
                 data = data.decode("utf-8")
-            
-            # Parse JSON
             if isinstance(data, str):
                 try:
                     return json.loads(data)
                 except json.JSONDecodeError:
                     return data
-            
             return data
         except Exception:
             return None
     
     def _redis_delete(self, key: str) -> None:
         """Delete key from Redis."""
+        self._ensure_context()
         try:
             frappe.cache().delete_value(key)
         except Exception:
@@ -432,10 +399,6 @@ class FrappeSessionService:
     def _cache_key(self, app_name: str, user_id: str, session_id: str) -> str:
         """Generate local cache key."""
         return f"{app_name}:{user_id}:{session_id}"
-    
-    # ─────────────────────────────────────────────────────────────
-    # UTILITY
-    # ─────────────────────────────────────────────────────────────
     
     def clear_local_cache(self) -> None:
         """Clear request-local cache."""
@@ -447,17 +410,12 @@ class FrappeSessionService:
 # ─────────────────────────────────────────────────────────────────
 
 def get_session_service(site: str = None) -> FrappeSessionService:
-    """
-    Get singleton session service instance.
-    """
+    """Get singleton session service instance."""
     global _session_service
-    
     if _session_service is None:
         _session_service = FrappeSessionService(site=site)
     elif site and _session_service.site != site:
-        # Re-init if site changed
         _session_service.site = site
-    
     return _session_service
 
 
