@@ -67,8 +67,56 @@ For NBFC/Growth System: Every loan number, amount, date, borrower name MUST be r
 
 
 # ─────────────────────────────────────────────────────────────────
-# CALLBACKS — State initialization
+# CALLBACKS — State initialization & Tool result storage
 # ─────────────────────────────────────────────────────────────────
+
+def store_tool_result_in_state(
+    tool,
+    args: Dict[str, Any],
+    tool_context,
+    tool_response: Any,
+) -> Optional[Dict]:
+    """
+    After-tool callback: Store tool results in session state.
+    
+    This is CRITICAL for A2A — allows agents to share data via state.
+    
+    Pattern from official ADK samples:
+    - data-science/sub_agents/bigquery/agent.py
+    - travel-concierge/sub_agents/planning/agent.py
+    """
+    try:
+        tool_name = getattr(tool, "name", str(tool))
+        
+        # Store result in state with tool name as key
+        result_key = f"tool_result_{tool_name}"
+        
+        # Convert response to string if needed
+        if isinstance(tool_response, dict):
+            result_str = json.dumps(tool_response, default=str, ensure_ascii=False)
+        else:
+            result_str = str(tool_response)
+        
+        # Truncate if too long (avoid state bloat)
+        if len(result_str) > 5000:
+            result_str = result_str[:5000] + "... (truncated)"
+        
+        tool_context.state[result_key] = result_str
+        
+        # Also store last tool result for easy access
+        tool_context.state["last_tool_result"] = result_str
+        tool_context.state["last_tool_name"] = tool_name
+        
+    except Exception as e:
+        # Don't fail the tool call, just log
+        try:
+            frappe.log_error(f"store_tool_result_in_state error: {e}", "Niv AI A2A")
+        except:
+            pass
+    
+    # Return None to not modify the tool response
+    return None
+
 
 def init_agent_state(callback_context: CallbackContext) -> None:
     """
@@ -548,6 +596,9 @@ class NivAgentFactory:
             # TEMPERATURE: Slightly creative for code generation
             generate_content_config=CREATIVE_CONFIG,
             
+            # CRITICAL: Store tool results in state for sharing
+            after_tool_callback=store_tool_result_in_state,
+            
             tools=self._get_tools(tool_names),
         )
 
@@ -588,6 +639,9 @@ class NivAgentFactory:
             disallow_transfer_to_parent=True,
             disallow_transfer_to_peers=True,
             generate_content_config=FACTUAL_CONFIG,
+            
+            # CRITICAL: Store tool results in state for sharing
+            after_tool_callback=store_tool_result_in_state,
             
             tools=self._get_tools(tool_names),
         )
@@ -635,6 +689,9 @@ class NivAgentFactory:
             disallow_transfer_to_peers=True,
             generate_content_config=FACTUAL_CONFIG,
             
+            # CRITICAL: Store tool results in state for sharing
+            after_tool_callback=store_tool_result_in_state,
+            
             tools=self._get_tools(tool_names),
         )
 
@@ -675,6 +732,9 @@ class NivAgentFactory:
             disallow_transfer_to_parent=True,
             disallow_transfer_to_peers=True,
             generate_content_config=FACTUAL_CONFIG,
+            
+            # CRITICAL: Store tool results in state for sharing
+            after_tool_callback=store_tool_result_in_state,
             
             tools=self._get_tools(tool_names),
         )
@@ -743,6 +803,10 @@ class NivAgentFactory:
             
             output_key="planner_result",
             generate_content_config=FACTUAL_CONFIG,
+            
+            # CRITICAL: Store tool results in state for sharing
+            after_tool_callback=store_tool_result_in_state,
+            
             tools=[self.adk_tools["create_task_plan"]]
         )
 
@@ -816,6 +880,9 @@ class NivAgentFactory:
             
             # ROUTING TEMPERATURE: Very low for consistent decisions
             generate_content_config=ROUTING_CONFIG,
+            
+            # CRITICAL: Store tool results in state for sharing
+            after_tool_callback=store_tool_result_in_state,
             
             tools=self._get_tools(orc_tool_names),
             
