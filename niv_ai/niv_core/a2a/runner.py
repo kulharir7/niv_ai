@@ -146,6 +146,7 @@ def stream_a2a(
     seen_agents: List[str] = []
     yielded_results: Set[str] = set()  # Track which *_result keys we already sent
     yielded_content_hashes: Set[int] = set()  # Track content hashes to prevent duplicate text
+    yielded_full_text = ""  # Track full text we've sent to detect streaming duplicates
     has_yielded_text = False
     start_time = time.time()
     
@@ -244,11 +245,22 @@ def stream_a2a(
             if text and _is_meaningful_text(text):
                 # Deduplicate: don't yield same content twice
                 content_hash = hash(text.strip()[:200])  # Hash first 200 chars
-                if content_hash not in yielded_content_hashes:
+                
+                # Also check if this streaming token is part of already-yielded full text
+                is_streaming_duplicate = False
+                if len(text) < 50 and yielded_full_text:
+                    # Short token — check if it's part of a previously yielded full response
+                    # This catches: full block yielded first → same text streamed word-by-word later
+                    check_text = text.strip()
+                    if check_text and check_text in yielded_full_text:
+                        is_streaming_duplicate = True
+                
+                if content_hash not in yielded_content_hashes and not is_streaming_duplicate:
                     yielded_content_hashes.add(content_hash)
                     has_yielded_text = True
                     yield {"type": EVENT_TOKEN, "content": text}
-                    _log(f"EVENT #{event_count}: TOKEN ({len(text)} chars)")
+                    yielded_full_text += text
+                    _log(f"EVENT #{event_count}: TOKEN ({len(text)} chars) from {current_agent}")
                 else:
                     _log(f"EVENT #{event_count}: SKIP duplicate token ({len(text)} chars)")
             
