@@ -111,13 +111,15 @@ def stream_a2a(
         # ADK v1.0.0: Runner takes agent directly, not App
         # KEY FIX: Reuse session service across requests
         try:
+            # ADK v1.0.0 Runner signature:
+            # Runner(app_name, agent, artifact_service, session_service, memory_service)
+            # No auto_create_session parameter!
             runner = Runner(
                 app_name="NivAI",
                 agent=orchestrator,
                 artifact_service=InMemoryArtifactService(),
                 session_service=get_session_service(),  # SINGLETON!
                 memory_service=InMemoryMemoryService(),
-                auto_create_session=True,
             )
         except Exception as e:
             yield {
