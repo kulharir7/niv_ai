@@ -1677,14 +1677,14 @@ ${htmlCode}
                 this.hide_typing();
                 this.append_message("assistant", `⚠️ Something went wrong. Please try again.\n\n_${err.message || ""}_`, { is_error: 1 });
             }
+        } finally {
+            this.is_streaming = false;
+            this.$sendBtn.show();
+            this.$stopBtn.hide();
+            this.scroll_to_bottom();
+            this.load_balance();
+            this.update_last_assistant_actions();
         }
-
-        this.is_streaming = false;
-        this.$sendBtn.show();
-        this.$stopBtn.hide();
-        this.scroll_to_bottom();
-        this.load_balance();
-        this.update_last_assistant_actions();
 
         this.auto_title(text);
     }
@@ -1826,7 +1826,13 @@ ${htmlCode}
                                     $thought = $('<div class="niv-thought-block"></div>');
                                     $thoughtWrapper.append($thought);
                                 }
-                                $thought.append(data.content.replace(/\n/g, '<br>'));
+                                // Use a separate div for thought content to append tokens correctly
+                                let $thoughtContent = $thought.find(".thought-text");
+                                if (!$thoughtContent.length) {
+                                    $thoughtContent = $('<div class="thought-text"></div>');
+                                    $thought.append($thoughtContent);
+                                }
+                                $thoughtContent.append(data.content.replace(/\n/g, '<br>'));
                                 this.scroll_to_bottom_if_near();
                             }
                         } else if (data.type === "tool_call") {

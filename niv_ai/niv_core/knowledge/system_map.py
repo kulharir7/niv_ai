@@ -90,6 +90,7 @@ class SystemMapper:
         """Format data for Cytoscape.js visualizer."""
         graph = self.map_system()
         elements = []
+        node_ids = set()
         
         # Add Nodes (DocTypes)
         for name, info in graph["doctypes"].items():
@@ -101,18 +102,20 @@ class SystemMapper:
                     "type": "doctype"
                 }
             })
+            node_ids.add(name)
             
-        # Add Edges (Links)
+        # Add Edges (Only if both source and target nodes exist)
         for link in graph["links"]:
-            elements.append({
-                "data": {
-                    "id": f"{link['source']}-{link['target']}-{link['field']}",
-                    "source": link["source"],
-                    "target": link["target"],
-                    "label": link["field"],
-                    "type": link["type"]
-                }
-            })
+            if link['source'] in node_ids and link['target'] in node_ids:
+                elements.append({
+                    "data": {
+                        "id": f"{link['source']}-{link['target']}-{link['field']}",
+                        "source": link["source"],
+                        "target": link["target"],
+                        "label": link["field"],
+                        "type": link["type"]
+                    }
+                })
             
         return elements
 

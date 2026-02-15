@@ -17,6 +17,10 @@
     border-left: 4px solid #7c3aed;
 }
 
+.niv-thought-block .thought-text {
+    display: inline;
+}
+
 .niv-thought-block::before {
     content: "💭 THINKING PROCESS";
     display: block;
