@@ -113,12 +113,15 @@ def stream_a2a(
         try:
             # ADK v1.0.0 Runner signature:
             # Runner(app_name, agent, artifact_service, session_service, memory_service)
-            # No auto_create_session parameter!
+            # Use InMemorySessionService for ADK compatibility
+            # TODO: Replace with FrappeSessionService once compatible
+            session_service = InMemorySessionService()
+            
             runner = Runner(
                 app_name="NivAI",
                 agent=orchestrator,
                 artifact_service=InMemoryArtifactService(),
-                session_service=get_session_service(),  # SINGLETON!
+                session_service=session_service,
                 memory_service=InMemoryMemoryService(),
             )
         except Exception as e:
@@ -130,6 +133,28 @@ def stream_a2a(
         
         # Session ID = conversation_id (links ADK ↔ Niv Conversation)
         session_id = conversation_id
+        
+        # ADK v1.0.0: Must create session BEFORE calling runner.run()
+        # Use InMemorySessionService's sync methods
+        try:
+            existing_session = session_service.get_session_sync(
+                app_name="NivAI",
+                user_id=user,
+                session_id=session_id,
+            )
+            if not existing_session:
+                session_service.create_session_sync(
+                    app_name="NivAI",
+                    user_id=user,
+                    session_id=session_id,
+                    state={},
+                )
+        except Exception as e:
+            yield {
+                "type": EVENT_ERROR,
+                "content": f"Failed to create session: {e}",
+            }
+            return
         
         # Build message
         from google.genai import types
