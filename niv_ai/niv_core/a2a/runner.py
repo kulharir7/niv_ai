@@ -143,11 +143,23 @@ def stream_a2a(
                 session_id=session_id,
             )
             if not existing_session:
+                # Initialize state with required keys to avoid Template KeyError
+                initial_state = {
+                    "coder_result": "",
+                    "analyst_result": "",
+                    "nbfc_result": "",
+                    "discovery_result": "",
+                    "critique_result": "",
+                    "planner_result": "",
+                    "orchestrator_result": "",
+                    "user_memory": "No prior memory.",
+                    "nbfc_context": {}
+                }
                 session_service.create_session_sync(
                     app_name="NivAI",
                     user_id=user,
                     session_id=session_id,
-                    state={},
+                    state=initial_state,
                 )
         except Exception as e:
             yield {
