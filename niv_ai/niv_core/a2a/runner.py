@@ -109,7 +109,7 @@ def stream_a2a(
         
         # Create Runner with SINGLETON session service
         try:
-            session_service = get_session_service()
+            session_service = get_session_service(site=site)
             
             runner = Runner(
                 app_name="NivAI",
