@@ -2446,12 +2446,13 @@ ${htmlCode}
     }
 
     update_token_ring(used, limit) {
-        const percent = Math.min(100, (used / limit) * 100);
-        const offset = 94.2 - (percent / 100) * 94.2;
-        this.wrapper.find(".niv-token-ring-progress").css("stroke-dashoffset", offset);
-        this.wrapper.find(".niv-token-usage-value").text(Number(used).toLocaleString() + " / " + Number(limit).toLocaleString());
-        if (percent > 90) {
-            this.wrapper.find(".niv-token-ring-progress").css("stroke", "#ef4444");
+        const usage_val = this.wrapper.find(".niv-token-usage-value");
+        usage_val.text(Number(used).toLocaleString() + " / " + Number(limit).toLocaleString());
+        
+        if (used >= limit * 0.9) {
+            usage_val.css("color", "#ef4444");
+        } else {
+            usage_val.css("color", "");
         }
     }
 
