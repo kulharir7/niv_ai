@@ -285,13 +285,20 @@ def stream_chat(**kwargs):
                             yield _sse(event)
                     
                     # ─── A2A COMPLETION ───
-                    # Clean up full_response — remove critique signals
+                    # Clean up full_response — remove critique signals + thought tags
+                    import re as _re
                     _critique_words = {"PASSED", "FAILED", "APPROVED", "REJECTED"}
                     clean_parts = []
                     for part in full_response.split("\n"):
                         if part.strip().upper() not in _critique_words:
                             clean_parts.append(part)
                     full_response = "\n".join(clean_parts).strip()
+                    # Strip [[THOUGHT]]...[[/THOUGHT]] blocks
+                    full_response = _re.sub(r'\[\[THOUGHT\]\].*?\[\[/THOUGHT\]\]', '', full_response, flags=_re.DOTALL).strip()
+                    # Remove fallback message if real content follows
+                    _fallback = "I processed your request but couldn't generate a response. Please try again."
+                    if _fallback in full_response and len(full_response) > len(_fallback) + 20:
+                        full_response = full_response.replace(_fallback, "").strip()
                     
                     # Save assistant message if we got a response
                     if full_response.strip():
