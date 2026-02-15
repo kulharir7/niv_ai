@@ -259,7 +259,66 @@ def stream_a2a(
             
             # ─── TEXT (3 methods) ───
             text = _extract_text(event)
-            if text and _is_meaningful_text(text):
+            if not text:
+                pass  # Fall through to tool calls etc
+            else:
+                # ── THOUGHT TAG HANDLING (before meaningful text check) ──
+                # Must catch fragments like [, [TH, O, UGHT, ]], [[/, etc
+                
+                # If we're inside a thought block, accumulate everything
+                if in_thought_block:
+                    thought_buffer += text
+                    if '[[/THOUGHT]]' in thought_buffer:
+                        thought_match2 = _thought_pattern.search(thought_buffer)
+                        if thought_match2:
+                            yield {"type": EVENT_THOUGHT, "content": thought_match2.group(1).strip()}
+                        after = thought_buffer.split('[[/THOUGHT]]', 1)[1] if '[[/THOUGHT]]' in thought_buffer else ""
+                        thought_buffer = ""
+                        in_thought_block = False
+                        if after.strip() and _is_meaningful_text(after.strip()):
+                            text = after.strip()
+                        else:
+                            continue  # Thought consumed, no text after
+                    else:
+                        continue  # Still accumulating thought
+                
+                # Check if current token could be start of [[THOUGHT]]
+                combined_check = thought_buffer + text
+                if '[' in combined_check and '[[THOUGHT]]' not in combined_check:
+                    # Could be partial thought tag — buffer it
+                    if combined_check.rstrip() in ('[', '[[', '[[T', '[[TH', '[[THO', 
+                        '[[THOU', '[[THOUG', '[[THOUGH', '[[THOUGHT', '[[THOUGHT]',
+                        '[[/', '[[/T', '[[/TH', '[[/THO', '[[/THOU', '[[/THOUG',
+                        '[[/THOUGH', '[[/THOUGHT', '[[/THOUGHT]'):
+                        thought_buffer = combined_check
+                        continue
+                    elif not thought_buffer:
+                        # Single [ that's part of normal text — don't buffer
+                        pass
+                    else:
+                        # Had buffer but doesn't match thought pattern — flush
+                        text = thought_buffer + text
+                        thought_buffer = ""
+                
+                if '[[THOUGHT]]' in combined_check:
+                    in_thought_block = True
+                    before = combined_check.split('[[THOUGHT]]')[0]
+                    if before.strip() and _is_meaningful_text(before.strip()):
+                        yield {"type": EVENT_TOKEN, "content": before}
+                        yielded_full_text += before
+                        has_yielded_text = True
+                    thought_buffer = '[[THOUGHT]]' + combined_check.split('[[THOUGHT]]', 1)[1]
+                    continue
+                
+                # Clear thought buffer if we get here with one
+                if thought_buffer:
+                    text = thought_buffer + text
+                    thought_buffer = ""
+                
+                # Now check if meaningful
+                if not _is_meaningful_text(text):
+                    continue
+                
                 # Handle complete [[THOUGHT]]...[[/THOUGHT]] in one event
                 if '[[THOUGHT]]' in text and '[[/THOUGHT]]' in text:
                     thought_match = _thought_pattern.search(text)
@@ -273,53 +332,6 @@ def stream_a2a(
                             text = clean_text
                         else:
                             continue
-                
-                # Detect start of thought block (streaming fragments)
-                if not in_thought_block:
-                    # Check if this token starts or contains [[THOUGHT]]
-                    combined = thought_buffer + text
-                    if '[[THOUGHT]]' in combined:
-                        in_thought_block = True
-                        # Extract any text BEFORE the thought tag
-                        before = combined.split('[[THOUGHT]]')[0]
-                        if before.strip() and _is_meaningful_text(before.strip()):
-                            yield {"type": EVENT_TOKEN, "content": before}
-                            yielded_full_text += before
-                            has_yielded_text = True
-                        thought_buffer = '[[THOUGHT]]' + combined.split('[[THOUGHT]]', 1)[1]
-                        continue
-                    # Buffer potential thought tag starts: [, [[, [[T etc
-                    if text.strip().startswith('[') and len(text.strip()) < 15:
-                        thought_buffer += text
-                        if len(thought_buffer) > 30:
-                            # Too long, not a thought tag — flush as text
-                            text = thought_buffer
-                            thought_buffer = ""
-                        else:
-                            continue
-                    elif thought_buffer:
-                        # Had buffered text but this isn't a thought start — flush buffer + current
-                        text = thought_buffer + text
-                        thought_buffer = ""
-                
-                # Inside thought block — accumulate until [[/THOUGHT]]
-                if in_thought_block:
-                    thought_buffer += text
-                    if '[[/THOUGHT]]' in thought_buffer:
-                        # Extract thought content
-                        thought_match2 = _thought_pattern.search(thought_buffer)
-                        if thought_match2:
-                            yield {"type": EVENT_THOUGHT, "content": thought_match2.group(1).strip()}
-                        # Extract any text AFTER the thought block
-                        after = thought_buffer.split('[[/THOUGHT]]', 1)[1] if '[[/THOUGHT]]' in thought_buffer else ""
-                        thought_buffer = ""
-                        in_thought_block = False
-                        if after.strip() and _is_meaningful_text(after.strip()):
-                            text = after
-                        else:
-                            continue
-                    else:
-                        continue  # Still inside thought block
                 
                 # Deduplicate: don't yield same content twice
                 content_hash = hash(text.strip()[:200])  # Hash first 200 chars
