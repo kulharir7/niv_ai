@@ -294,7 +294,7 @@ class NivAgentFactory:
         return create_task_plan
 
     def _make_update_plan_tool(self):
-        def update_task_plan(plan_id: str, step_num: int, status: str, result: str = None) -> str:
+        def update_task_plan(plan_id: str, step_num: int, status: str, result: str = "") -> str:
             try:
                 from niv_ai.niv_core.knowledge.planner_service import PlannerService
                 PlannerService.update_step(plan_id, step_num, status, result)
@@ -316,7 +316,7 @@ class NivAgentFactory:
 
     def _make_memory_tool(self):
         """Native tool to save something to user's long-term memory."""
-        def save_to_user_memory(key: str, value: str, category: str = "Preference") -> str:
+        def save_to_user_memory(key: str, value: str, category: str) -> str:
             try:
                 from niv_ai.niv_core.knowledge.memory_service import MemoryService
                 user = frappe.session.user
@@ -326,7 +326,7 @@ class NivAgentFactory:
                 return f"Error saving to memory: {e}"
         
         save_to_user_memory.__name__ = "save_to_user_memory"
-        save_to_user_memory.__doc__ = "Saves a user preference, habit, or fact to long-term memory. Use this when the user says 'remember this' or expresses a clear preference."
+        save_to_user_memory.__doc__ = "Saves a user preference, habit, or fact to long-term memory. Categories: Preference, Habit, Fact, Context."
         return save_to_user_memory
 
     def _make_knowledge_graph_tool(self):
