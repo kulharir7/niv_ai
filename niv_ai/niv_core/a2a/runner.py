@@ -262,7 +262,14 @@ def stream_a2a(
                 
                 if state_delta and isinstance(state_delta, dict):
                     for key, value in state_delta.items():
-                        # Only show relevant state changes
+                        # CRITICAL: Map orchestrator_result to tokens for immediate UI display
+                        if key == "orchestrator_result" and value:
+                            yield {
+                                "type": EVENT_TOKEN,
+                                "content": str(value),
+                            }
+                        
+                        # Also show relevant state changes
                         if key.endswith("_result") or key.startswith("user:"):
                             value_str = str(value)[:500]
                             yield {
