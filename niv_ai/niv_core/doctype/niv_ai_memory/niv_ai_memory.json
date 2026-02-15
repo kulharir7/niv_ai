@@ -1,0 +1,101 @@
+
+{
+ "actions": [],
+ "allow_events_in_timeline": 0,
+ "allow_guest_to_view": 0,
+ "allow_import": 0,
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-02-15 11:41:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "user",
+  "category",
+  "cb1",
+  "memory_key",
+  "importance",
+  "sb1",
+  "memory_value",
+  "last_used"
+ ],
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "in_list_view": 1,
+   "label": "User",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Select",
+   "in_list_view": 1,
+   "label": "Category",
+   "options": "Preference\nHabit\nFact\nContext",
+   "reqd": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "memory_key",
+   "fieldtype": "Data",
+   "in_list_view": 1,
+   "label": "Memory Key",
+   "reqd": 1,
+   "unique": 0
+  },
+  {
+   "fieldname": "importance",
+   "fieldtype": "Select",
+   "label": "Importance",
+   "options": "High\nMedium\nLow",
+   "default": "Medium"
+  },
+  {
+   "fieldname": "sb1",
+   "fieldtype": "Section Break",
+   "label": "Content"
+  },
+  {
+   "fieldname": "memory_value",
+   "fieldtype": "Small Text",
+   "label": "Memory Value",
+   "reqd": 1
+  },
+  {
+   "fieldname": "last_used",
+   "fieldtype": "Datetime",
+   "label": "Last Used"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "links": [],
+ "modified": "2026-02-15 11:41:00.000000",
+ "modified_by": "Administrator",
+ "module": "Custom",
+ "name": "Niv AI Memory",
+ "naming_rule": "Random",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": []
+}

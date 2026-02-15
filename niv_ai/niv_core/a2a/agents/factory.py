@@ -100,6 +100,15 @@ def init_agent_state(callback_context: CallbackContext) -> None:
         except Exception:
             state["nbfc_context"] = {}
 
+    # Load User Persistent Memory
+    if "user_memory" not in state:
+        try:
+            from niv_ai.niv_core.knowledge.memory_service import MemoryService
+            user = frappe.session.user
+            state["user_memory"] = MemoryService.get_user_memory(user)
+        except Exception:
+            state["user_memory"] = "Could not load long-term memory."
+
 
 # ─────────────────────────────────────────────────────────────────
 # GENERATE CONTENT CONFIG — Temperature control
@@ -155,6 +164,26 @@ class NivAgentFactory:
         self.adk_tools["get_system_knowledge_graph"] = FunctionTool(
             func=self._make_knowledge_graph_tool()
         )
+        
+        # Add Native Memory Tool
+        self.adk_tools["save_to_user_memory"] = FunctionTool(
+            func=self._make_memory_tool()
+        )
+
+    def _make_memory_tool(self):
+        """Native tool to save something to user's long-term memory."""
+        def save_to_user_memory(key: str, value: str, category: str = "Preference") -> str:
+            try:
+                from niv_ai.niv_core.knowledge.memory_service import MemoryService
+                user = frappe.session.user
+                doc_name = MemoryService.save_memory(user, key, value, category)
+                return f"Successfully saved to memory: {key} = {value}"
+            except Exception as e:
+                return f"Error saving to memory: {e}"
+        
+        save_to_user_memory.__name__ = "save_to_user_memory"
+        save_to_user_memory.__doc__ = "Saves a user preference, habit, or fact to long-term memory. Use this when the user says 'remember this' or expresses a clear preference."
+        return save_to_user_memory
 
     def _make_knowledge_graph_tool(self):
         """Native tool to fetch the pre-built knowledge graph."""
@@ -525,7 +554,7 @@ class NivAgentFactory:
         discovery = self.create_discovery_agent()
         
         # Orchestrator's own tools (lightweight)
-        orc_tool_names = ["universal_search", "list_documents", "get_doctype_info"]
+        orc_tool_names = ["universal_search", "list_documents", "get_doctype_info", "save_to_user_memory"]
         
         return LlmAgent(
             name="niv_orchestrator",
@@ -544,6 +573,8 @@ class NivAgentFactory:
                 "EVERY response with data MUST come from tool execution.\n"
                 "If you don't know → run a tool or transfer to specialist.\n"
                 "NEVER guess, assume, or provide example data.\n\n"
+                "🧠 USER MEMORY:\n"
+                "{user_memory}\n\n"
                 "ROUTING RULES:\n"
                 "• Coding/DocTypes/Scripts → transfer to 'frappe_coder'\n"
                 "• SQL/Reports/Analytics → transfer to 'data_analyst'\n"
