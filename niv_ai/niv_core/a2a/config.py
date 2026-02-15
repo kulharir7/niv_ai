@@ -1,10 +1,18 @@
 """
-Niv AI A2A Configuration
+Niv AI A2A Configuration — COMPLETE
 
-Centralized config for A2A system.
+Centralized configuration for A2A multi-agent system.
+Based on official ADK samples patterns.
 """
 
-# Agent names (consistent across the system)
+from datetime import date
+
+
+# ─────────────────────────────────────────────────────────────────
+# AGENT CONFIGURATION
+# ─────────────────────────────────────────────────────────────────
+
+# Agent names (must match factory.py)
 AGENT_NAMES = {
     "orchestrator": "niv_orchestrator",
     "coder": "frappe_coder",
@@ -13,7 +21,16 @@ AGENT_NAMES = {
     "discovery": "system_discovery",
 }
 
-# State keys (output_key values)
+# Agent display names (for UI)
+AGENT_DISPLAY_NAMES = {
+    "niv_orchestrator": "🎯 Orchestrator",
+    "frappe_coder": "👨‍💻 Frappe Developer",
+    "data_analyst": "📊 Data Analyst",
+    "nbfc_specialist": "🏦 NBFC Specialist",
+    "system_discovery": "🔍 System Discovery",
+}
+
+# State keys (output_key values for each agent)
 STATE_KEYS = {
     "orchestrator": "orchestrator_result",
     "coder": "coder_result",
@@ -22,7 +39,12 @@ STATE_KEYS = {
     "discovery": "discovery_result",
 }
 
-# Tool categories per agent
+
+# ─────────────────────────────────────────────────────────────────
+# TOOL CATEGORIES
+# ─────────────────────────────────────────────────────────────────
+
+# Tools assigned to each agent
 AGENT_TOOLS = {
     "coder": [
         "create_document",
@@ -62,27 +84,99 @@ AGENT_TOOLS = {
     ],
 }
 
-# Session settings
-SESSION_TTL = 7200  # 2 hours
-SESSION_MAX_EVENTS = 100  # Max events to keep in history
 
-# Routing keywords (help orchestrator decide which agent to use)
+# ─────────────────────────────────────────────────────────────────
+# SESSION CONFIGURATION
+# ─────────────────────────────────────────────────────────────────
+
+SESSION_TTL = 7200  # 2 hours
+STATE_TTL = 7200
+EVENTS_TTL = 3600  # 1 hour
+MAX_EVENTS = 100  # Keep last 100 events per session
+
+
+# ─────────────────────────────────────────────────────────────────
+# TEMPERATURE CONFIGURATION
+# ─────────────────────────────────────────────────────────────────
+
+# Based on official samples
+TEMPERATURE = {
+    "routing": 0.05,   # Very low for consistent routing decisions
+    "factual": 0.1,    # Low for data queries
+    "creative": 0.3,   # Medium for code generation
+}
+
+
+# ─────────────────────────────────────────────────────────────────
+# ROUTING HINTS
+# ─────────────────────────────────────────────────────────────────
+
+# Keywords that suggest which agent to use
 ROUTING_HINTS = {
     "coder": [
-        "doctype", "create", "script", "field", "workflow", "print format",
-        "web form", "code", "develop", "build", "custom", "hook",
+        "doctype", "create", "script", "field", "workflow",
+        "print format", "web form", "code", "develop", "build",
+        "custom", "hook", "server script", "client script",
+        "child table", "report builder",
     ],
     "analyst": [
         "report", "query", "sql", "data", "analytics", "dashboard",
-        "aggregate", "count", "sum", "average", "chart",
+        "aggregate", "count", "sum", "average", "chart", "graph",
+        "statistics", "analysis", "trend", "comparison",
     ],
     "nbfc": [
         "loan", "emi", "repayment", "borrower", "disbursement",
         "interest", "due", "overdue", "nbfc", "growth system",
-        "lms", "los", "collection",
+        "lms", "los", "collection", "npa", "default", "sanction",
+        "co-lending", "litigation",
     ],
     "discovery": [
         "scan", "discover", "explore", "system", "structure",
-        "onboard", "learn", "understand",
+        "onboard", "learn", "understand", "list doctypes",
+        "what modules", "show workflows",
     ],
+}
+
+
+# ─────────────────────────────────────────────────────────────────
+# GLOBAL INSTRUCTION
+# ─────────────────────────────────────────────────────────────────
+
+GLOBAL_INSTRUCTION = f"""
+You are part of Niv AI — an intelligent assistant for Frappe/ERPNext systems.
+Today's date: {date.today()}
+
+UNIVERSAL RULES:
+1. NEVER hallucinate or invent data. Always use tools to get REAL data.
+2. If a tool fails, explain the error and suggest alternatives.
+3. Be concise but thorough. Provide actionable answers.
+4. For NBFC/Growth System queries, always verify data from the database.
+5. When creating DocTypes/Scripts, always verify existing structure first.
+6. Return tool results as-is, don't summarize or modify them.
+"""
+
+
+# ─────────────────────────────────────────────────────────────────
+# ERROR MESSAGES
+# ─────────────────────────────────────────────────────────────────
+
+ERROR_MESSAGES = {
+    "no_tools": "No MCP tools loaded. Check MCP server connection.",
+    "adk_not_installed": "Google ADK not installed. Run: pip install google-adk",
+    "session_error": "Session service error. Check Redis connection.",
+    "orchestrator_error": "Failed to create orchestrator agent.",
+    "tool_not_found": "Tool not found in any MCP server.",
+    "frappe_context": "Frappe context initialization failed.",
+}
+
+
+# ─────────────────────────────────────────────────────────────────
+# FEATURE FLAGS
+# ─────────────────────────────────────────────────────────────────
+
+FEATURES = {
+    "enable_state_logging": True,   # Log state changes
+    "enable_transfer_logging": True,  # Log agent transfers
+    "enable_tool_result_truncation": True,  # Truncate long tool results
+    "max_tool_result_length": 500,  # Max chars for tool result display
 }
