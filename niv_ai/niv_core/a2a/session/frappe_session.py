@@ -124,20 +124,19 @@ class FrappeSession:
 class FrappeSessionService:
     """
     ADK SessionService implementation using Frappe Redis.
-    
-    KEY DIFFERENCE FROM InMemorySessionService:
-    - Sessions PERSIST across requests
-    - State survives gunicorn worker restarts
-    - Agents can share state properly
-    
-    This fixes the critical bug where every request
-    created a new session service, losing all context.
     """
     
-    def __init__(self):
+    def __init__(self, site: str = None):
         # Request-local cache for fast repeated access
         self._local_cache: Dict[str, FrappeSession] = {}
+        self.site = site or getattr(frappe.local, "site", None)
     
+    def _ensure_context(self):
+        """Ensure Frappe context is initialized (important for background threads)."""
+        if not getattr(frappe.local, "site", None) and self.site:
+            frappe.init(site=self.site)
+            frappe.connect()
+
     # ─────────────────────────────────────────────────────────────
     # CORE INTERFACE (async for ADK compatibility)
     # ─────────────────────────────────────────────────────────────
@@ -147,6 +146,11 @@ class FrappeSessionService:
         app_name: str,
         user_id: str,
         state: Dict[str, Any] = None,
+        session_id: str = None,
+    ) -> FrappeSession:
+        self._ensure_context()
+        session_id = session_id or str(uuid.uuid4())
+        # ...
         session_id: str = None,
     ) -> FrappeSession:
         """
@@ -191,11 +195,7 @@ class FrappeSessionService:
         user_id: str,
         session_id: str,
     ) -> Optional[FrappeSession]:
-        """
-        Retrieve existing session by ID.
-        
-        Returns None if not found.
-        """
+        self._ensure_context()
         cache_key = self._cache_key(app_name, user_id, session_id)
         
         # Local cache first
@@ -387,6 +387,7 @@ class FrappeSessionService:
     
     def _redis_set(self, key: str, value: Any, ttl: int = _SESSION_TTL) -> None:
         """Set value in Redis with TTL."""
+        self._ensure_context()
         try:
             data = json.dumps(value, default=str)
             try:
@@ -400,6 +401,7 @@ class FrappeSessionService:
     
     def _redis_get(self, key: str) -> Optional[Any]:
         """Get value from Redis."""
+        self._ensure_context()
         try:
             data = frappe.cache().get_value(key)
             if data is None:
@@ -444,20 +446,17 @@ class FrappeSessionService:
 # SINGLETON ACCESSOR
 # ─────────────────────────────────────────────────────────────────
 
-def get_session_service() -> FrappeSessionService:
+def get_session_service(site: str = None) -> FrappeSessionService:
     """
     Get singleton session service instance.
-    
-    CRITICAL FIX: Old code created InMemorySessionService
-    inside the stream function — every request got a NEW
-    service with NO data.
-    
-    Now we reuse the same service, persisting to Redis.
     """
     global _session_service
     
     if _session_service is None:
-        _session_service = FrappeSessionService()
+        _session_service = FrappeSessionService(site=site)
+    elif site and _session_service.site != site:
+        # Re-init if site changed
+        _session_service.site = site
     
     return _session_service
 
