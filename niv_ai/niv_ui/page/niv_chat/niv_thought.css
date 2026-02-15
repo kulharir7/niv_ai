@@ -1,29 +1,33 @@
 
 
-/* Thought Block Styling */
+/* Thought Block Styling - IMPROVED CONTRAST */
 .niv-thought-block {
-    background: rgba(124, 58, 237, 0.05);
+    background: rgba(26, 26, 46, 0.6); /* Darker glass background */
     border-left: 3px solid #7c3aed;
-    padding: 12px 16px;
-    margin: 10px 0;
-    border-radius: 4px 8px 8px 4px;
+    padding: 14px 18px;
+    margin: 12px 0;
+    border-radius: 4px 12px 12px 4px;
     font-style: italic;
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 0.95em;
-    line-height: 1.5;
+    color: #e2e8f0; /* Bright silver text for readability */
+    font-size: 0.92em;
+    line-height: 1.6;
     position: relative;
+    backdrop-filter: blur(4px);
+    border: 1px solid rgba(124, 58, 237, 0.1);
+    border-left: 4px solid #7c3aed;
 }
 
 .niv-thought-block::before {
-    content: "💭 Thinking...";
+    content: "💭 THINKING PROCESS";
     display: block;
     font-style: normal;
-    font-weight: 600;
-    font-size: 0.8em;
+    font-weight: 700;
+    font-size: 0.75em;
     color: #a78bfa;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 1px;
+    opacity: 0.9;
 }
 
 /* Tool badge inside thought */
