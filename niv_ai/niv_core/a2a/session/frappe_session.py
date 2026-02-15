@@ -317,6 +317,49 @@ class FrappeSessionService:
         state = self._redis_get(f"{_PREFIX_STATE}{session_id}") or {}
         state[key] = value
         await self._save_state(session_id, state)
+
+    # ─────────────────────────────────────────────────────────────
+    # SYNC WRAPPERS (for non-async runners)
+    # ─────────────────────────────────────────────────────────────
+    
+    def get_session_sync(self, app_name: str, user_id: str, session_id: str) -> Optional[FrappeSession]:
+        """Sync version of get_session."""
+        data = self._redis_get(f"{_PREFIX_SESSION}{session_id}")
+        if not data:
+            return None
+            
+        state = self._redis_get(f"{_PREFIX_STATE}{session_id}") or {}
+        events = self._redis_get(f"{_PREFIX_EVENTS}{session_id}") or []
+        
+        return FrappeSession(
+            session_id=data["id"],
+            app_name=data["app_name"],
+            user_id=data["user_id"],
+            state=state,
+            events=events,
+            last_update_time=data.get("last_update_time")
+        )
+    
+    def create_session_sync(self, app_name: str, user_id: str, session_id: str, state: Dict[str, Any] = None) -> FrappeSession:
+        """Sync version of create_session."""
+        session = FrappeSession(
+            session_id=session_id,
+            app_name=app_name,
+            user_id=user_id,
+            state=state or {}
+        )
+        self._redis_set(f"{_PREFIX_SESSION}{session_id}", session.to_dict(), ttl=_SESSION_TTL)
+        self._redis_set(f"{_PREFIX_STATE}{session_id}", session.state, ttl=_STATE_TTL)
+        return session
+
+    def update_session_sync(self, app_name: str, user_id: str, session_id: str, state: Dict[str, Any]) -> None:
+        """Sync version of update state."""
+        self._redis_set(f"{_PREFIX_STATE}{session_id}", state, ttl=_STATE_TTL)
+        # Update metadata too
+        data = self._redis_get(f"{_PREFIX_SESSION}{session_id}")
+        if data:
+            data["last_update_time"] = time.time()
+            self._redis_set(f"{_PREFIX_SESSION}{session_id}", data, ttl=_SESSION_TTL)
     
     # ─────────────────────────────────────────────────────────────
     # PERSISTENCE
