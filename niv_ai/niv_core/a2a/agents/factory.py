@@ -177,6 +177,21 @@ class NivAgentFactory:
         
         # Add Visualizer Tool
         self.adk_tools["visualize_system_map"] = FunctionTool(func=self._make_visualize_graph_tool())
+        
+        # Add Auditor Tool
+        self.adk_tools["run_nbfc_audit"] = FunctionTool(func=self._make_auditor_tool())
+
+    def _make_auditor_tool(self):
+        """Tool to run NBFC business audits."""
+        def run_nbfc_audit() -> str:
+            try:
+                from niv_ai.niv_core.knowledge.auditor_service import run_daily_audit
+                return run_daily_audit()
+            except Exception as e:
+                return f"Error running audit: {e}"
+        run_nbfc_audit.__name__ = "run_nbfc_audit"
+        run_nbfc_audit.__doc__ = "Scans the system for overdue loans, interest mismatches, and data anomalies."
+        return run_nbfc_audit
 
     def _make_visualize_graph_tool(self):
         """Tool to create a visual artifact of the knowledge graph."""
@@ -565,7 +580,7 @@ class NivAgentFactory:
         NBFC/Lending Operations Specialist for Growth System.
         """
         tool_names = [
-            "run_database_query", "list_documents", "get_doctype_info",
+            "run_nbfc_audit", "run_database_query", "list_documents", "get_doctype_info",
             "get_document", "search_documents",
         ]
         
