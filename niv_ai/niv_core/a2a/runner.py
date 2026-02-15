@@ -264,7 +264,7 @@ def stream_a2a(
                     for key, value in state_delta.items():
                         # Only show relevant state changes
                         if key.endswith("_result") or key.startswith("user:"):
-                            value_str = str(value)[:200]
+                            value_str = str(value)[:500]
                             yield {
                                 "type": EVENT_STATE_CHANGE,
                                 "key": key,
