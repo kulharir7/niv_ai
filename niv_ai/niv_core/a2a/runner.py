@@ -68,12 +68,14 @@ def _extract_text(event) -> str:
     
     Returns extracted text or empty string.
     """
+    raw = ""
+    
     # Method 1: Direct text attribute
     if hasattr(event, "text") and event.text:
-        return str(event.text)
+        raw = str(event.text)
     
     # Method 2: Content object with parts
-    if hasattr(event, "content") and event.content:
+    elif hasattr(event, "content") and event.content:
         content = event.content
         if hasattr(content, "parts") and content.parts:
             texts = []
@@ -81,18 +83,18 @@ def _extract_text(event) -> str:
                 if hasattr(part, "text") and part.text:
                     texts.append(str(part.text))
             if texts:
-                return "\n".join(texts)
+                raw = "\n".join(texts)
     
     # Method 3: Direct parts
-    if hasattr(event, "parts") and event.parts:
+    elif hasattr(event, "parts") and event.parts:
         texts = []
         for part in event.parts:
             if hasattr(part, "text") and part.text:
                 texts.append(str(part.text))
         if texts:
-            return "\n".join(texts)
+            raw = "\n".join(texts)
     
-    return ""
+    return raw
 
 
 def _is_meaningful_text(text: str) -> bool:
@@ -225,6 +227,12 @@ def stream_a2a(
         # ─── 5. STREAM EVENTS ───
         yield {"type": EVENT_THOUGHT, "content": "Processing request..."}
         
+        import re
+        _thought_pattern = re.compile(r'\[\[THOUGHT\]\](.*?)\[\[/THOUGHT\]\]', re.DOTALL)
+        _thought_tag_fragments = {'[[', ']]', '[[/', 'THOUGHT', '[[THOUGHT]]', '[[/THOUGHT]]',
+                                   '[', ']', 'TH', 'O', 'UGHT', '/TH', '/'}
+        thought_buffer = ""
+        
         event_count = 0
         for event in runner.run(
             new_message=user_message,
@@ -243,6 +251,47 @@ def stream_a2a(
             # ─── TEXT (3 methods) ───
             text = _extract_text(event)
             if text and _is_meaningful_text(text):
+                # Handle [[THOUGHT]] tags — convert to thought events, not visible text
+                if '[[THOUGHT]]' in text and '[[/THOUGHT]]' in text:
+                    thought_match = _thought_pattern.search(text)
+                    if thought_match:
+                        thought_text = thought_match.group(1).strip()
+                        if thought_text:
+                            yield {"type": EVENT_THOUGHT, "content": thought_text}
+                            _log(f"EVENT #{event_count}: THOUGHT ({len(thought_text)} chars)")
+                        clean_text = _thought_pattern.sub('', text).strip()
+                        if clean_text and _is_meaningful_text(clean_text):
+                            text = clean_text
+                        else:
+                            continue  # Only thought tags, skip
+                
+                # Skip streaming thought tag fragments (word-by-word: "[[", "TH", "OUGHT", "]]")
+                stripped = text.strip()
+                if stripped in _thought_tag_fragments:
+                    thought_buffer += text
+                    _log(f"EVENT #{event_count}: buffer thought fragment: {repr(stripped)}")
+                    continue
+                
+                # If we were buffering thought fragments, check for completion
+                if thought_buffer:
+                    thought_buffer += text
+                    if '[[/THOUGHT]]' in thought_buffer:
+                        thought_match2 = _thought_pattern.search(thought_buffer)
+                        if thought_match2:
+                            yield {"type": EVENT_THOUGHT, "content": thought_match2.group(1).strip()}
+                        clean = _thought_pattern.sub('', thought_buffer).strip()
+                        thought_buffer = ""
+                        if clean and _is_meaningful_text(clean):
+                            text = clean
+                        else:
+                            continue
+                    elif len(thought_buffer) > 500:
+                        # Too long without closing tag, flush as text
+                        text = thought_buffer
+                        thought_buffer = ""
+                    else:
+                        continue  # Still accumulating
+                
                 # Deduplicate: don't yield same content twice
                 content_hash = hash(text.strip()[:200])  # Hash first 200 chars
                 
