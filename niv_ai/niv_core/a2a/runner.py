@@ -108,14 +108,8 @@ def stream_a2a(
             return
         
         # Create Runner with SINGLETON session service
-        # ADK v1.0.0: Runner takes agent directly, not App
-        # KEY FIX: Reuse session service across requests
         try:
-            # ADK v1.0.0 Runner signature:
-            # Runner(app_name, agent, artifact_service, session_service, memory_service)
-            # Use InMemorySessionService for ADK compatibility
-            # TODO: Replace with FrappeSessionService once compatible
-            session_service = InMemorySessionService()
+            session_service = get_session_service()
             
             runner = Runner(
                 app_name="NivAI",
@@ -131,40 +125,44 @@ def stream_a2a(
             }
             return
         
-        # Session ID = conversation_id (links ADK ↔ Niv Conversation)
+        # Session ID = conversation_id
         session_id = conversation_id
         
-        # ADK v1.0.0: Must create session BEFORE calling runner.run()
-        # Use InMemorySessionService's sync methods
+        # Ensure session and state are ready
         try:
+            # Required state keys to avoid Template KeyError
+            required_keys = {
+                "coder_result": "", "analyst_result": "", "nbfc_result": "", 
+                "discovery_result": "", "critique_result": "", "planner_result": "", 
+                "orchestrator_result": "", "user_memory": "No prior memory.",
+                "nbfc_context": {}
+            }
+            
             existing_session = session_service.get_session_sync(
-                app_name="NivAI",
-                user_id=user,
-                session_id=session_id,
+                app_name="NivAI", user_id=user, session_id=session_id
             )
+            
             if not existing_session:
-                # Initialize state with required keys to avoid Template KeyError
-                initial_state = {
-                    "coder_result": "",
-                    "analyst_result": "",
-                    "nbfc_result": "",
-                    "discovery_result": "",
-                    "critique_result": "",
-                    "planner_result": "",
-                    "orchestrator_result": "",
-                    "user_memory": "No prior memory.",
-                    "nbfc_context": {}
-                }
                 session_service.create_session_sync(
-                    app_name="NivAI",
-                    user_id=user,
-                    session_id=session_id,
-                    state=initial_state,
+                    app_name="NivAI", user_id=user, session_id=session_id, state=required_keys
                 )
+            else:
+                # Force update existing session with missing keys
+                current_state = existing_session.state or {}
+                needs_update = False
+                for k, v in required_keys.items():
+                    if k not in current_state:
+                        current_state[k] = v
+                        needs_update = True
+                
+                if needs_update:
+                    session_service.update_session_sync(
+                        app_name="NivAI", user_id=user, session_id=session_id, state=current_state
+                    )
         except Exception as e:
             yield {
                 "type": EVENT_ERROR,
-                "content": f"Failed to create session: {e}",
+                "content": f"Session sync failed: {e}",
             }
             return
         
