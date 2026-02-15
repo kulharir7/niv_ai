@@ -432,3 +432,72 @@ The `discovery.py` pattern of scanning DocTypes is good — but needs proper int
 ---
 
 *This study report is the foundation for fixing A2A. Follow the checklist in order.*
+
+---
+
+## 📚 OFFICIAL ADK SAMPLES ANALYSIS (Added 2026-02-15)
+
+Source: https://github.com/google/adk-samples
+
+### Samples Studied:
+1. **RAG** — Vertex AI retrieval with `VertexAiRagRetrieval` tool
+2. **customer-service** — Single agent with tools + callbacks
+3. **data-science** — Multi-agent with `sub_agents` + dynamic tools
+4. **travel-concierge** — Complex hierarchy with 6 sub-agents
+
+### Key Patterns Discovered:
+
+#### 1. Two Ways to Use Sub-Agents
+```python
+# Option A: sub_agents (LLM-driven transfer)
+root = Agent(
+    sub_agents=[agent1, agent2]  # LLM decides when to transfer
+)
+
+# Option B: AgentTool (Explicit invocation)
+from google.adk.tools.agent_tool import AgentTool
+root = Agent(
+    tools=[AgentTool(agent=agent1)]  # Called as a tool
+)
+```
+
+#### 2. Sub-Agent Pattern (from travel-concierge)
+```python
+place_agent = Agent(
+    model="gemini-2.5-flash",
+    name="place_agent",
+    description="This agent suggests destinations given user preferences",
+    instruction=prompt.PLACE_AGENT_INSTR,
+    disallow_transfer_to_parent=True,  # Prevent returning mid-task
+    disallow_transfer_to_peers=True,   # Prevent sibling transfers
+    output_schema=DestinationIdeas,    # Pydantic model for structured output
+    output_key="place",                # Saves to state['place']
+)
+```
+
+#### 3. Root Agent Pattern (from data-science)
+```python
+agent = LlmAgent(
+    model="gemini-2.5-flash",
+    name="data_science_root_agent",
+    instruction=return_instructions_root(),
+    global_instruction="You are a Data Science Multi Agent System.",
+    sub_agents=sub_agents,
+    tools=tools,
+    before_agent_callback=load_database_settings_in_context,
+    generate_content_config=types.GenerateContentConfig(temperature=0.01),
+)
+```
+
+### Features Our Implementation Has:
+- ✅ `sub_agents` for hierarchy
+- ✅ `description` for routing
+- ✅ `output_key` for state sharing
+
+### Features We Can Add:
+- 🔄 `disallow_transfer_to_parent` — Prevent premature returns
+- 🔄 `disallow_transfer_to_peers` — Prevent sibling transfers
+- 🔄 `output_schema` — Pydantic models for structured output
+- 🔄 `global_instruction` — Common context for all agents
+- 🔄 `before_agent_callback` — State initialization
+- 🔄 `generate_content_config` — Temperature control
