@@ -98,12 +98,22 @@ def _extract_text(event) -> str:
 
 
 def _is_meaningful_text(text: str) -> bool:
-    """Check if text is meaningful (not empty, not just JSON, not just whitespace)."""
+    """Check if text is meaningful (not empty, not just JSON, not just whitespace, not internal agent signals)."""
     if not text or not text.strip():
         return False
     stripped = text.strip()
     if len(stripped) < 5:
         return False
+    
+    # Skip critique agent outputs (internal signals, not user-facing)
+    _critique_signals = {"PASSED", "FAILED", "APPROVED", "REJECTED"}
+    if stripped.upper() in _critique_signals:
+        return False
+    if stripped.upper().startswith("PASSED") and len(stripped) < 20:
+        return False
+    if stripped.upper().startswith("FAILED:") and len(stripped) < 100:
+        return False
+    
     # Skip pure JSON objects (tool results get stored in state too)
     if stripped.startswith("{") and stripped.endswith("}"):
         try:
