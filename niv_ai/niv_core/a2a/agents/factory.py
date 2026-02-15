@@ -201,49 +201,79 @@ class NivAgentFactory:
                 from niv_ai.niv_core.knowledge.system_map import get_graph_elements
                 elements = get_graph_elements()
                 
-                # HTML Template for Cytoscape.js
+                # HTML Template for Cytoscape.js (Improved for reliability)
                 html_content = f"""
-                <div id="cy" style="width: 100%; height: 600px; background: #1a1a2e; border-radius: 12px;"></div>
+                <div id="cy-container" style="width: 100%; height: 500px; background: #11111e; border-radius: 12px; border: 1px solid #333; position: relative;">
+                    <div id="cy-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #7c3aed; font-family: sans-serif;">
+                        Generating Graph...
+                    </div>
+                    <div id="cy" style="width: 100%; height: 100%;"></div>
+                </div>
                 <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
                 <script>
-                    var cy = cytoscape({{
-                        container: document.getElementById('cy'),
-                        elements: {json.dumps(elements)},
-                        style: [
-                            {{
-                                selector: 'node',
-                                style: {{
-                                    'background-color': '#7c3aed',
-                                    'label': 'data(label)',
-                                    'color': '#fff',
-                                    'text-valign': 'center',
-                                    'font-size': '12px',
-                                    'width': '100px',
-                                    'height': '40px',
-                                    'shape': 'round-rectangle'
-                                }}
-                            }},
-                            {{
-                                selector: 'edge',
-                                style: {{
-                                    'width': 2,
-                                    'line-color': '#4f46e5',
-                                    'target-arrow-color': '#4f46e5',
-                                    'target-arrow-shape': 'triangle',
-                                    'curve-style': 'bezier',
-                                    'label': 'data(label)',
-                                    'font-size': '10px',
-                                    'color': '#a78bfa',
-                                    'text-background-opacity': 1,
-                                    'text-background-color': '#1e1b4b'
-                                }}
+                    (function() {{
+                        function initGraph() {{
+                            var el = document.getElementById('cy');
+                            if (!el || typeof cytoscape === 'undefined') {{
+                                setTimeout(initGraph, 100);
+                                return;
                             }}
-                        ],
-                        layout: {{
-                            name: 'cose',
-                            animate: true
+                            
+                            document.getElementById('cy-loading').style.display = 'none';
+                            
+                            var cy = cytoscape({{
+                                container: el,
+                                elements: {json.dumps(elements)},
+                                boxSelectionEnabled: false,
+                                autounselectify: true,
+                                style: [
+                                    {{
+                                        selector: 'node',
+                                        style: {{
+                                            'background-color': '#7c3aed',
+                                            'label': 'data(label)',
+                                            'color': '#fff',
+                                            'text-valign': 'center',
+                                            'font-size': '10px',
+                                            'width': '80px',
+                                            'height': '30px',
+                                            'shape': 'round-rectangle',
+                                            'text-wrap': 'wrap',
+                                            'text-max-width': '70px'
+                                        }}
+                                    }},
+                                    {{
+                                        selector: 'edge',
+                                        style: {{
+                                            'width': 1,
+                                            'line-color': '#4f46e5',
+                                            'target-arrow-color': '#4f46e5',
+                                            'target-arrow-shape': 'triangle',
+                                            'curve-style': 'bezier',
+                                            'label': 'data(label)',
+                                            'font-size': '8px',
+                                            'color': '#a78bfa',
+                                            'text-background-opacity': 1,
+                                            'text-background-color': '#11111e',
+                                            'text-margin-y': -10
+                                        }}
+                                    }}
+                                ],
+                                layout: {{
+                                    name: 'cose',
+                                    padding: 30,
+                                    animate: true,
+                                    nodeRepulsion: 4000
+                                }}
+                            }});
                         }}
-                    }});
+                        
+                        if (document.readyState === 'complete') {{
+                            initGraph();
+                        }} else {{
+                            window.addEventListener('load', initGraph);
+                        }}
+                    }})();
                 </script>
                 """
                 
