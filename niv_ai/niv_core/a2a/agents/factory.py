@@ -536,6 +536,38 @@ class NivAgentFactory:
             tools=self._get_tools(tool_names),
         )
 
+    def create_critique_agent(self) -> LlmAgent:
+        """
+        Quality Control & Self-Reflection Specialist.
+        Ensures REAL DATA ONLY and zero hallucinations.
+        """
+        return LlmAgent(
+            name="niv_critique",
+            model=self.adk_model,
+            
+            description=(
+                "Quality control agent. Reviews other agents' work for accuracy, "
+                "hallucinations, and mock data. DO NOT use for original tasks."
+            ),
+            
+            instruction=(
+                "You are the Niv AI Critique Agent. Your ONLY job is to verify accuracy.\n\n"
+                "🚨 CRITICAL VERIFICATION RULES:\n"
+                "1. CHECK FOR MOCK DATA: If you see names like 'John Doe', 'Company X', "
+                "or IDs like 'INV-001' that didn't come from a tool result → REJECT.\n"
+                "2. CHECK FOR TOOLS: Did the previous agent actually run a tool? If not, "
+                "and they provided data → REJECT.\n"
+                "3. CHECK LOGIC: Is the calculation correct based on the tool output?\n"
+                "4. REAL DATA ONLY: If the data looks suspicious or 'too perfect', flag it.\n\n"
+                "RESPONSE FORMAT:\n"
+                "- If OK: 'PASSED'\n"
+                "- If FAIL: 'FAILED: [Reason and what to fix]'"
+            ),
+            
+            output_key="critique_result",
+            generate_content_config=ROUTING_CONFIG, # Very strict
+        )
+
     # ─────────────────────────────────────────────────────────────
     # ORCHESTRATOR
     # ─────────────────────────────────────────────────────────────
@@ -552,6 +584,7 @@ class NivAgentFactory:
         analyst = self.create_analyst_agent()
         nbfc = self.create_nbfc_agent()
         discovery = self.create_discovery_agent()
+        critique = self.create_critique_agent()
         
         # Orchestrator's own tools (lightweight)
         orc_tool_names = ["universal_search", "list_documents", "get_doctype_info", "save_to_user_memory"]
@@ -579,17 +612,20 @@ class NivAgentFactory:
                 "• Coding/DocTypes/Scripts → transfer to 'frappe_coder'\n"
                 "• SQL/Reports/Analytics → transfer to 'data_analyst'\n"
                 "• Loans/EMI/NBFC → transfer to 'nbfc_specialist'\n"
-                "• System scan/discovery → transfer to 'system_discovery'\n\n"
+                "• System scan/discovery → transfer to 'system_discovery'\n"
+                "• QUALITY CHECK (mandatory for data/code) → transfer to 'niv_critique'\n\n"
                 "WORKFLOW:\n"
                 "1. User asks for data → Run tool OR transfer to specialist\n"
-                "2. Get tool result → Use ONLY that result in response\n"
-                "3. Tool failed? → Say 'Tool failed' — don't make up data\n"
-                "4. Specialist returned? → Use their {output_key} result\n\n"
+                "2. Get tool result → BEFORE responding, transfer to 'niv_critique' to verify if data is REAL.\n"
+                "3. If critique says 'PASSED' → provide result to user.\n"
+                "4. If critique says 'FAILED' → Re-run tool with fix or report failure.\n"
+                "5. NEVER fill gaps with imagination.\n\n"
                 "STATE ACCESS:\n"
                 "- {coder_result} — frappe_coder output\n"
                 "- {analyst_result} — data_analyst output\n"
                 "- {nbfc_result} — nbfc_specialist output\n"
-                "- {discovery_result} — system_discovery output"
+                "- {discovery_result} — system_discovery output\n"
+                "- {critique_result} — niv_critique verdict"
             ),
             
             output_key="orchestrator_result",
@@ -603,7 +639,7 @@ class NivAgentFactory:
             tools=self._get_tools(orc_tool_names),
             
             # HIERARCHY: ADK enables transfers automatically
-            sub_agents=[coder, analyst, nbfc, discovery],
+            sub_agents=[coder, analyst, nbfc, discovery, critique],
         )
 
 
