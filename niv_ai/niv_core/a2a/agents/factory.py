@@ -170,6 +170,44 @@ class NivAgentFactory:
             func=self._make_memory_tool()
         )
 
+        # Add Native Planning Tools
+        self.adk_tools["create_task_plan"] = FunctionTool(func=self._make_create_plan_tool())
+        self.adk_tools["update_task_plan"] = FunctionTool(func=self._make_update_plan_tool())
+        self.adk_tools["get_task_plan"] = FunctionTool(func=self._make_get_plan_tool())
+
+    def _make_create_plan_tool(self):
+        def create_task_plan(title: str, steps: list) -> str:
+            try:
+                from niv_ai.niv_core.knowledge.planner_service import PlannerService
+                user = frappe.session.user
+                plan_id = PlannerService.create_plan(user, title, steps)
+                return f"Plan created successfully. ID: {plan_id}"
+            except Exception as e:
+                return f"Error creating plan: {e}"
+        create_task_plan.__name__ = "create_task_plan"
+        return create_task_plan
+
+    def _make_update_plan_tool(self):
+        def update_task_plan(plan_id: str, step_num: int, status: str, result: str = None) -> str:
+            try:
+                from niv_ai.niv_core.knowledge.planner_service import PlannerService
+                PlannerService.update_step(plan_id, step_num, status, result)
+                return f"Step {step_num} updated to {status}."
+            except Exception as e:
+                return f"Error updating plan: {e}"
+        update_task_plan.__name__ = "update_task_plan"
+        return update_task_plan
+
+    def _make_get_plan_tool(self):
+        def get_task_plan(plan_id: str) -> str:
+            try:
+                from niv_ai.niv_core.knowledge.planner_service import PlannerService
+                return PlannerService.get_plan_status(plan_id)
+            except Exception as e:
+                return f"Error getting plan: {e}"
+        get_task_plan.__name__ = "get_task_plan"
+        return get_task_plan
+
     def _make_memory_tool(self):
         """Native tool to save something to user's long-term memory."""
         def save_to_user_memory(key: str, value: str, category: str = "Preference") -> str:
@@ -568,6 +606,41 @@ class NivAgentFactory:
             generate_content_config=ROUTING_CONFIG, # Very strict
         )
 
+    def create_planner_agent(self) -> LlmAgent:
+        """
+        Task Planning & Decomposition Specialist.
+        Breaks complex requests into actionable steps.
+        """
+        return LlmAgent(
+            name="niv_planner",
+            model=self.adk_model,
+            
+            description=(
+                "Architect and Planner. Use this when the user request is complex, "
+                "multi-step, or involves creating entire modules/systems. "
+                "DO NOT use for simple data queries."
+            ),
+            
+            instruction=(
+                "You are the Niv AI Architect. Your job is to break complex projects into steps.\n\n"
+                "PLANNING RULES:\n"
+                "1. Break large tasks into 3-7 manageable steps.\n"
+                "2. Assign each step to the correct agent (frappe_coder, data_analyst, nbfc_specialist).\n"
+                "3. Use the 'create_task_plan' tool to save the plan to the database.\n"
+                "4. After creating the plan, present it to the user clearly.\n\n"
+                "WORKFLOW:\n"
+                "- Analyze the project (e.g. 'Build a Loan App').\n"
+                "- Step 1: Research structure (Discovery).\n"
+                "- Step 2: Create DocTypes (Coder).\n"
+                "- Step 3: Add Logic/Scripts (Coder).\n"
+                "- Step 4: Create Reports (Analyst)."
+            ),
+            
+            output_key="planner_result",
+            generate_content_config=FACTUAL_CONFIG,
+            tools=[self.adk_tools["create_task_plan"]]
+        )
+
     # ─────────────────────────────────────────────────────────────
     # ORCHESTRATOR
     # ─────────────────────────────────────────────────────────────
@@ -585,9 +658,10 @@ class NivAgentFactory:
         nbfc = self.create_nbfc_agent()
         discovery = self.create_discovery_agent()
         critique = self.create_critique_agent()
+        planner = self.create_planner_agent()
         
         # Orchestrator's own tools (lightweight)
-        orc_tool_names = ["universal_search", "list_documents", "get_doctype_info", "save_to_user_memory"]
+        orc_tool_names = ["universal_search", "list_documents", "get_doctype_info", "save_to_user_memory", "update_task_plan", "get_task_plan"]
         
         return LlmAgent(
             name="niv_orchestrator",
@@ -609,23 +683,24 @@ class NivAgentFactory:
                 "🧠 USER MEMORY:\n"
                 "{user_memory}\n\n"
                 "ROUTING RULES:\n"
+                "• Complex Projects/Module Creation → transfer to 'niv_planner'\n"
                 "• Coding/DocTypes/Scripts → transfer to 'frappe_coder'\n"
                 "• SQL/Reports/Analytics → transfer to 'data_analyst'\n"
                 "• Loans/EMI/NBFC → transfer to 'nbfc_specialist'\n"
                 "• System scan/discovery → transfer to 'system_discovery'\n"
                 "• QUALITY CHECK (mandatory for data/code) → transfer to 'niv_critique'\n\n"
                 "WORKFLOW:\n"
-                "1. User asks for data → Run tool OR transfer to specialist\n"
-                "2. Get tool result → BEFORE responding, transfer to 'niv_critique' to verify if data is REAL.\n"
-                "3. If critique says 'PASSED' → provide result to user.\n"
-                "4. If critique says 'FAILED' → Re-run tool with fix or report failure.\n"
-                "5. NEVER fill gaps with imagination.\n\n"
+                "1. Is it a complex multi-step request? Yes → transfer to 'niv_planner'.\n"
+                "2. If simple request → Run tool OR transfer to specialist.\n"
+                "3. Get tool result → BEFORE responding, transfer to 'niv_critique' to verify if data is REAL.\n"
+                "4. If plan exists → Execute current step and use 'update_task_plan'.\n\n"
                 "STATE ACCESS:\n"
                 "- {coder_result} — frappe_coder output\n"
                 "- {analyst_result} — data_analyst output\n"
                 "- {nbfc_result} — nbfc_specialist output\n"
                 "- {discovery_result} — system_discovery output\n"
-                "- {critique_result} — niv_critique verdict"
+                "- {critique_result} — niv_critique verdict\n"
+                "- {planner_result} — niv_planner plan"
             ),
             
             output_key="orchestrator_result",
@@ -639,7 +714,7 @@ class NivAgentFactory:
             tools=self._get_tools(orc_tool_names),
             
             # HIERARCHY: ADK enables transfers automatically
-            sub_agents=[coder, analyst, nbfc, discovery, critique],
+            sub_agents=[coder, analyst, nbfc, discovery, critique, planner],
         )
 
 
