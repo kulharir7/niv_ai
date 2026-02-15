@@ -239,9 +239,8 @@ def stream_a2a(
         
         import re
         _thought_pattern = re.compile(r'\[\[THOUGHT\]\](.*?)\[\[/THOUGHT\]\]', re.DOTALL)
-        _thought_tag_fragments = {'[[', ']]', '[[/', 'THOUGHT', '[[THOUGHT]]', '[[/THOUGHT]]',
-                                   '[', ']', 'TH', 'O', 'UGHT', '/TH', '/'}
         thought_buffer = ""
+        in_thought_block = False  # True when we're inside [[THOUGHT]]...[[/THOUGHT]]
         
         event_count = 0
         for event in runner.run(
@@ -261,7 +260,7 @@ def stream_a2a(
             # ─── TEXT (3 methods) ───
             text = _extract_text(event)
             if text and _is_meaningful_text(text):
-                # Handle [[THOUGHT]] tags — convert to thought events, not visible text
+                # Handle complete [[THOUGHT]]...[[/THOUGHT]] in one event
                 if '[[THOUGHT]]' in text and '[[/THOUGHT]]' in text:
                     thought_match = _thought_pattern.search(text)
                     if thought_match:
@@ -273,34 +272,54 @@ def stream_a2a(
                         if clean_text and _is_meaningful_text(clean_text):
                             text = clean_text
                         else:
-                            continue  # Only thought tags, skip
+                            continue
                 
-                # Skip streaming thought tag fragments (word-by-word: "[[", "TH", "OUGHT", "]]")
-                stripped = text.strip()
-                if stripped in _thought_tag_fragments:
-                    thought_buffer += text
-                    _log(f"EVENT #{event_count}: buffer thought fragment: {repr(stripped)}")
-                    continue
+                # Detect start of thought block (streaming fragments)
+                if not in_thought_block:
+                    # Check if this token starts or contains [[THOUGHT]]
+                    combined = thought_buffer + text
+                    if '[[THOUGHT]]' in combined:
+                        in_thought_block = True
+                        # Extract any text BEFORE the thought tag
+                        before = combined.split('[[THOUGHT]]')[0]
+                        if before.strip() and _is_meaningful_text(before.strip()):
+                            yield {"type": EVENT_TOKEN, "content": before}
+                            yielded_full_text += before
+                            has_yielded_text = True
+                        thought_buffer = '[[THOUGHT]]' + combined.split('[[THOUGHT]]', 1)[1]
+                        continue
+                    # Buffer potential thought tag starts: [, [[, [[T etc
+                    if text.strip().startswith('[') and len(text.strip()) < 15:
+                        thought_buffer += text
+                        if len(thought_buffer) > 30:
+                            # Too long, not a thought tag — flush as text
+                            text = thought_buffer
+                            thought_buffer = ""
+                        else:
+                            continue
+                    elif thought_buffer:
+                        # Had buffered text but this isn't a thought start — flush buffer + current
+                        text = thought_buffer + text
+                        thought_buffer = ""
                 
-                # If we were buffering thought fragments, check for completion
-                if thought_buffer:
+                # Inside thought block — accumulate until [[/THOUGHT]]
+                if in_thought_block:
                     thought_buffer += text
                     if '[[/THOUGHT]]' in thought_buffer:
+                        # Extract thought content
                         thought_match2 = _thought_pattern.search(thought_buffer)
                         if thought_match2:
                             yield {"type": EVENT_THOUGHT, "content": thought_match2.group(1).strip()}
-                        clean = _thought_pattern.sub('', thought_buffer).strip()
+                        # Extract any text AFTER the thought block
+                        after = thought_buffer.split('[[/THOUGHT]]', 1)[1] if '[[/THOUGHT]]' in thought_buffer else ""
                         thought_buffer = ""
-                        if clean and _is_meaningful_text(clean):
-                            text = clean
+                        in_thought_block = False
+                        if after.strip() and _is_meaningful_text(after.strip()):
+                            text = after
                         else:
                             continue
-                    elif len(thought_buffer) > 500:
-                        # Too long without closing tag, flush as text
-                        text = thought_buffer
-                        thought_buffer = ""
                     else:
-                        continue  # Still accumulating
+                        continue  # Still inside thought block
                 
                 # Deduplicate: don't yield same content twice
                 content_hash = hash(text.strip()[:200])  # Hash first 200 chars
@@ -433,6 +452,15 @@ def stream_a2a(
                 _log(f"EVENT #{event_count}: FINAL")
                 break
         
+        # ─── POST-LOOP: Flush thought buffer if any ───
+        if thought_buffer:
+            # Thought block never closed — yield as text
+            clean = re.sub(r'\[\[THOUGHT\]\]|\[\[/THOUGHT\]\]', '', thought_buffer).strip()
+            if clean and _is_meaningful_text(clean):
+                yield {"type": EVENT_TOKEN, "content": clean}
+                has_yielded_text = True
+            thought_buffer = ""
+        
         # ─── POST-LOOP: Check if we got any text ───
         if not has_yielded_text:
             _log("WARNING: No text yielded! Checking session state for results...")
@@ -454,11 +482,7 @@ def stream_a2a(
             except Exception as e:
                 _log(f"FALLBACK state read failed: {e}")
             
-            if not has_yielded_text:
-                yield {
-                    "type": EVENT_TOKEN,
-                    "content": "I processed your request but couldn't generate a response. Please try again."
-                }
+            # No fallback error message — stream.py handles empty responses
         
         elapsed = time.time() - start_time
         _log(f"A2A COMPLETE: {event_count} events, {elapsed:.1f}s, agents={seen_agents}")
