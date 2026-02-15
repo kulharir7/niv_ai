@@ -257,8 +257,8 @@ def stream_chat(**kwargs):
             adk_failed = False
             if use_a2a:
                 try:
-                    from niv_ai.niv_core.adk.stream_handler import stream_agent_adk
-                    for event in stream_agent_adk(
+                    from niv_ai.niv_core.a2a.runner import stream_a2a
+                    for event in stream_a2a(
                         message=message,
                         conversation_id=conversation_id,
                         provider_name=provider,
