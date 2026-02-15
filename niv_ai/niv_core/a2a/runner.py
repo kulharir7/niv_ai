@@ -1,28 +1,26 @@
 """
-Niv AI A2A Runner — COMPLETE ADK Stream Handler
+Niv AI A2A Runner — COMPLETE ADK Stream Handler (v2)
 
-Based on official ADK patterns + samples.
+REWRITTEN for reliability. Every event type properly handled.
 
-FEATURES:
-1. ✅ Singleton FrappeSessionService (not InMemorySessionService per call)
-2. ✅ ALL event types handled
-3. ✅ Proper error handling with recovery
-4. ✅ Session reuse across requests
-5. ✅ Agent transfer tracking
-6. ✅ State change notifications
-7. ✅ Thinking/reasoning blocks
+KEY CHANGES from v1:
+1. Check event.text + event.content + event.parts (all 3 ways ADK returns text)
+2. Track which results already yielded (no duplicates)
+3. Proper agent transfer detection
+4. Timeout protection
+5. Debug logging for troubleshooting
 """
 
 import json
+import time
 import traceback
-from typing import Generator, Dict, Any, Optional, List
+from typing import Generator, Dict, Any, Optional, List, Set
 
 import frappe
 
-# ADK v1.0.0 imports — all from runners module
+# ADK v1.0.0 imports
 from google.adk.runners import (
     Runner,
-    InMemoryRunner,
     InMemoryArtifactService,
     InMemoryMemoryService,
     InMemorySessionService,
@@ -33,7 +31,7 @@ from niv_ai.niv_core.a2a.session import get_session_service
 
 
 # ─────────────────────────────────────────────────────────────────
-# EVENT TYPES
+# EVENT TYPES (match niv_chat.js expectations)
 # ─────────────────────────────────────────────────────────────────
 
 EVENT_TOKEN = "token"
@@ -44,6 +42,76 @@ EVENT_AGENT_TRANSFER = "agent_transfer"
 EVENT_STATE_CHANGE = "state_change"
 EVENT_ERROR = "error"
 EVENT_COMPLETE = "complete"
+
+# Agent display names
+AGENT_NAMES = {
+    "niv_orchestrator": "🎯 Orchestrator",
+    "frappe_coder": "💻 Frappe Developer",
+    "data_analyst": "📊 Data Analyst",
+    "nbfc_specialist": "🏦 NBFC Specialist",
+    "system_discovery": "🔍 System Discovery",
+    "niv_critique": "✅ Quality Check",
+    "niv_planner": "📋 Planner",
+}
+
+
+# ─────────────────────────────────────────────────────────────────
+# HELPER: Extract text from ADK event (multiple ways)
+# ─────────────────────────────────────────────────────────────────
+
+def _extract_text(event) -> str:
+    """
+    ADK events can have text in multiple places:
+    1. event.text (most common)
+    2. event.content.parts[].text (Content object)
+    3. event.parts[].text (Parts directly)
+    
+    Returns extracted text or empty string.
+    """
+    # Method 1: Direct text attribute
+    if hasattr(event, "text") and event.text:
+        return str(event.text)
+    
+    # Method 2: Content object with parts
+    if hasattr(event, "content") and event.content:
+        content = event.content
+        if hasattr(content, "parts") and content.parts:
+            texts = []
+            for part in content.parts:
+                if hasattr(part, "text") and part.text:
+                    texts.append(str(part.text))
+            if texts:
+                return "\n".join(texts)
+    
+    # Method 3: Direct parts
+    if hasattr(event, "parts") and event.parts:
+        texts = []
+        for part in event.parts:
+            if hasattr(part, "text") and part.text:
+                texts.append(str(part.text))
+        if texts:
+            return "\n".join(texts)
+    
+    return ""
+
+
+def _is_meaningful_text(text: str) -> bool:
+    """Check if text is meaningful (not empty, not just JSON, not just whitespace)."""
+    if not text or not text.strip():
+        return False
+    stripped = text.strip()
+    if len(stripped) < 5:
+        return False
+    # Skip pure JSON objects (tool results get stored in state too)
+    if stripped.startswith("{") and stripped.endswith("}"):
+        try:
+            parsed = json.loads(stripped)
+            # If it's a tool result dict, skip it
+            if isinstance(parsed, dict) and ("result" in parsed or "error" in parsed or "content" in parsed):
+                return False
+        except (json.JSONDecodeError, ValueError):
+            pass  # Not JSON, could be text starting with {
+    return True
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -59,58 +127,46 @@ def stream_a2a(
     dev_mode: bool = False,
 ) -> Generator[Dict[str, Any], None, None]:
     """
-    Stream A2A agent response with COMPLETE event handling.
+    Stream A2A agent response.
     
-    Yields Niv-compatible SSE events:
-    - {"type": "token", "content": "..."} — Text chunks
-    - {"type": "tool_call", "tool": "...", "arguments": {...}} — Tool invocation
-    - {"type": "tool_result", "tool": "...", "result": "..."} — Tool response
-    - {"type": "thought", "content": "..."} — Internal reasoning
-    - {"type": "agent_transfer", "from": "...", "to": "..."} — Agent handoff
-    - {"type": "state_change", "key": "...", "value": "..."} — State update
-    - {"type": "error", "content": "..."} — Error message
-    - {"type": "complete"} — Stream finished
-    
-    Args:
-        message: User message
-        conversation_id: Links to Niv Conversation DocType
-        provider_name: LLM provider (uses default if None)
-        model_name: Model to use (uses default if None)
-        user: Frappe user (uses session.user if None)
-        dev_mode: Enable developer mode confirmations
-        
-    Yields:
-        Dict with 'type' and event-specific fields
+    Yields SSE-compatible events for niv_chat.js:
+    - token: Text content chunks
+    - tool_call: Tool being called
+    - tool_result: Tool response
+    - thought: Thinking/processing status
+    - agent_transfer: Agent handoff with names
+    - error: Error message
+    - complete: Stream finished
     """
     user = user or frappe.session.user
     site = getattr(frappe.local, "site", None)
     
-    # Track state for event processing
+    # Tracking
     current_agent = "niv_orchestrator"
     seen_agents: List[str] = []
-    completion_sent = False
+    yielded_results: Set[str] = set()  # Track which *_result keys we already sent
+    has_yielded_text = False
+    start_time = time.time()
+    
+    _log(f"A2A START: user={user}, conv={conversation_id}, msg={message[:50]}...")
     
     try:
-        # ─── SETUP ───
-        
-        # Get orchestrator agent
+        # ─── 1. CREATE ORCHESTRATOR ───
         try:
             orchestrator = get_orchestrator(
                 conversation_id=conversation_id,
                 provider_name=provider_name,
                 model_name=model_name,
             )
+            _log(f"Orchestrator created with {len(orchestrator.sub_agents)} sub_agents")
         except Exception as e:
-            yield {
-                "type": EVENT_ERROR,
-                "content": f"Failed to create orchestrator: {e}",
-            }
+            _log(f"Orchestrator creation FAILED: {e}")
+            yield {"type": EVENT_ERROR, "content": f"Failed to create orchestrator: {e}"}
             return
         
-        # Create Runner with SINGLETON session service
+        # ─── 2. CREATE RUNNER ───
         try:
             session_service = get_session_service(site=site)
-            
             runner = Runner(
                 app_name="NivAI",
                 agent=orchestrator,
@@ -119,212 +175,228 @@ def stream_a2a(
                 memory_service=InMemoryMemoryService(),
             )
         except Exception as e:
-            yield {
-                "type": EVENT_ERROR,
-                "content": f"Failed to create ADK runner: {e}",
-            }
+            _log(f"Runner creation FAILED: {e}")
+            yield {"type": EVENT_ERROR, "content": f"Failed to create ADK runner: {e}"}
             return
         
-        # Session ID = conversation_id
+        # ─── 3. SETUP SESSION ───
         session_id = conversation_id
-        
-        # Ensure session and state are ready
         try:
-            # Required state keys to avoid Template KeyError
             required_keys = {
-                "coder_result": "", "analyst_result": "", "nbfc_result": "", 
-                "discovery_result": "", "critique_result": "", "planner_result": "", 
+                "coder_result": "", "analyst_result": "", "nbfc_result": "",
+                "discovery_result": "", "critique_result": "", "planner_result": "",
                 "orchestrator_result": "", "user_memory": "No prior memory.",
                 "nbfc_context": {}
             }
             
-            existing_session = session_service.get_session_sync(
+            existing = session_service.get_session_sync(
                 app_name="NivAI", user_id=user, session_id=session_id
             )
             
-            if not existing_session:
+            if not existing:
                 session_service.create_session_sync(
                     app_name="NivAI", user_id=user, session_id=session_id, state=required_keys
                 )
             else:
-                # Force update existing session with missing keys
-                current_state = existing_session.state or {}
-                needs_update = False
+                state = existing.state or {}
+                updated = False
                 for k, v in required_keys.items():
-                    if k not in current_state:
-                        current_state[k] = v
-                        needs_update = True
-                
-                if needs_update:
+                    if k not in state:
+                        state[k] = v
+                        updated = True
+                if updated:
                     session_service.update_session_sync(
-                        app_name="NivAI", user_id=user, session_id=session_id, state=current_state
+                        app_name="NivAI", user_id=user, session_id=session_id, state=state
                     )
         except Exception as e:
-            yield {
-                "type": EVENT_ERROR,
-                "content": f"Session sync failed: {e}",
-            }
+            _log(f"Session setup FAILED: {e}")
+            yield {"type": EVENT_ERROR, "content": f"Session setup failed: {e}"}
             return
         
-        # Build message
+        # ─── 4. BUILD MESSAGE ───
         from google.genai import types
         user_message = types.Content(
             role="user",
             parts=[types.Part(text=message)],
         )
         
-        # ─── STREAM EVENTS ───
+        # ─── 5. STREAM EVENTS ───
+        yield {"type": EVENT_THOUGHT, "content": "Processing request..."}
         
-        yield {
-            "type": EVENT_THOUGHT,
-            "content": "Processing request...",
-        }
-        
+        event_count = 0
         for event in runner.run(
             new_message=user_message,
             user_id=user,
             session_id=session_id,
         ):
-            # ─── 1. TEXT TOKENS ───
-            if hasattr(event, "text") and event.text:
-                yield {
-                    "type": EVENT_TOKEN,
-                    "content": event.text,
-                }
+            event_count += 1
+            elapsed = time.time() - start_time
             
-            # ─── 2. TOOL CALLS ───
-            tool_calls = None
+            # Safety timeout (3 minutes)
+            if elapsed > 180:
+                _log(f"TIMEOUT after {elapsed:.0f}s, {event_count} events")
+                yield {"type": EVENT_ERROR, "content": "Request timed out (3 min limit)"}
+                break
+            
+            # ─── TEXT (3 methods) ───
+            text = _extract_text(event)
+            if text and _is_meaningful_text(text):
+                has_yielded_text = True
+                yield {"type": EVENT_TOKEN, "content": text}
+                _log(f"EVENT #{event_count}: TOKEN ({len(text)} chars)")
+            
+            # ─── TOOL CALLS ───
             if hasattr(event, "get_function_calls"):
-                tool_calls = event.get_function_calls()
-            
-            if tool_calls:
-                for tc in tool_calls:
-                    tool_name = getattr(tc, "name", "unknown")
-                    tool_args = getattr(tc, "args", {})
-                    
-                    yield {
-                        "type": EVENT_TOOL_CALL,
-                        "tool": tool_name,
-                        "arguments": tool_args,
-                        "agent": current_agent,
-                    }
-            
-            # ─── 3. TOOL RESULTS ───
-            tool_results = None
-            if hasattr(event, "get_function_responses"):
-                tool_results = event.get_function_responses()
-            
-            if tool_results:
-                for tr in tool_results:
-                    tool_name = getattr(tr, "name", "unknown")
-                    tool_response = getattr(tr, "response", str(tr))
-                    
-                    # Truncate long results for display
-                    result_str = str(tool_response)
-                    if len(result_str) > 500:
-                        result_str = result_str[:500] + "... (truncated)"
-                    
-                    yield {
-                        "type": EVENT_TOOL_RESULT,
-                        "tool": tool_name,
-                        "result": result_str,
-                        "agent": current_agent,
-                    }
-            
-            # ─── 4. AGENT TRANSFERS ───
-            if hasattr(event, "author") and event.author:
-                author = event.author
-                
-                # Detect transfer (author changed)
-                if author != current_agent and author != "user":
-                    # Record the transfer
-                    yield {
-                        "type": EVENT_AGENT_TRANSFER,
-                        "from": current_agent,
-                        "to": author,
-                    }
-                    
-                    # Show thinking message
-                    agent_display = _get_agent_display_name(author)
-                    yield {
-                        "type": EVENT_THOUGHT,
-                        "content": f"Delegating to {agent_display}...",
-                    }
-                    
-                    # Track
-                    if author not in seen_agents:
-                        seen_agents.append(author)
-                    current_agent = author
-            
-            # ─── 5. STATE CHANGES ───
-            if hasattr(event, "actions") and event.actions:
-                state_delta = getattr(event.actions, "state_delta", None)
-                
-                if state_delta and isinstance(state_delta, dict):
-                    for key, value in state_delta.items():
-                        # CRITICAL: Map ANY *_result to tokens for immediate UI display
-                        # Specialist agents (discovery, coder, analyst, etc.) save their results here
-                        if key.endswith("_result") and value and key not in ("tool_result", "last_tool_result"):
-                            # Only yield meaningful content (not empty strings or placeholders)
-                            value_str = str(value).strip()
-                            if len(value_str) > 10 and not value_str.startswith("{"):  # Skip JSON/empty
-                                yield {
-                                    "type": EVENT_TOKEN,
-                                    "content": value_str,
+                calls = event.get_function_calls()
+                if calls:
+                    for tc in calls:
+                        name = getattr(tc, "name", "unknown")
+                        args = getattr(tc, "args", {})
+                        # Skip internal transfer_to_agent tool display
+                        if name == "transfer_to_agent":
+                            _log(f"EVENT #{event_count}: TRANSFER via tool → {args}")
+                        else:
+                            yield {
+                                "type": EVENT_TOOL_CALL,
+                                "tool": name,
+                                "arguments": args,
+                                "agent": current_agent,
                             }
+                            _log(f"EVENT #{event_count}: TOOL_CALL {name}")
+            
+            # ─── TOOL RESULTS ───
+            if hasattr(event, "get_function_responses"):
+                responses = event.get_function_responses()
+                if responses:
+                    for tr in responses:
+                        name = getattr(tr, "name", "unknown")
+                        response = getattr(tr, "response", str(tr))
                         
-                        # Also show relevant state changes
-                        if key.endswith("_result") or key.startswith("user:"):
-                            value_str = str(value)[:500]
+                        if name == "transfer_to_agent":
+                            continue  # Skip transfer results
+                        
+                        result_str = str(response)
+                        if len(result_str) > 500:
+                            result_str = result_str[:500] + "... (truncated)"
+                        
+                        yield {
+                            "type": EVENT_TOOL_RESULT,
+                            "tool": name,
+                            "result": result_str,
+                            "agent": current_agent,
+                        }
+                        _log(f"EVENT #{event_count}: TOOL_RESULT {name}")
+            
+            # ─── AGENT TRANSFERS ───
+            author = getattr(event, "author", None)
+            if author and author != current_agent and author != "user":
+                display = AGENT_NAMES.get(author, author)
+                
+                yield {
+                    "type": EVENT_AGENT_TRANSFER,
+                    "from": current_agent,
+                    "to": author,
+                }
+                yield {
+                    "type": EVENT_THOUGHT,
+                    "content": f"Delegating to {display}...",
+                }
+                
+                if author not in seen_agents:
+                    seen_agents.append(author)
+                current_agent = author
+                _log(f"EVENT #{event_count}: TRANSFER → {author}")
+            
+            # ─── STATE CHANGES (2-way communication) ───
+            actions = getattr(event, "actions", None)
+            if actions:
+                delta = getattr(actions, "state_delta", None)
+                if delta and isinstance(delta, dict):
+                    for key, value in delta.items():
+                        # Skip tool tracking keys
+                        if key in ("last_tool_result", "last_tool_name") or key.startswith("tool_result_"):
+                            continue
+                        
+                        # Agent result keys → yield as text if meaningful
+                        if key.endswith("_result") and value:
+                            value_str = str(value).strip()
+                            
+                            # Only yield if:
+                            # 1. Not already yielded this key
+                            # 2. Meaningful text (not JSON, not empty)
+                            # 3. Not a duplicate of text already sent
+                            if key not in yielded_results and _is_meaningful_text(value_str):
+                                yielded_results.add(key)
+                                has_yielded_text = True
+                                yield {"type": EVENT_TOKEN, "content": value_str}
+                                _log(f"EVENT #{event_count}: STATE→TOKEN {key} ({len(value_str)} chars)")
+                            
+                            # Always send state change event for tracking
                             yield {
                                 "type": EVENT_STATE_CHANGE,
                                 "key": key,
-                                "value": value_str,
+                                "value": value_str[:500],
                             }
             
-            # ─── 6. ERRORS ───
+            # ─── ERRORS ───
             if hasattr(event, "error") and event.error:
-                yield {
-                    "type": EVENT_ERROR,
-                    "content": str(event.error),
-                }
+                yield {"type": EVENT_ERROR, "content": str(event.error)}
+                _log(f"EVENT #{event_count}: ERROR {event.error}")
             
-            # ─── 7. COMPLETION ───
+            # ─── COMPLETION ───
             if hasattr(event, "is_final") and event.is_final:
-                completion_sent = True
-                yield {"type": EVENT_COMPLETE}
+                _log(f"EVENT #{event_count}: FINAL")
+                break
         
-        # Ensure completion is sent
-        if not completion_sent:
-            yield {"type": EVENT_COMPLETE}
+        # ─── POST-LOOP: Check if we got any text ───
+        if not has_yielded_text:
+            _log("WARNING: No text yielded! Checking session state for results...")
+            # Last resort: read final state from session
+            try:
+                final_session = session_service.get_session_sync(
+                    app_name="NivAI", user_id=user, session_id=session_id
+                )
+                if final_session and final_session.state:
+                    # Try orchestrator_result first, then any specialist result
+                    for key in ["orchestrator_result", "analyst_result", "coder_result", 
+                                "discovery_result", "nbfc_result", "planner_result"]:
+                        val = final_session.state.get(key, "")
+                        if val and _is_meaningful_text(str(val)):
+                            yield {"type": EVENT_TOKEN, "content": str(val)}
+                            _log(f"FALLBACK: Found text in state[{key}]")
+                            has_yielded_text = True
+                            break
+            except Exception as e:
+                _log(f"FALLBACK state read failed: {e}")
+            
+            if not has_yielded_text:
+                yield {
+                    "type": EVENT_TOKEN,
+                    "content": "I processed your request but couldn't generate a response. Please try again."
+                }
+        
+        elapsed = time.time() - start_time
+        _log(f"A2A COMPLETE: {event_count} events, {elapsed:.1f}s, agents={seen_agents}")
+        yield {"type": EVENT_COMPLETE}
         
     except ImportError as e:
-        yield {
-            "type": EVENT_ERROR,
-            "content": f"ADK import error: {e}. Install google-adk: pip install google-adk",
-        }
+        yield {"type": EVENT_ERROR, "content": f"ADK not installed: {e}. Run: pip install google-adk"}
     except Exception as e:
-        # Log full error
-        frappe.log_error(
-            f"A2A Stream Error:\n{traceback.format_exc()}",
-            "Niv AI A2A"
-        )
-        yield {
-            "type": EVENT_ERROR,
-            "content": f"A2A Error: {str(e)}",
-        }
+        frappe.log_error(f"A2A Stream Error:\n{traceback.format_exc()}", "Niv AI A2A")
+        yield {"type": EVENT_ERROR, "content": f"A2A Error: {str(e)}"}
+        yield {"type": EVENT_COMPLETE}
 
 
-def _get_agent_display_name(agent_name: str) -> str:
-    """Get human-readable agent name."""
-    display_names = {
-        "niv_orchestrator": "Orchestrator",
-        "frappe_coder": "Frappe Developer",
-        "data_analyst": "Data Analyst",
-        "nbfc_specialist": "NBFC Specialist",
-        "system_discovery": "System Discovery",
-    }
-    return display_names.get(agent_name, agent_name)
+# ─────────────────────────────────────────────────────────────────
+# LOGGING
+# ─────────────────────────────────────────────────────────────────
+
+def _log(msg: str):
+    """Debug log for A2A events."""
+    try:
+        frappe.logger("niv_a2a").info(msg)
+    except Exception:
+        pass  # Don't fail on logging
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -337,17 +409,7 @@ def run_a2a_sync(
     provider_name: str = None,
     model_name: str = None,
 ) -> Dict[str, Any]:
-    """
-    Run A2A agent synchronously (non-streaming).
-    
-    Returns dict with:
-    - response: Final text response
-    - tools_used: List of tools that were called
-    - agents_involved: List of agents that participated
-    - error: Error message if any
-    
-    Useful for background tasks or simple queries.
-    """
+    """Run A2A synchronously (non-streaming). For background tasks."""
     response_parts = []
     tools_used = []
     agents_involved = ["niv_orchestrator"]
@@ -359,22 +421,18 @@ def run_a2a_sync(
         provider_name=provider_name,
         model_name=model_name,
     ):
-        event_type = event.get("type")
-        
-        if event_type == EVENT_TOKEN:
+        t = event.get("type")
+        if t == EVENT_TOKEN:
             response_parts.append(event.get("content", ""))
-        
-        elif event_type == EVENT_TOOL_CALL:
+        elif t == EVENT_TOOL_CALL:
             tool = event.get("tool")
             if tool and tool not in tools_used:
                 tools_used.append(tool)
-        
-        elif event_type == EVENT_AGENT_TRANSFER:
-            to_agent = event.get("to")
-            if to_agent and to_agent not in agents_involved:
-                agents_involved.append(to_agent)
-        
-        elif event_type == EVENT_ERROR:
+        elif t == EVENT_AGENT_TRANSFER:
+            to = event.get("to")
+            if to and to not in agents_involved:
+                agents_involved.append(to)
+        elif t == EVENT_ERROR:
             error = event.get("content")
     
     return {
@@ -386,15 +444,11 @@ def run_a2a_sync(
 
 
 # ─────────────────────────────────────────────────────────────────
-# UTILITY
+# TEST UTILITY
 # ─────────────────────────────────────────────────────────────────
 
 def test_a2a_setup() -> Dict[str, Any]:
-    """
-    Test A2A setup without running a full query.
-    
-    Returns status dict.
-    """
+    """Test A2A setup without running a query."""
     status = {
         "adk_installed": False,
         "session_service": False,
@@ -419,8 +473,6 @@ def test_a2a_setup() -> Dict[str, Any]:
     try:
         orc = get_orchestrator(conversation_id="test")
         status["orchestrator"] = orc is not None
-        
-        # Count tools
         from niv_ai.niv_core.mcp_client import get_all_mcp_tools_cached
         tools = get_all_mcp_tools_cached()
         status["mcp_tools"] = len(tools)
