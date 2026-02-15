@@ -262,11 +262,15 @@ def stream_a2a(
                 
                 if state_delta and isinstance(state_delta, dict):
                     for key, value in state_delta.items():
-                        # CRITICAL: Map orchestrator_result to tokens for immediate UI display
-                        if key == "orchestrator_result" and value:
-                            yield {
-                                "type": EVENT_TOKEN,
-                                "content": str(value),
+                        # CRITICAL: Map ANY *_result to tokens for immediate UI display
+                        # Specialist agents (discovery, coder, analyst, etc.) save their results here
+                        if key.endswith("_result") and value and key not in ("tool_result", "last_tool_result"):
+                            # Only yield meaningful content (not empty strings or placeholders)
+                            value_str = str(value).strip()
+                            if len(value_str) > 10 and not value_str.startswith("{"):  # Skip JSON/empty
+                                yield {
+                                    "type": EVENT_TOKEN,
+                                    "content": value_str,
                             }
                         
                         # Also show relevant state changes
