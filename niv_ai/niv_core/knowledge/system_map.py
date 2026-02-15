@@ -22,8 +22,14 @@ class SystemMapper:
 
     def map_system(self):
         """Scan all DocTypes and build relationship map."""
-        # Get all non-virtual DocTypes
-        doctypes = frappe.get_all("DocType", filters={"istable": 0, "issingle": 0, "custom": 1})
+        # Get custom DocTypes OR DocTypes from Growth System related modules
+        nbfc_modules = ["LOS", "LMS", "Co-Lending", "Accounting", "Litigation", "HR"]
+        
+        doctypes = frappe.get_all("DocType", filters=[
+            ["istable", "=", 0],
+            ["issingle", "=", 0],
+            ["module", "in", nbfc_modules + ["Custom"]]
+        ])
         
         for dt in doctypes:
             name = dt.name
