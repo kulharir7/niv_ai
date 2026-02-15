@@ -174,6 +174,79 @@ class NivAgentFactory:
         self.adk_tools["create_task_plan"] = FunctionTool(func=self._make_create_plan_tool())
         self.adk_tools["update_task_plan"] = FunctionTool(func=self._make_update_plan_tool())
         self.adk_tools["get_task_plan"] = FunctionTool(func=self._make_get_plan_tool())
+        
+        # Add Visualizer Tool
+        self.adk_tools["visualize_system_map"] = FunctionTool(func=self._make_visualize_graph_tool())
+
+    def _make_visualize_graph_tool(self):
+        """Tool to create a visual artifact of the knowledge graph."""
+        def visualize_system_map() -> str:
+            try:
+                from niv_ai.niv_core.knowledge.system_map import get_graph_elements
+                elements = get_graph_elements()
+                
+                # HTML Template for Cytoscape.js
+                html_content = f"""
+                <div id="cy" style="width: 100%; height: 600px; background: #1a1a2e; border-radius: 12px;"></div>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+                <script>
+                    var cy = cytoscape({{
+                        container: document.getElementById('cy'),
+                        elements: {json.dumps(elements)},
+                        style: [
+                            {{
+                                selector: 'node',
+                                style: {{
+                                    'background-color': '#7c3aed',
+                                    'label': 'data(label)',
+                                    'color': '#fff',
+                                    'text-valign': 'center',
+                                    'font-size': '12px',
+                                    'width': '100px',
+                                    'height': '40px',
+                                    'shape': 'round-rectangle'
+                                }}
+                            }},
+                            {{
+                                selector: 'edge',
+                                style: {{
+                                    'width': 2,
+                                    'line-color': '#4f46e5',
+                                    'target-arrow-color': '#4f46e5',
+                                    'target-arrow-shape': 'triangle',
+                                    'curve-style': 'bezier',
+                                    'label': 'data(label)',
+                                    'font-size': '10px',
+                                    'color': '#a78bfa',
+                                    'text-background-opacity': 1,
+                                    'text-background-color': '#1e1b4b'
+                                }}
+                            }}
+                        ],
+                        layout: {{
+                            name: 'cose',
+                            animate: true
+                        }}
+                    }});
+                </script>
+                """
+                
+                # Use Artifact API to create the visual
+                from niv_ai.niv_core.api.artifacts import create_artifact
+                artifact_id = create_artifact(
+                    title="System Knowledge Graph",
+                    artifact_type="Dashboard",
+                    artifact_content=json.dumps({"elements": elements}),
+                    preview_html=html_content
+                )
+                
+                return f"Visual Graph created! View it in the Artifacts panel. Artifact ID: {artifact_id}"
+            except Exception as e:
+                return f"Error creating visualization: {e}"
+        
+        visualize_system_map.__name__ = "visualize_system_map"
+        visualize_system_map.__doc__ = "Creates an interactive visual map of the system DocTypes and their relationships."
+        return visualize_system_map
 
     def _make_create_plan_tool(self):
         def create_task_plan(title: str, steps: list) -> str:
@@ -538,7 +611,7 @@ class NivAgentFactory:
         System Discovery & Introspection Specialist.
         """
         tool_names = [
-            "get_system_knowledge_graph", "introspect_system", "get_doctype_info", "search_doctype", "list_documents",
+            "get_system_knowledge_graph", "visualize_system_map", "introspect_system", "get_doctype_info", "search_doctype", "list_documents",
         ]
         
         return LlmAgent(

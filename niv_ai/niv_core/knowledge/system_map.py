@@ -86,6 +86,40 @@ class SystemMapper:
         frappe.cache().set_value("niv_system_knowledge_graph", json.dumps(self.graph))
         return self.graph
 
+    def get_visualization_data(self):
+        """Format data for Cytoscape.js visualizer."""
+        graph = self.map_system()
+        elements = []
+        
+        # Add Nodes (DocTypes)
+        for name, info in graph["doctypes"].items():
+            elements.append({
+                "data": {
+                    "id": name,
+                    "label": info["label"],
+                    "module": info["module"],
+                    "type": "doctype"
+                }
+            })
+            
+        # Add Edges (Links)
+        for link in graph["links"]:
+            elements.append({
+                "data": {
+                    "id": f"{link['source']}-{link['target']}-{link['field']}",
+                    "source": link["source"],
+                    "target": link["target"],
+                    "label": link["field"],
+                    "type": link["type"]
+                }
+            })
+            
+        return elements
+
+def get_graph_elements():
+    mapper = SystemMapper()
+    return mapper.get_visualization_data()
+
 def update_knowledge_graph():
     mapper = SystemMapper()
     graph = mapper.map_system()
