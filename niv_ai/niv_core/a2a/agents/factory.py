@@ -195,7 +195,7 @@ class NivAgentFactory:
                 from niv_ai.niv_core.knowledge.system_map import get_graph_elements
                 elements = get_graph_elements()
                 
-                # Full self-contained HTML Document
+                # Full self-contained HTML Document (Optimized for speed)
                 html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -204,63 +204,62 @@ class NivAgentFactory:
     <style>
         body {{ margin: 0; padding: 0; background: #0f172a; overflow: hidden; font-family: sans-serif; }}
         #cy {{ width: 100vw; height: 100vh; display: block; }}
-        #loading {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #8b5cf6; font-size: 14px; z-index: 10; }}
-        .header {{ position: absolute; top: 10px; left: 10px; background: rgba(30, 41, 59, 0.8); color: white; padding: 8px 12px; border-radius: 6px; font-size: 12px; z-index: 10; border: 1px solid #334155; }}
+        #loading {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #8b5cf6; font-size: 14px; z-index: 10; font-weight: bold; }}
     </style>
 </head>
 <body>
-    <div class="header">Niv AI System Graph</div>
-    <div id="loading">Initialising Neural Map...</div>
+    <div id="loading">🧠 Neural Map Loading...</div>
     <div id="cy"></div>
     <script>
-        document.addEventListener('DOMContentLoaded', function() {{
-            var cy = cytoscape({{
-                container: document.getElementById('cy'),
-                elements: {json.dumps(elements)},
-                style: [
-                    {{
-                        selector: 'node',
-                        style: {{
-                            'background-color': '#7c3aed',
-                            'label': 'data(label)',
-                            'color': '#f8fafc',
-                            'text-valign': 'center',
-                            'font-size': '10px',
-                            'width': '100px',
-                            'height': '35px',
-                            'shape': 'round-rectangle',
-                            'text-wrap': 'wrap',
-                            'text-max-width': '90px',
-                            'border-width': 1,
-                            'border-color': '#a78bfa'
-                        }}
-                    }},
-                    {{
-                        selector: 'edge',
-                        style: {{
-                            'width': 1.5,
-                            'line-color': '#4f46e5',
-                            'target-arrow-color': '#4f46e5',
-                            'target-arrow-shape': 'triangle',
-                            'curve-style': 'bezier',
-                            'label': 'data(label)',
-                            'font-size': '8px',
-                            'color': '#94a3b8',
-                            'text-background-opacity': 1,
-                            'text-background-color': '#0f172a',
-                            'text-margin-y': -8
-                        }}
-                    }}
-                ],
-                layout: {{
-                    name: 'cose',
-                    padding: 40,
-                    nodeRepulsion: 6000,
-                    idealEdgeLength: 100
+        window.onload = function() {{
+            try {{
+                var elements = {json.dumps(elements)};
+                if (!elements || elements.length === 0) {{
+                    document.getElementById('loading').innerText = "No data found to map.";
+                    return;
                 }}
-            }});
-            document.getElementById('loading').style.display = 'none';
-        }});
+
+                var cy = cytoscape({{
+                    container: document.getElementById('cy'),
+                    elements: elements,
+                    style: [
+                        {{
+                            selector: 'node',
+                            style: {{
+                                'background-color': '#7c3aed',
+                                'label': 'data(label)',
+                                'color': '#fff',
+                                'text-valign': 'center',
+                                'font-size': '10px',
+                                'width': '90px',
+                                'height': '30px',
+                                'shape': 'round-rectangle',
+                                'text-wrap': 'wrap',
+                                'text-max-width': '80px'
+                            }}
+                        }},
+                        {{
+                            selector: 'edge',
+                            style: {{
+                                'width': 1,
+                                'line-color': '#4f46e5',
+                                'target-arrow-color': '#4f46e5',
+                                'target-arrow-shape': 'triangle',
+                                'curve-style': 'haystack',
+                                'opacity': 0.6
+                            }}
+                        }}
+                    ],
+                    layout: {{
+                        name: 'grid',
+                        padding: 50
+                    }}
+                }});
+                document.getElementById('loading').style.display = 'none';
+            }} catch (err) {{
+                document.getElementById('loading').innerText = "Error: " + err.message;
+            }}
+        }};
     </script>
 </body>
 </html>"""
