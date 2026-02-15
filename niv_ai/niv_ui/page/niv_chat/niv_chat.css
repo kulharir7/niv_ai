@@ -3424,8 +3424,25 @@ body.niv-widget-mode .niv-message.user .msg-content { max-width: 90% !important;
 }
 
 
-/* Thought Block Styling - IMPROVED CONTRAST */
-.niv-thought-block {
+/* Sidebar Streaming Indicator */
+.niv-conversation-item.streaming::after {
+    content: "";
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 8px;
+    height: 8px;
+    background: #7c3aed;
+    border-radius: 50%;
+    box-shadow: 0 0 10px #7c3aed;
+    animation: sidebarPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes sidebarPulse {
+    0%, 100% { opacity: 1; transform: translateY(-50%) scale(1); }
+    50% { opacity: 0.4; transform: translateY(-50%) scale(0.8); }
+}
     background: rgba(26, 26, 46, 0.6); /* Darker glass background */
     border-left: 3px solid #7c3aed;
     padding: 14px 18px;
