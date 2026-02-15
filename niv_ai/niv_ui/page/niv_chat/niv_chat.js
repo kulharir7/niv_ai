@@ -1865,6 +1865,44 @@ ${htmlCode}
                                 $running.find(".tool-call-header").attr("onclick", "$(this).closest('.tool-call-accordion').toggleClass('open')");
                                 $running.append(`<div class="tool-call-body"><pre><code>${frappe.utils.escape_html(resultStr)}</code></pre></div>`);
                             }
+                        } else if (data.type === "agent_transfer") {
+                            // A2A: Show which agent is handling the request
+                            if (is_active) {
+                                if (!$msgEl) {
+                                    this.hide_typing();
+                                    $msgEl = this.append_message("assistant", "");
+                                }
+                                const fromAgent = data.from || "orchestrator";
+                                const toAgent = data.to || "specialist";
+                                const agentNames = {
+                                    "niv_orchestrator": "🎯 Orchestrator",
+                                    "frappe_coder": "💻 Frappe Developer",
+                                    "data_analyst": "📊 Data Analyst",
+                                    "nbfc_specialist": "🏦 NBFC Specialist",
+                                    "system_discovery": "🔍 System Discovery",
+                                    "niv_critique": "✅ Quality Check",
+                                    "niv_planner": "📋 Planner"
+                                };
+                                const toName = agentNames[toAgent] || toAgent;
+                                
+                                // Update typing indicator with agent info
+                                this.update_typing_text(`Delegating to ${toName}...`);
+                                
+                                // Add agent badge to thought wrapper
+                                var $thoughtWrapper = $msgEl.find(".msg-thought-wrapper");
+                                if (!$thoughtWrapper.length) {
+                                    $thoughtWrapper = $('<div class="msg-thought-wrapper"></div>');
+                                    $msgEl.find(".msg-body").find(".msg-content").before($thoughtWrapper);
+                                }
+                                $thoughtWrapper.append(`<div class="agent-transfer-badge">${toName}</div>`);
+                                this.scroll_to_bottom_if_near();
+                            }
+                        } else if (data.type === "state_change") {
+                            // A2A: State updates (optional display)
+                            // Currently just track, don't render
+                            if (data.key && data.key.endsWith("_result")) {
+                                // Agent finished, could show indicator
+                            }
                         } else if (data.type === "done") {
                             streamDone = true;
                             delete this.active_streams[conv_id];
