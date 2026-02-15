@@ -16,9 +16,12 @@ def test():
         message="Hello, who are you and what tools do you have?",
         conversation_id=conv_id
     ):
-        print(f"EVENT: {event.get('type')} | Content: {str(event.get('content', ''))[:100]}")
-        if event.get('type') == 'tool_call':
+        etype = event.get('type')
+        print(f"EVENT: {etype} | Content: {str(event.get('content', event.get('value', '')))[:200]}")
+        if etype == 'tool_call':
             print(f"  TOOL: {event.get('tool')} ({event.get('arguments')})")
+        elif etype == 'error':
+            print(f"  ERROR: {event.get('content')}")
 
 if __name__ == "__main__":
     test()
