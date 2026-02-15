@@ -273,14 +273,31 @@ def stream_chat(**kwargs):
                                 saw_token = True
                                 full_response += content
                             yield _sse(event)
-                        elif event_type in ("tool_call", "tool_result", "thought", "error"):
+                        elif event_type == "complete":
+                            # A2A finished - save message and send done
+                            pass  # Will be handled after loop
+                        elif event_type in ("tool_call", "tool_result", "thought", "error", "agent_transfer", "state_change"):
                             if event_type == "tool_call":
                                 saw_tool_activity = True
                                 tool_calls_data.append({"tool": event.get("tool", ""), "arguments": event.get("arguments", {})})
                             elif event_type == "tool_result":
                                 tool_results_data.append({"tool": event.get("tool", ""), "result": str(event.get("result", ""))[:500]})
                             yield _sse(event)
-                    # Exit if ADK finished successfully
+                    
+                    # ─── A2A COMPLETION ───
+                    # Save assistant message if we got a response
+                    if full_response.strip():
+                        try:
+                            # Ensure DB connection is alive
+                            frappe.db.sql("SELECT 1")
+                        except Exception:
+                            frappe.init(site=_site_name)
+                            frappe.connect()
+                        save_assistant_message(conversation_id, full_response, tool_calls_data)
+                        auto_title(conversation_id)
+                    
+                    # Send done event
+                    yield _sse({"type": "done", "content": ""})
                     return
                 except Exception as adk_err:
                     frappe.log_error(f"Niv AI: ADK failed, falling back to LangGraph: {adk_err}", "Niv AI Stream")
