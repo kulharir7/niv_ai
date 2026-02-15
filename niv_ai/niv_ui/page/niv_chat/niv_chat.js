@@ -442,7 +442,9 @@ class NivChat {
                 args: { artifact_id: artifactId, with_versions: 1 }
             });
             const a = r.message || {};
-            let content = (a.artifact_content || "").toString();
+            
+            // Prioritize preview_html for specialized visualizations (Graphs/Charts)
+            let content = (a.preview_html || a.artifact_content || "").toString();
             
             // Unescape HTML entities that might have been double-escaped
             content = content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
@@ -453,7 +455,7 @@ class NivChat {
             this.$artifactCode.text(content || "// No code yet");
             
             // Update preview iframe
-            if (content && content.includes("<")) {
+            if (content && (content.includes("<") || content.includes("{"))) {
                 this.show_live_preview(content);
             } else {
                 const noPreviewHtml = `<!DOCTYPE html><html><body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#666;font-family:system-ui;background:#fafafa;">
