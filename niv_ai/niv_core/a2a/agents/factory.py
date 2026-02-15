@@ -150,6 +150,27 @@ class NivAgentFactory:
         # Load and convert MCP tools to ADK format
         self.all_mcp_tools = get_all_mcp_tools_cached()
         self.adk_tools = self._convert_mcp_to_adk()
+        
+        # Add Native Knowledge Graph Tool
+        self.adk_tools["get_system_knowledge_graph"] = FunctionTool(
+            func=self._make_knowledge_graph_tool()
+        )
+
+    def _make_knowledge_graph_tool(self):
+        """Native tool to fetch the pre-built knowledge graph."""
+        def get_system_knowledge_graph() -> str:
+            try:
+                cache = frappe.cache().get_value("niv_system_knowledge_graph")
+                if not cache:
+                    from niv_ai.niv_core.knowledge.system_map import update_knowledge_graph
+                    cache = json.dumps(update_knowledge_graph())
+                return cache
+            except Exception as e:
+                return f"Error fetching graph: {e}"
+        
+        get_system_knowledge_graph.__name__ = "get_system_knowledge_graph"
+        get_system_knowledge_graph.__doc__ = "Returns a JSON map of all DocTypes and their relationships (Links/Tables)."
+        return get_system_knowledge_graph
 
     def _init_model(self, provider_name: str, model_name: str) -> LiteLlm:
         """Initialize ADK model with LiteLLM adapter."""
@@ -450,7 +471,7 @@ class NivAgentFactory:
         System Discovery & Introspection Specialist.
         """
         tool_names = [
-            "introspect_system", "get_doctype_info", "search_doctype", "list_documents",
+            "get_system_knowledge_graph", "introspect_system", "get_doctype_info", "search_doctype", "list_documents",
         ]
         
         return LlmAgent(
@@ -467,15 +488,15 @@ class NivAgentFactory:
             instruction=(
                 "You are the System Discovery Specialist.\n\n"
                 "🚨 REAL DATA ONLY:\n"
-                "1. Run 'introspect_system' FIRST before describing anything.\n"
-                "2. DocType names → MUST come from tool results.\n"
-                "3. Field counts, workflow states → MUST be from actual scan.\n"
-                "4. NEVER say 'this system might have...' — scan and report facts.\n\n"
-                "JOB: Scan Frappe instance and report ACTUAL findings:\n"
-                "- Custom DocTypes (from 'search_doctype')\n"
-                "- Active Workflows (from 'list_documents' on Workflow)\n"
-                "- Data patterns (from 'run_database_query')\n\n"
-                "Every finding must have a tool source."
+                "1. Run 'get_system_knowledge_graph' FIRST to see the full relationship map.\n"
+                "2. Use 'introspect_system' for a high-level overview if the graph is too large.\n"
+                "3. DocType names and relationships → MUST come from the graph or tool results.\n"
+                "4. NEVER guess connections — if the graph shows a Link, mention it.\n\n"
+                "JOB: Scan Frappe instance and report ACTUAL findings using the Knowledge Graph:\n"
+                "- Map of Custom DocTypes and their modules\n"
+                "- Link relationships (e.g. Loan links to Customer)\n"
+                "- Active Workflows and their states\n\n"
+                "Your goal is to be the 'brain' that understands how everything is connected."
             ),
             
             output_key="discovery_result",
