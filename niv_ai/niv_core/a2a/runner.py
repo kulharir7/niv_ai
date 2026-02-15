@@ -18,10 +18,15 @@ import traceback
 from typing import Generator, Dict, Any, Optional, List
 
 import frappe
-from google.adk.runners import Runner
-from google.adk.apps import App
-from google.adk.artifacts.in_memory_artifact_service import InMemoryArtifactService
-from google.adk.memory.in_memory_memory_service import InMemoryMemoryService
+
+# ADK v1.0.0 imports — all from runners module
+from google.adk.runners import (
+    Runner,
+    InMemoryRunner,
+    InMemoryArtifactService,
+    InMemoryMemoryService,
+    InMemorySessionService,
+)
 
 from niv_ai.niv_core.a2a.agents import get_orchestrator
 from niv_ai.niv_core.a2a.session import get_session_service
@@ -102,14 +107,13 @@ def stream_a2a(
             }
             return
         
-        # Create ADK App
-        app = App(name="NivAI", root_agent=orchestrator)
-        
         # Create Runner with SINGLETON session service
+        # ADK v1.0.0: Runner takes agent directly, not App
         # KEY FIX: Reuse session service across requests
         try:
             runner = Runner(
-                app=app,
+                app_name="NivAI",
+                agent=orchestrator,
                 artifact_service=InMemoryArtifactService(),
                 session_service=get_session_service(),  # SINGLETON!
                 memory_service=InMemoryMemoryService(),
