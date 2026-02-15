@@ -201,94 +201,87 @@ class NivAgentFactory:
                 from niv_ai.niv_core.knowledge.system_map import get_graph_elements
                 elements = get_graph_elements()
                 
-                # HTML Template for Cytoscape.js (Improved for reliability)
-                html_content = f"""
-                <div id="cy-container" style="width: 100%; height: 500px; background: #11111e; border-radius: 12px; border: 1px solid #333; position: relative;">
-                    <div id="cy-loading" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #7c3aed; font-family: sans-serif;">
-                        Generating Graph...
-                    </div>
-                    <div id="cy" style="width: 100%; height: 100%;"></div>
-                </div>
-                <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
-                <script>
-                    (function() {{
-                        function initGraph() {{
-                            var el = document.getElementById('cy');
-                            if (!el || typeof cytoscape === 'undefined') {{
-                                setTimeout(initGraph, 100);
-                                return;
-                            }}
-                            
-                            document.getElementById('cy-loading').style.display = 'none';
-                            
-                            var cy = cytoscape({{
-                                container: el,
-                                elements: {json.dumps(elements)},
-                                boxSelectionEnabled: false,
-                                autounselectify: true,
-                                style: [
-                                    {{
-                                        selector: 'node',
-                                        style: {{
-                                            'background-color': '#7c3aed',
-                                            'label': 'data(label)',
-                                            'color': '#fff',
-                                            'text-valign': 'center',
-                                            'font-size': '10px',
-                                            'width': '80px',
-                                            'height': '30px',
-                                            'shape': 'round-rectangle',
-                                            'text-wrap': 'wrap',
-                                            'text-max-width': '70px'
-                                        }}
-                                    }},
-                                    {{
-                                        selector: 'edge',
-                                        style: {{
-                                            'width': 1,
-                                            'line-color': '#4f46e5',
-                                            'target-arrow-color': '#4f46e5',
-                                            'target-arrow-shape': 'triangle',
-                                            'curve-style': 'bezier',
-                                            'label': 'data(label)',
-                                            'font-size': '8px',
-                                            'color': '#a78bfa',
-                                            'text-background-opacity': 1,
-                                            'text-background-color': '#11111e',
-                                            'text-margin-y': -10
-                                        }}
-                                    }}
-                                ],
-                                layout: {{
-                                    name: 'cose',
-                                    padding: 30,
-                                    animate: true,
-                                    nodeRepulsion: 4000
-                                }}
-                            }});
+                # Full self-contained HTML Document
+                html_content = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.26.0/cytoscape.min.js"></script>
+    <style>
+        body {{ margin: 0; padding: 0; background: #0f172a; overflow: hidden; font-family: sans-serif; }}
+        #cy {{ width: 100vw; height: 100vh; display: block; }}
+        #loading {{ position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: #8b5cf6; font-size: 14px; z-index: 10; }}
+        .header {{ position: absolute; top: 10px; left: 10px; background: rgba(30, 41, 59, 0.8); color: white; padding: 8px 12px; border-radius: 6px; font-size: 12px; z-index: 10; border: 1px solid #334155; }}
+    </style>
+</head>
+<body>
+    <div class="header">Niv AI System Graph</div>
+    <div id="loading">Initialising Neural Map...</div>
+    <div id="cy"></div>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {{
+            var cy = cytoscape({{
+                container: document.getElementById('cy'),
+                elements: {json.dumps(elements)},
+                style: [
+                    {{
+                        selector: 'node',
+                        style: {{
+                            'background-color': '#7c3aed',
+                            'label': 'data(label)',
+                            'color': '#f8fafc',
+                            'text-valign': 'center',
+                            'font-size': '10px',
+                            'width': '100px',
+                            'height': '35px',
+                            'shape': 'round-rectangle',
+                            'text-wrap': 'wrap',
+                            'text-max-width': '90px',
+                            'border-width': 1,
+                            'border-color': '#a78bfa'
                         }}
-                        
-                        if (document.readyState === 'complete') {{
-                            initGraph();
-                        }} else {{
-                            window.addEventListener('load', initGraph);
+                    }},
+                    {{
+                        selector: 'edge',
+                        style: {{
+                            'width': 1.5,
+                            'line-color': '#4f46e5',
+                            'target-arrow-color': '#4f46e5',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'label': 'data(label)',
+                            'font-size': '8px',
+                            'color': '#94a3b8',
+                            'text-background-opacity': 1,
+                            'text-background-color': '#0f172a',
+                            'text-margin-y': -8
                         }}
-                    }})();
-                </script>
-                """
+                    }}
+                ],
+                layout: {{
+                    name: 'cose',
+                    padding: 40,
+                    nodeRepulsion: 6000,
+                    idealEdgeLength: 100
+                }}
+            }});
+            document.getElementById('loading').style.display = 'none';
+        }});
+    </script>
+</body>
+</html>"""
                 
-                # Use Artifact API to create the visual
                 from niv_ai.niv_core.api.artifacts import create_artifact
                 artifact_id = create_artifact(
-                    title="System Knowledge Graph",
+                    title="System Knowledge Map",
                     artifact_type="Dashboard",
-                    artifact_content=json.dumps({"elements": elements}),
+                    artifact_content=html_content,
                     preview_html=html_content
                 )
                 
-                return f"Visual Graph created! View it in the Artifacts panel. Artifact ID: {artifact_id}"
+                return f"SUCCESS: Interactive Graph created (ID: {artifact_id}). View in Artifacts panel."
             except Exception as e:
-                return f"Error creating visualization: {e}"
+                return f"ERROR: {e}"
         
         visualize_system_map.__name__ = "visualize_system_map"
         visualize_system_map.__doc__ = "Creates an interactive visual map of the system DocTypes and their relationships."
