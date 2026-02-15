@@ -73,40 +73,34 @@ For NBFC/Growth System: Every loan number, amount, date, borrower name MUST be r
 def init_agent_state(callback_context: CallbackContext) -> None:
     """
     Initialize state before agent runs.
-    
-    Called via before_agent_callback — ensures state is ready.
-    From: data-science sample pattern.
     """
     state = callback_context.state
     
     # Initialize result placeholders if not present
-    if "coder_result" not in state:
-        state["coder_result"] = ""
-    if "analyst_result" not in state:
-        state["analyst_result"] = ""
-    if "nbfc_result" not in state:
-        state["nbfc_result"] = ""
-    if "discovery_result" not in state:
-        state["discovery_result"] = ""
-    if "orchestrator_result" not in state:
-        state["orchestrator_result"] = ""
+    for key in ["coder_result", "analyst_result", "nbfc_result", "discovery_result", 
+                "critique_result", "planner_result", "orchestrator_result"]:
+        if key not in state:
+            state[key] = ""
     
-    # Load NBFC context if available
+    # Load NBFC context
     if "nbfc_context" not in state:
         try:
             cache = frappe.cache().get_value("niv_system_discovery_map")
             if cache:
                 data = json.loads(cache) if isinstance(cache, str) else cache
                 state["nbfc_context"] = data.get("nbfc_related", {})
+            else:
+                state["nbfc_context"] = {}
         except Exception:
             state["nbfc_context"] = {}
 
     # Load User Persistent Memory
-    if "user_memory" not in state:
+    if "user_memory" not in state or not state["user_memory"]:
         try:
             from niv_ai.niv_core.knowledge.memory_service import MemoryService
             user = frappe.session.user
-            state["user_memory"] = MemoryService.get_user_memory(user)
+            mem = MemoryService.get_user_memory(user)
+            state["user_memory"] = mem or "No prior memory."
         except Exception:
             state["user_memory"] = "Could not load long-term memory."
 
