@@ -1,0 +1,1691 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>A2A Master Plan - Niv AI</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; max-width: 900px; margin: 0 auto; padding: 40px; color: #333; }
+h1 { color: #7c3aed; border-bottom: 3px solid #7c3aed; padding-bottom: 10px; }
+h2 { color: #5b21b6; margin-top: 40px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+h3 { color: #6d28d9; }
+code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+pre { background: #1e1e1e; color: #d4d4d4; padding: 16px; border-radius: 8px; overflow-x: auto; }
+pre code { background: none; color: inherit; }
+table { border-collapse: collapse; width: 100%; margin: 20px 0; }
+th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+th { background: #f8f9fa; font-weight: 600; }
+tr:nth-child(even) { background: #f8f9fa; }
+blockquote { border-left: 4px solid #7c3aed; margin: 20px 0; padding: 10px 20px; background: #f5f3ff; }
+a { color: #7c3aed; }
+hr { border: none; border-top: 2px solid #e5e7eb; margin: 40px 0; }
+@media print { body { max-width: 100%; padding: 20px; } pre { white-space: pre-wrap; } }
+</style>
+</head>
+<body>
+<h1 id="niv-ai-a2a-master-plan">🚀 NIV AI — A2A MASTER PLAN</h1>
+
+<h2 id="zero-failure-multi-agent-architecture">Zero-Failure Multi-Agent Architecture</h2>
+
+<p><strong>Version:</strong> 1.0
+<strong>Author:</strong> Nova (AI Assistant)
+<strong>Date:</strong> 2026-02-14
+<strong>Target Completion:</strong> 8-10 weeks</p>
+
+<hr />
+
+<h2 id="table-of-contents">📋 TABLE OF CONTENTS</h2>
+
+<ol>
+<li><a href="#executive-summary">Executive Summary</a></li>
+<li><a href="#current-problems-analysis">Current Problems Analysis</a></li>
+<li><a href="#google-adk-deep-dive">Google ADK Deep Dive</a></li>
+<li><a href="#10-phase-implementation-plan">10-Phase Implementation Plan</a></li>
+<li><a href="#architecture-diagrams">Architecture Diagrams</a></li>
+<li><a href="#testing-strategy">Testing Strategy</a></li>
+<li><a href="#success-metrics">Success Metrics</a></li>
+</ol>
+
+<hr />
+
+<h2 id="executive-summary">🎯 EXECUTIVE SUMMARY</h2>
+
+<h3 id="goal">Goal</h3>
+
+<p>Build a <strong>bulletproof A2A (Agent-to-Agent) system</strong> for Niv AI that:
+- ✅ 0% false tool calls
+- ✅ 100% proper delegation between agents
+- ✅ Real data, never hallucinated
+- ✅ Works for NBFC/Growth System production</p>
+
+<h3 id="current-state">Current State</h3>
+
+<ul>
+<li>A2A exists but <strong>broken</strong> — agents don't actually transfer work</li>
+<li>TransferToAgentTool used incorrectly</li>
+<li>Session memory lost between calls</li>
+<li>Tool results don't return properly</li>
+</ul>
+
+<h3 id="target-state">Target State</h3>
+
+<ul>
+<li><strong>Orchestrator</strong> correctly routes to specialists</li>
+<li>Specialists execute with <strong>real tools</strong></li>
+<li>Results flow back through the chain</li>
+<li>Full observability and error recovery</li>
+</ul>
+
+<hr />
+
+<h2 id="current-problems-analysis">🔍 CURRENT PROBLEMS ANALYSIS</h2>
+
+<h3 id="problem-1-wrong-transfertoagenttool-usage">Problem 1: Wrong TransferToAgentTool Usage</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># WRONG (current code)</span>
+<span class="n">transfer_tool</span> <span class="o">=</span> <span class="n">TransferToAgentTool</span><span class="p">(</span><span class="n">agent_names</span><span class="o">=</span><span class="p">[</span><span class="n">coder</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="n">data</span><span class="o">.</span><span class="n">name</span><span class="p">,</span> <span class="o">...</span><span class="p">])</span>
+</code></pre>
+</div>
+
+<p><strong>Issue:</strong> Only passes names, not actual agent objects. ADK can't find the agents.</p>
+
+<p><strong>Correct Approach:</strong> Use <code>sub_agents</code> parameter — ADK automatically enables transfers.</p>
+
+<h3 id="problem-2-no-session-persistence">Problem 2: No Session Persistence</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># WRONG (current code)</span>
+<span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">(</span>
+    <span class="n">session_service</span><span class="o">=</span><span class="n">InMemorySessionService</span><span class="p">(),</span>  <span class="c1"># ← Created fresh every call</span>
+    <span class="o">...</span>
+<span class="p">)</span>
+</code></pre>
+</div>
+
+<p><strong>Issue:</strong> Every request creates new session. Context lost. Agents can't share state.</p>
+
+<h3 id="problem-3-no-output_key-for-state-sharing">Problem 3: No output_key for State Sharing</h3>
+
+<p><strong>Issue:</strong> Agents don't save their results to shared state. Next agent can't read previous results.</p>
+
+<h3 id="problem-4-vague-agent-descriptions">Problem 4: Vague Agent Descriptions</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># WRONG (current code)</span>
+<span class="n">description</span><span class="o">=</span><span class="s2">&quot;Handles flight and hotel bookings.&quot;</span>  <span class="c1"># ← Too vague</span>
+</code></pre>
+</div>
+
+<p><strong>Issue:</strong> LLM can't decide which agent to route to. Descriptions must be specific.</p>
+
+<h3 id="problem-5-sync-runnerrun-issues">Problem 5: Sync runner.run() Issues</h3>
+
+<p><strong>Issue:</strong> Transfer events may not fire properly in synchronous mode. Need async handling.</p>
+
+<h3 id="problem-6-tool-execution-in-background-thread">Problem 6: Tool Execution in Background Thread</h3>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># WRONG (current code)</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">tool_func</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">frappe</span><span class="o">.</span><span class="n">local</span><span class="p">,</span> <span class="s2">&quot;site&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+        <span class="n">frappe</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">site</span><span class="o">=</span><span class="n">site</span><span class="p">)</span>  <span class="c1"># ← Race condition</span>
+</code></pre>
+</div>
+
+<p><strong>Issue:</strong> Frappe context not properly managed in ThreadPoolExecutor.</p>
+
+<h3 id="problem-7-no-error-recovery">Problem 7: No Error Recovery</h3>
+
+<p><strong>Issue:</strong> When tool fails, no retry logic. Error just propagates up.</p>
+
+<hr />
+
+<h2 id="google-adk-deep-dive">📚 GOOGLE ADK DEEP DIVE</h2>
+
+<h3 id="key-concepts-from-official-documentation">Key Concepts from Official Documentation</h3>
+
+<h4 id="1-agent-hierarchy-sub_agents">1. Agent Hierarchy (sub_agents)</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="n">coordinator</span> <span class="o">=</span> <span class="n">LlmAgent</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;Coordinator&quot;</span><span class="p">,</span>
+    <span class="n">model</span><span class="o">=</span><span class="s2">&quot;gemini-2.5-flash&quot;</span><span class="p">,</span>
+    <span class="n">instruction</span><span class="o">=</span><span class="s2">&quot;Route user requests...&quot;</span><span class="p">,</span>
+    <span class="n">sub_agents</span><span class="o">=</span><span class="p">[</span><span class="n">billing_agent</span><span class="p">,</span> <span class="n">support_agent</span><span class="p">]</span>  <span class="c1"># ← AutoFlow enables transfers</span>
+<span class="p">)</span>
+</code></pre>
+</div>
+
+<ul>
+<li>Framework <strong>automatically</strong> sets <code>transfer_to_agent</code> function</li>
+<li>LLM decides when to transfer based on <strong>descriptions</strong></li>
+</ul>
+
+<h4 id="2-shared-session-state">2. Shared Session State</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># Agent A saves to state</span>
+<span class="n">agent_a</span> <span class="o">=</span> <span class="n">LlmAgent</span><span class="p">(</span>
+    <span class="n">name</span><span class="o">=</span><span class="s2">&quot;AgentA&quot;</span><span class="p">,</span>
+    <span class="n">output_key</span><span class="o">=</span><span class="s2">&quot;data&quot;</span>  <span class="c1"># ← Saves response to state[&#39;data&#39;]</span>
+<span class="p">)</span>
+
+<span class="c1"># Agent B reads from state</span>
+<span class="n">agent_b</span> <span class="o">=</span> <span class="n">LlmAgent</span><span class="p">(</span>
+    <span class="n">instruction</span><span class="o">=</span><span class="s2">&quot;Process data from </span><span class="si">{data}</span><span class="s2">.&quot;</span>  <span class="c1"># ← Reads state[&#39;data&#39;]</span>
+<span class="p">)</span>
+</code></pre>
+</div>
+
+<h4 id="3-workflow-agents-deterministic">3. Workflow Agents (Deterministic)</h4>
+
+<ul>
+<li><strong>SequentialAgent:</strong> Run agents in order</li>
+<li><strong>ParallelAgent:</strong> Run agents concurrently</li>
+<li><strong>LoopAgent:</strong> Repeat until condition</li>
+</ul>
+
+<h4 id="4-agenttool-explicit-invocation">4. AgentTool (Explicit Invocation)</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">agent_tool</span>
+
+<span class="n">image_tool</span> <span class="o">=</span> <span class="n">agent_tool</span><span class="o">.</span><span class="n">AgentTool</span><span class="p">(</span><span class="n">agent</span><span class="o">=</span><span class="n">image_agent</span><span class="p">)</span>
+<span class="n">parent_agent</span> <span class="o">=</span> <span class="n">LlmAgent</span><span class="p">(</span><span class="n">tools</span><span class="o">=</span><span class="p">[</span><span class="n">image_tool</span><span class="p">])</span>  <span class="c1"># ← Parent can call child as tool</span>
+</code></pre>
+</div>
+
+<h4 id="5-session-services">5. Session Services</h4>
+
+<ul>
+<li><strong>InMemorySessionService:</strong> Testing only</li>
+<li><strong>DatabaseSessionService:</strong> Production (we need to implement for MariaDB)</li>
+<li><strong>VertexAI Session:</strong> Cloud-based</li>
+</ul>
+
+<h4 id="6-planners">6. Planners</h4>
+
+<ul>
+<li><strong>BuiltInPlanner:</strong> Uses Gemini's thinking feature</li>
+<li><strong>PlanReActPlanner:</strong> Plan → Action → Reasoning → Answer</li>
+</ul>
+
+<hr />
+
+<h2 id="10-phase-implementation-plan">📅 10-PHASE IMPLEMENTATION PLAN</h2>
+
+<h3 id="phase-1-foundation-reset-week-1">PHASE 1: Foundation Reset (Week 1)</h3>
+
+<p><strong>Goal:</strong> Clean slate with correct ADK patterns</p>
+
+<h4 id="tasks">Tasks:</h4>
+
+<ol>
+<li><strong>Delete</strong> existing <code>agent_factory.py</code> and <code>stream_handler.py</code></li>
+<li><p><strong>Create</strong> new <code>niv_ai/niv_core/a2a/</code> directory structure:</p>
+
+<pre><code>a2a/
+├── __init__.py
+├── agents/
+│   ├── __init__.py
+│   ├── orchestrator.py
+│   ├── coder.py
+│   ├── analyst.py
+│   ├── nbfc.py
+│   └── discovery.py
+├── session/
+│   ├── __init__.py
+│   ├── frappe_session_service.py  # MariaDB-backed
+│   └── state_manager.py
+├── tools/
+│   ├── __init__.py
+│   └── mcp_adapter.py
+├── runner.py
+└── config.py
+</code></pre></li>
+<li><p><strong>Install</strong> latest google-adk:</p>
+
+<div class="codehilite">
+<pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>google-adk<span class="w"> </span>--upgrade
+</code></pre>
+</div></li>
+</ol>
+
+<h4 id="deliverables">Deliverables:</h4>
+
+<ul>
+<li>[ ] Clean directory structure</li>
+<li>[ ] ADK v0.5.0+ installed</li>
+<li>[ ] Basic imports working</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-2-session-persistence-week-1-2">PHASE 2: Session Persistence (Week 1-2)</h3>
+
+<p><strong>Goal:</strong> Implement MariaDB-backed session service</p>
+
+<h4 id="why-this-matters">Why This Matters:</h4>
+
+<ul>
+<li>Sessions persist across requests</li>
+<li>Agents can share state</li>
+<li>Conversation history maintained</li>
+</ul>
+
+<h4 id="implementation">Implementation:</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/session/frappe_session_service.py</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">frappe</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.sessions</span><span class="w"> </span><span class="kn">import</span> <span class="n">BaseSessionService</span><span class="p">,</span> <span class="n">Session</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Optional</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">FrappeSessionService</span><span class="p">(</span><span class="n">BaseSessionService</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;MariaDB-backed session service using Frappe&#39;s ORM.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">table</span> <span class="o">=</span> <span class="s2">&quot;Niv A2A Session&quot;</span>  <span class="c1"># DocType</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">create_session</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">session_id</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">state</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Session</span><span class="p">:</span>
+        <span class="n">session_id</span> <span class="o">=</span> <span class="n">session_id</span> <span class="ow">or</span> <span class="n">frappe</span><span class="o">.</span><span class="n">generate_hash</span><span class="p">(</span><span class="n">length</span><span class="o">=</span><span class="mi">16</span><span class="p">)</span>
+
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">frappe</span><span class="o">.</span><span class="n">get_doc</span><span class="p">({</span>
+            <span class="s2">&quot;doctype&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="p">,</span>
+            <span class="s2">&quot;session_id&quot;</span><span class="p">:</span> <span class="n">session_id</span><span class="p">,</span>
+            <span class="s2">&quot;app_name&quot;</span><span class="p">:</span> <span class="n">app_name</span><span class="p">,</span>
+            <span class="s2">&quot;user_id&quot;</span><span class="p">:</span> <span class="n">user_id</span><span class="p">,</span>
+            <span class="s2">&quot;state_json&quot;</span><span class="p">:</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">state</span> <span class="ow">or</span> <span class="p">{}),</span>
+            <span class="s2">&quot;events_json&quot;</span><span class="p">:</span> <span class="s2">&quot;[]&quot;</span>
+        <span class="p">})</span>
+        <span class="n">doc</span><span class="o">.</span><span class="n">insert</span><span class="p">(</span><span class="n">ignore_permissions</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">frappe</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+
+        <span class="k">return</span> <span class="n">Session</span><span class="p">(</span>
+            <span class="nb">id</span><span class="o">=</span><span class="n">session_id</span><span class="p">,</span>
+            <span class="n">app_name</span><span class="o">=</span><span class="n">app_name</span><span class="p">,</span>
+            <span class="n">user_id</span><span class="o">=</span><span class="n">user_id</span><span class="p">,</span>
+            <span class="n">state</span><span class="o">=</span><span class="n">state</span> <span class="ow">or</span> <span class="p">{}</span>
+        <span class="p">)</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">get_session</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">app_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">user_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">session_id</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Optional</span><span class="p">[</span><span class="n">Session</span><span class="p">]:</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">doc</span> <span class="o">=</span> <span class="n">frappe</span><span class="o">.</span><span class="n">get_doc</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;session_id&quot;</span><span class="p">:</span> <span class="n">session_id</span><span class="p">})</span>
+            <span class="k">return</span> <span class="n">Session</span><span class="p">(</span>
+                <span class="nb">id</span><span class="o">=</span><span class="n">doc</span><span class="o">.</span><span class="n">session_id</span><span class="p">,</span>
+                <span class="n">app_name</span><span class="o">=</span><span class="n">doc</span><span class="o">.</span><span class="n">app_name</span><span class="p">,</span>
+                <span class="n">user_id</span><span class="o">=</span><span class="n">doc</span><span class="o">.</span><span class="n">user_id</span><span class="p">,</span>
+                <span class="n">state</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">doc</span><span class="o">.</span><span class="n">state_json</span> <span class="ow">or</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">),</span>
+                <span class="n">events</span><span class="o">=</span><span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">doc</span><span class="o">.</span><span class="n">events_json</span> <span class="ow">or</span> <span class="s2">&quot;[]&quot;</span><span class="p">)</span>
+            <span class="p">)</span>
+        <span class="k">except</span> <span class="n">frappe</span><span class="o">.</span><span class="n">DoesNotExistError</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">None</span>
+
+    <span class="k">async</span> <span class="k">def</span><span class="w"> </span><span class="nf">update_session</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">session</span><span class="p">:</span> <span class="n">Session</span><span class="p">,</span>
+        <span class="n">events</span><span class="p">:</span> <span class="nb">list</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">state_delta</span><span class="p">:</span> <span class="nb">dict</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Session</span><span class="p">:</span>
+        <span class="n">doc</span> <span class="o">=</span> <span class="n">frappe</span><span class="o">.</span><span class="n">get_doc</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">table</span><span class="p">,</span> <span class="p">{</span><span class="s2">&quot;session_id&quot;</span><span class="p">:</span> <span class="n">session</span><span class="o">.</span><span class="n">id</span><span class="p">})</span>
+
+        <span class="k">if</span> <span class="n">state_delta</span><span class="p">:</span>
+            <span class="n">current_state</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">doc</span><span class="o">.</span><span class="n">state_json</span> <span class="ow">or</span> <span class="s2">&quot;</span><span class="si">{}</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">current_state</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">state_delta</span><span class="p">)</span>
+            <span class="n">doc</span><span class="o">.</span><span class="n">state_json</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">current_state</span><span class="p">)</span>
+            <span class="n">session</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="n">current_state</span>
+
+        <span class="k">if</span> <span class="n">events</span><span class="p">:</span>
+            <span class="n">current_events</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">doc</span><span class="o">.</span><span class="n">events_json</span> <span class="ow">or</span> <span class="s2">&quot;[]&quot;</span><span class="p">)</span>
+            <span class="n">current_events</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="n">e</span><span class="o">.</span><span class="n">to_dict</span><span class="p">()</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span><span class="p">])</span>
+            <span class="n">doc</span><span class="o">.</span><span class="n">events_json</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">current_events</span><span class="p">[</span><span class="o">-</span><span class="mi">100</span><span class="p">:])</span>  <span class="c1"># Keep last 100</span>
+
+        <span class="n">doc</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">ignore_permissions</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">frappe</span><span class="o">.</span><span class="n">db</span><span class="o">.</span><span class="n">commit</span><span class="p">()</span>
+        <span class="k">return</span> <span class="n">session</span>
+</code></pre>
+</div>
+
+<h4 id="doctype-creation">DocType Creation:</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># Create via Frappe UI or fixture</span>
+<span class="p">{</span>
+    <span class="s2">&quot;doctype&quot;</span><span class="p">:</span> <span class="s2">&quot;DocType&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Niv A2A Session&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;module&quot;</span><span class="p">:</span> <span class="s2">&quot;Niv AI&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;fields&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;session_id&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Data&quot;</span><span class="p">,</span> <span class="s2">&quot;unique&quot;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;app_name&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Data&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;user_id&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Link&quot;</span><span class="p">,</span> <span class="s2">&quot;options&quot;</span><span class="p">:</span> <span class="s2">&quot;User&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;state_json&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Long Text&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;events_json&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Long Text&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;last_activity&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Datetime&quot;</span><span class="p">}</span>
+    <span class="p">]</span>
+<span class="p">}</span>
+</code></pre>
+</div>
+
+<h4 id="deliverables-2">Deliverables:</h4>
+
+<ul>
+<li>[ ] <code>Niv A2A Session</code> DocType created</li>
+<li>[ ] <code>FrappeSessionService</code> implemented</li>
+<li>[ ] Unit tests passing</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-3-specialist-agents-week-2">PHASE 3: Specialist Agents (Week 2)</h3>
+
+<p><strong>Goal:</strong> Create properly configured specialist agents</p>
+
+<h4 id="agent-1-frappe-coder">Agent 1: Frappe Coder</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/agents/coder.py</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">LlmAgent</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">create_coder_agent</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LlmAgent</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates the Frappe/ERPNext developer specialist.&quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">LlmAgent</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;frappe_coder&quot;</span><span class="p">,</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">&quot;SPECIALIST: Frappe/ERPNext Developer. &quot;</span>
+            <span class="s2">&quot;HANDLES: Creating DocTypes, Custom Fields, Server Scripts, &quot;</span>
+            <span class="s2">&quot;Client Scripts, Print Formats, Workflows, and any code-related tasks. &quot;</span>
+            <span class="s2">&quot;TRIGGERS: User mentions &#39;create&#39;, &#39;build&#39;, &#39;add field&#39;, &#39;script&#39;, &quot;</span>
+            <span class="s2">&quot;&#39;DocType&#39;, &#39;workflow&#39;, &#39;automation&#39;, &#39;code&#39;.&quot;</span>
+        <span class="p">),</span>
+        <span class="n">instruction</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;You are an expert Frappe/ERPNext developer.</span>
+
+<span class="s2">## YOUR CAPABILITIES:</span>
+<span class="s2">1. Create DocTypes (standard and custom)</span>
+<span class="s2">2. Add Custom Fields to existing DocTypes</span>
+<span class="s2">3. Write Server Scripts (Document Events, API, Scheduler)</span>
+<span class="s2">4. Write Client Scripts (Form, List, Page)</span>
+<span class="s2">5. Create Workflows with states and actions</span>
+<span class="s2">6. Generate Reports (Script Reports, Query Reports)</span>
+
+<span class="s2">## CRITICAL RULES:</span>
+<span class="s2">1. NEVER hallucinate. Always verify DocType exists using `get_doctype_info`.</span>
+<span class="s2">2. Before adding fields, check existing fields to avoid duplicates.</span>
+<span class="s2">3. For Server Scripts, use `doc_events` hook properly.</span>
+<span class="s2">4. Always test your creations using `test_created_item` tool.</span>
+
+<span class="s2">## OUTPUT FORMAT:</span>
+<span class="s2">After completing a task, summarize what was created with the exact document name.</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">,</span>
+        <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+        <span class="n">output_key</span><span class="o">=</span><span class="s2">&quot;coder_result&quot;</span>  <span class="c1"># Saves to state[&#39;coder_result&#39;]</span>
+    <span class="p">)</span>
+</code></pre>
+</div>
+
+<h4 id="agent-2-data-analyst">Agent 2: Data Analyst</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/agents/analyst.py</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">LlmAgent</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">create_analyst_agent</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LlmAgent</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates the Business Intelligence specialist.&quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">LlmAgent</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;data_analyst&quot;</span><span class="p">,</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">&quot;SPECIALIST: Business Intelligence &amp; Data Analyst. &quot;</span>
+            <span class="s2">&quot;HANDLES: SQL queries, reports, data analysis, dashboards, &quot;</span>
+            <span class="s2">&quot;financial calculations, aggregations, trends. &quot;</span>
+            <span class="s2">&quot;TRIGGERS: User mentions &#39;report&#39;, &#39;query&#39;, &#39;data&#39;, &#39;analysis&#39;, &quot;</span>
+            <span class="s2">&quot;&#39;how many&#39;, &#39;total&#39;, &#39;average&#39;, &#39;sum&#39;, &#39;show me&#39;, &#39;list&#39;.&quot;</span>
+        <span class="p">),</span>
+        <span class="n">instruction</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;You are a Business Intelligence expert.</span>
+
+<span class="s2">## YOUR CAPABILITIES:</span>
+<span class="s2">1. Run SQL queries using `run_database_query`</span>
+<span class="s2">2. Generate Frappe Script Reports</span>
+<span class="s2">3. Create Dashboard Charts</span>
+<span class="s2">4. Analyze data patterns and trends</span>
+<span class="s2">5. Calculate financial metrics</span>
+
+<span class="s2">## CRITICAL RULES:</span>
+<span class="s2">1. NEVER provide fake data. Always query the database.</span>
+<span class="s2">2. If you don&#39;t know the table name, use `SHOW TABLES` first.</span>
+<span class="s2">3. For financial data, always show actual calculated values.</span>
+<span class="s2">4. Double-check column names using `get_doctype_info`.</span>
+
+<span class="s2">## OUTPUT FORMAT:</span>
+<span class="s2">Present data in clear tables or bullet points with real numbers.</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">,</span>
+        <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+        <span class="n">output_key</span><span class="o">=</span><span class="s2">&quot;analyst_result&quot;</span>
+    <span class="p">)</span>
+</code></pre>
+</div>
+
+<h4 id="agent-3-nbfc-specialist">Agent 3: NBFC Specialist</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/agents/nbfc.py</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">LlmAgent</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">create_nbfc_agent</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LlmAgent</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates the NBFC/Lending operations specialist.&quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">LlmAgent</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;nbfc_specialist&quot;</span><span class="p">,</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">&quot;SPECIALIST: NBFC &amp; Lending Operations Expert for Growth System. &quot;</span>
+            <span class="s2">&quot;HANDLES: Loan inquiries, repayment schedules, borrower info, &quot;</span>
+            <span class="s2">&quot;due amounts, EMI calculations, collection status, NPA analysis. &quot;</span>
+            <span class="s2">&quot;TRIGGERS: User mentions &#39;loan&#39;, &#39;borrower&#39;, &#39;EMI&#39;, &#39;due&#39;, &quot;</span>
+            <span class="s2">&quot;&#39;repayment&#39;, &#39;collection&#39;, &#39;NPA&#39;, &#39;overdue&#39;, &#39;principal&#39;, &#39;interest&#39;.&quot;</span>
+        <span class="p">),</span>
+        <span class="n">instruction</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;You are an NBFC operations expert for Growth System.</span>
+
+<span class="s2">## YOUR KNOWLEDGE:</span>
+<span class="s2">- Loan Application workflow</span>
+<span class="s2">- Repayment Schedule structure</span>
+<span class="s2">- Collection and recovery processes</span>
+<span class="s2">- Interest calculation methods</span>
+<span class="s2">- NPA classification rules</span>
+
+<span class="s2">## RELEVANT DOCTYPES:</span>
+<span class="s2">- Loan, Loan Application, Loan Type</span>
+<span class="s2">- Borrower, Borrower Group</span>
+<span class="s2">- Repayment Schedule, Repayment Entry</span>
+<span class="s2">- Collection Assignment</span>
+<span class="s2">- Check &#39;Repayment Schedule&#39; for due amounts</span>
+
+<span class="s2">## CRITICAL RULES:</span>
+<span class="s2">1. NEVER invent loan numbers or amounts.</span>
+<span class="s2">2. A loan is &quot;Due&quot; if total_payment &gt; 0 AND status != &#39;Cleared&#39;</span>
+<span class="s2">3. Always check actual database for loan status.</span>
+<span class="s2">4. For overdue, compare due_date with today&#39;s date.</span>
+
+<span class="s2">## OUTPUT FORMAT:</span>
+<span class="s2">Present loan data with: Loan ID, Borrower Name, Due Amount, Due Date, Status</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">,</span>
+        <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+        <span class="n">output_key</span><span class="o">=</span><span class="s2">&quot;nbfc_result&quot;</span>
+    <span class="p">)</span>
+</code></pre>
+</div>
+
+<h4 id="agent-4-system-discovery">Agent 4: System Discovery</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/agents/discovery.py</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">LlmAgent</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">create_discovery_agent</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">tools</span><span class="p">:</span> <span class="nb">list</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LlmAgent</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates the system introspection specialist.&quot;&quot;&quot;</span>
+
+    <span class="k">return</span> <span class="n">LlmAgent</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;system_discovery&quot;</span><span class="p">,</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="p">(</span>
+            <span class="s2">&quot;SPECIALIST: System Architecture &amp; Discovery Expert. &quot;</span>
+            <span class="s2">&quot;HANDLES: Finding DocTypes, understanding schemas, &quot;</span>
+            <span class="s2">&quot;mapping relationships, exploring modules, explaining system structure. &quot;</span>
+            <span class="s2">&quot;TRIGGERS: User mentions &#39;what DocTypes&#39;, &#39;show me schema&#39;, &quot;</span>
+            <span class="s2">&quot;&#39;how is X structured&#39;, &#39;find&#39;, &#39;explore&#39;, &#39;what modules&#39;.&quot;</span>
+        <span class="p">),</span>
+        <span class="n">instruction</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;You are a Frappe system discovery expert.</span>
+
+<span class="s2">## YOUR CAPABILITIES:</span>
+<span class="s2">1. List all DocTypes in the system</span>
+<span class="s2">2. Show DocType schemas and field structures</span>
+<span class="s2">3. Map relationships between DocTypes (Links)</span>
+<span class="s2">4. Explore installed apps and modules</span>
+<span class="s2">5. Find custom vs standard DocTypes</span>
+
+<span class="s2">## CRITICAL RULES:</span>
+<span class="s2">1. Use `introspect_system` for full system scan</span>
+<span class="s2">2. Use `get_doctype_info` for specific DocType details</span>
+<span class="s2">3. Present findings in organized hierarchies</span>
+
+<span class="s2">## OUTPUT FORMAT:</span>
+<span class="s2">Organize discoveries by: Module → DocType → Key Fields → Relationships</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">,</span>
+        <span class="n">tools</span><span class="o">=</span><span class="n">tools</span><span class="p">,</span>
+        <span class="n">output_key</span><span class="o">=</span><span class="s2">&quot;discovery_result&quot;</span>
+    <span class="p">)</span>
+</code></pre>
+</div>
+
+<h4 id="deliverables-3">Deliverables:</h4>
+
+<ul>
+<li>[ ] All 4 specialist agents created</li>
+<li>[ ] Each agent has clear description (for routing)</li>
+<li>[ ] Each agent uses output_key (for state sharing)</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-4-orchestrator-agent-week-2-3">PHASE 4: Orchestrator Agent (Week 2-3)</h3>
+
+<p><strong>Goal:</strong> Build the master router that delegates correctly</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/agents/orchestrator.py</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.agents</span><span class="w"> </span><span class="kn">import</span> <span class="n">LlmAgent</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.coder</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_coder_agent</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.analyst</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_analyst_agent</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.nbfc</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_nbfc_agent</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.discovery</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_discovery_agent</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">create_orchestrator</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">all_tools</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">LlmAgent</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Creates the main orchestrator with sub-agents.&quot;&quot;&quot;</span>
+
+    <span class="c1"># Create specialist agents</span>
+    <span class="n">coder</span> <span class="o">=</span> <span class="n">create_coder_agent</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">all_tools</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;coder&quot;</span><span class="p">,</span> <span class="p">[]))</span>
+    <span class="n">analyst</span> <span class="o">=</span> <span class="n">create_analyst_agent</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">all_tools</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;analyst&quot;</span><span class="p">,</span> <span class="p">[]))</span>
+    <span class="n">nbfc</span> <span class="o">=</span> <span class="n">create_nbfc_agent</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">all_tools</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;nbfc&quot;</span><span class="p">,</span> <span class="p">[]))</span>
+    <span class="n">discovery</span> <span class="o">=</span> <span class="n">create_discovery_agent</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">all_tools</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;discovery&quot;</span><span class="p">,</span> <span class="p">[]))</span>
+
+    <span class="c1"># Orchestrator with sub_agents (AutoFlow enables transfer)</span>
+    <span class="k">return</span> <span class="n">LlmAgent</span><span class="p">(</span>
+        <span class="n">name</span><span class="o">=</span><span class="s2">&quot;niv_orchestrator&quot;</span><span class="p">,</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">description</span><span class="o">=</span><span class="s2">&quot;Main Niv AI orchestrator that routes requests to specialists.&quot;</span><span class="p">,</span>
+        <span class="n">instruction</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;You are Niv AI&#39;s main orchestrator.</span>
+
+<span class="s2">## YOUR ROLE:</span>
+<span class="s2">You ROUTE requests to the right specialist. You do NOT answer yourself unless:</span>
+<span class="s2">- It&#39;s a simple greeting or general question</span>
+<span class="s2">- No specialist is needed</span>
+
+<span class="s2">## ROUTING RULES:</span>
+<span class="s2">1. **frappe_coder**: Anything about creating, building, coding, DocTypes, scripts</span>
+<span class="s2">2. **data_analyst**: Anything about reports, queries, data, analytics, &quot;show me&quot;, &quot;how many&quot;</span>
+<span class="s2">3. **nbfc_specialist**: Anything about loans, borrowers, EMI, repayment, collection</span>
+<span class="s2">4. **system_discovery**: Anything about &quot;what exists&quot;, &quot;find DocType&quot;, &quot;explore&quot;</span>
+
+<span class="s2">## HOW TO ROUTE:</span>
+<span class="s2">Use `transfer_to_agent` function with the agent name:</span>
+<span class="s2">- transfer_to_agent(agent_name=&quot;frappe_coder&quot;)</span>
+<span class="s2">- transfer_to_agent(agent_name=&quot;data_analyst&quot;)</span>
+<span class="s2">- transfer_to_agent(agent_name=&quot;nbfc_specialist&quot;)</span>
+<span class="s2">- transfer_to_agent(agent_name=&quot;system_discovery&quot;)</span>
+
+<span class="s2">## CRITICAL RULES:</span>
+<span class="s2">1. DO NOT answer data questions yourself. Route to analyst.</span>
+<span class="s2">2. DO NOT invent data. Always route to specialist.</span>
+<span class="s2">3. When routing, pass the original user question unchanged.</span>
+<span class="s2">4. After specialist responds, summarize for the user.</span>
+
+<span class="s2">## EXAMPLES:</span>
+<span class="s2">- &quot;Create a Customer DocType&quot; → transfer_to_agent(&quot;frappe_coder&quot;)</span>
+<span class="s2">- &quot;Show me overdue loans&quot; → transfer_to_agent(&quot;nbfc_specialist&quot;)</span>
+<span class="s2">- &quot;How many sales orders this month?&quot; → transfer_to_agent(&quot;data_analyst&quot;)</span>
+<span class="s2">- &quot;What DocTypes exist in HR module?&quot; → transfer_to_agent(&quot;system_discovery&quot;)</span>
+<span class="s2">&quot;&quot;&quot;</span><span class="p">,</span>
+        <span class="c1"># Basic tools for orchestrator (for simple queries)</span>
+        <span class="n">tools</span><span class="o">=</span><span class="n">all_tools</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;orchestrator&quot;</span><span class="p">,</span> <span class="p">[]),</span>
+        <span class="c1"># Sub-agents for delegation (AutoFlow enabled automatically)</span>
+        <span class="n">sub_agents</span><span class="o">=</span><span class="p">[</span><span class="n">coder</span><span class="p">,</span> <span class="n">analyst</span><span class="p">,</span> <span class="n">nbfc</span><span class="p">,</span> <span class="n">discovery</span><span class="p">]</span>
+    <span class="p">)</span>
+</code></pre>
+</div>
+
+<h4 id="key-points">Key Points:</h4>
+
+<ul>
+<li><code>sub_agents</code> parameter enables AutoFlow</li>
+<li>ADK automatically creates <code>transfer_to_agent</code> function</li>
+<li>LLM uses agent descriptions to decide routing</li>
+<li>No manual TransferToAgentTool needed!</li>
+</ul>
+
+<h4 id="deliverables-4">Deliverables:</h4>
+
+<ul>
+<li>[ ] Orchestrator correctly routes to specialists</li>
+<li>[ ] Transfer function works automatically</li>
+<li>[ ] No manual TransferToAgentTool</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-5-mcp-tool-adapter-week-3">PHASE 5: MCP Tool Adapter (Week 3)</h3>
+
+<p><strong>Goal:</strong> Properly wrap MCP tools for ADK</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/tools/mcp_adapter.py</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">frappe</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.tools</span><span class="w"> </span><span class="kn">import</span> <span class="n">FunctionTool</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">niv_ai.niv_core.mcp_client</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_all_mcp_tools_cached</span><span class="p">,</span> <span class="n">call_tool_fast</span><span class="p">,</span> <span class="n">find_tool_server</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">List</span><span class="p">,</span> <span class="n">Any</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">functools</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">MCPToolAdapter</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Converts MCP tools to ADK FunctionTools with proper Frappe context.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">site</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">site</span> <span class="o">=</span> <span class="n">site</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_tools_cache</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">get_tools_by_category</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">List</span><span class="p">[</span><span class="n">FunctionTool</span><span class="p">]]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns tools categorized for each specialist agent.&quot;&quot;&quot;</span>
+
+        <span class="n">all_mcp</span> <span class="o">=</span> <span class="n">get_all_mcp_tools_cached</span><span class="p">()</span>
+
+        <span class="n">categories</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;orchestrator&quot;</span><span class="p">:</span> <span class="p">[</span><span class="s2">&quot;universal_search&quot;</span><span class="p">,</span> <span class="s2">&quot;list_documents&quot;</span><span class="p">],</span>
+            <span class="s2">&quot;coder&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s2">&quot;create_document&quot;</span><span class="p">,</span> <span class="s2">&quot;update_document&quot;</span><span class="p">,</span> <span class="s2">&quot;delete_document&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;get_document&quot;</span><span class="p">,</span> <span class="s2">&quot;get_doctype_info&quot;</span><span class="p">,</span> <span class="s2">&quot;run_python_code&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;search_doctype&quot;</span><span class="p">,</span> <span class="s2">&quot;test_created_item&quot;</span>
+            <span class="p">],</span>
+            <span class="s2">&quot;analyst&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s2">&quot;run_database_query&quot;</span><span class="p">,</span> <span class="s2">&quot;generate_report&quot;</span><span class="p">,</span> <span class="s2">&quot;report_list&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;list_documents&quot;</span><span class="p">,</span> <span class="s2">&quot;fetch&quot;</span><span class="p">,</span> <span class="s2">&quot;get_document&quot;</span><span class="p">,</span> <span class="s2">&quot;search_documents&quot;</span>
+            <span class="p">],</span>
+            <span class="s2">&quot;nbfc&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s2">&quot;run_database_query&quot;</span><span class="p">,</span> <span class="s2">&quot;list_documents&quot;</span><span class="p">,</span> <span class="s2">&quot;get_doctype_info&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;get_document&quot;</span><span class="p">,</span> <span class="s2">&quot;search_documents&quot;</span>
+            <span class="p">],</span>
+            <span class="s2">&quot;discovery&quot;</span><span class="p">:</span> <span class="p">[</span>
+                <span class="s2">&quot;introspect_system&quot;</span><span class="p">,</span> <span class="s2">&quot;get_doctype_info&quot;</span><span class="p">,</span> <span class="s2">&quot;search_doctype&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;list_documents&quot;</span>
+            <span class="p">]</span>
+        <span class="p">}</span>
+
+        <span class="n">result</span> <span class="o">=</span> <span class="p">{</span><span class="n">cat</span><span class="p">:</span> <span class="p">[]</span> <span class="k">for</span> <span class="n">cat</span> <span class="ow">in</span> <span class="n">categories</span><span class="p">}</span>
+
+        <span class="k">for</span> <span class="n">tool_def</span> <span class="ow">in</span> <span class="n">all_mcp</span><span class="p">:</span>
+            <span class="n">func_def</span> <span class="o">=</span> <span class="n">tool_def</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;function&quot;</span><span class="p">,</span> <span class="p">{})</span>
+            <span class="n">name</span> <span class="o">=</span> <span class="n">func_def</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">name</span><span class="p">:</span>
+                <span class="k">continue</span>
+
+            <span class="c1"># Create ADK FunctionTool</span>
+            <span class="n">adk_tool</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_create_adk_tool</span><span class="p">(</span><span class="n">name</span><span class="p">,</span> <span class="n">func_def</span><span class="p">)</span>
+
+            <span class="c1"># Assign to categories</span>
+            <span class="k">for</span> <span class="n">cat</span><span class="p">,</span> <span class="n">tool_names</span> <span class="ow">in</span> <span class="n">categories</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+                <span class="k">if</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">tool_names</span><span class="p">:</span>
+                    <span class="n">result</span><span class="p">[</span><span class="n">cat</span><span class="p">]</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">adk_tool</span><span class="p">)</span>
+
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_create_adk_tool</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">func_def</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">FunctionTool</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Creates an ADK FunctionTool with proper context management.&quot;&quot;&quot;</span>
+
+        <span class="n">description</span> <span class="o">=</span> <span class="n">func_def</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;description&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+        <span class="n">site</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">site</span>
+
+        <span class="c1"># Use closure to capture tool name and site</span>
+        <span class="nd">@functools</span><span class="o">.</span><span class="n">wraps</span><span class="p">(</span><span class="k">lambda</span><span class="p">:</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="k">def</span><span class="w"> </span><span class="nf">tool_executor</span><span class="p">(</span><span class="o">**</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+<span class="w">            </span><span class="sd">&quot;&quot;&quot;Execute MCP tool with Frappe context.&quot;&quot;&quot;</span>
+            <span class="c1"># Re-initialize Frappe context in this thread</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">frappe</span><span class="o">.</span><span class="n">local</span><span class="p">,</span> <span class="s2">&quot;site&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">):</span>
+                    <span class="n">frappe</span><span class="o">.</span><span class="n">init</span><span class="p">(</span><span class="n">site</span><span class="o">=</span><span class="n">site</span><span class="p">)</span>
+                    <span class="n">frappe</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+
+                <span class="n">server_name</span> <span class="o">=</span> <span class="n">find_tool_server</span><span class="p">(</span><span class="n">name</span><span class="p">)</span>
+                <span class="k">if</span> <span class="ow">not</span> <span class="n">server_name</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;Error: Tool &#39;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">&#39; not found in any MCP server.&quot;</span>
+
+                <span class="n">result</span> <span class="o">=</span> <span class="n">call_tool_fast</span><span class="p">(</span>
+                    <span class="n">server_name</span><span class="o">=</span><span class="n">server_name</span><span class="p">,</span>
+                    <span class="n">tool_name</span><span class="o">=</span><span class="n">name</span><span class="p">,</span>
+                    <span class="n">arguments</span><span class="o">=</span><span class="n">kwargs</span>
+                <span class="p">)</span>
+
+                <span class="c1"># Format result</span>
+                <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">result</span><span class="p">,</span> <span class="nb">dict</span><span class="p">)</span> <span class="ow">and</span> <span class="s2">&quot;content&quot;</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+                    <span class="n">parts</span> <span class="o">=</span> <span class="p">[]</span>
+                    <span class="k">for</span> <span class="n">c</span> <span class="ow">in</span> <span class="n">result</span><span class="p">[</span><span class="s2">&quot;content&quot;</span><span class="p">]:</span>
+                        <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">c</span><span class="p">,</span> <span class="nb">dict</span><span class="p">):</span>
+                            <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">c</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;text&quot;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">c</span><span class="p">)))</span>
+                        <span class="k">else</span><span class="p">:</span>
+                            <span class="n">parts</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">c</span><span class="p">))</span>
+                    <span class="k">return</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">parts</span><span class="p">)</span>
+
+                <span class="k">return</span> <span class="nb">str</span><span class="p">(</span><span class="n">result</span><span class="p">)</span>
+
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="k">return</span> <span class="sa">f</span><span class="s2">&quot;Error executing </span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="c1"># Set function name and docstring</span>
+        <span class="n">tool_executor</span><span class="o">.</span><span class="vm">__name__</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="n">tool_executor</span><span class="o">.</span><span class="vm">__doc__</span> <span class="o">=</span> <span class="n">description</span>
+
+        <span class="k">return</span> <span class="n">FunctionTool</span><span class="p">(</span><span class="n">func</span><span class="o">=</span><span class="n">tool_executor</span><span class="p">)</span>
+</code></pre>
+</div>
+
+<h4 id="key-improvements">Key Improvements:</h4>
+
+<ul>
+<li>Proper Frappe context initialization</li>
+<li>Error handling with meaningful messages</li>
+<li>Tool categorization for specialists</li>
+<li>Cached tool discovery</li>
+</ul>
+
+<h4 id="deliverables-5">Deliverables:</h4>
+
+<ul>
+<li>[ ] MCP tools properly wrapped</li>
+<li>[ ] Frappe context managed correctly</li>
+<li>[ ] Tools categorized per agent</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-6-stream-handler-rewrite-week-3-4">PHASE 6: Stream Handler Rewrite (Week 3-4)</h3>
+
+<p><strong>Goal:</strong> Proper async event handling with all event types</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/runner.py</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">frappe</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">json</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.runners</span><span class="w"> </span><span class="kn">import</span> <span class="n">Runner</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.apps</span><span class="w"> </span><span class="kn">import</span> <span class="n">App</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">google.genai</span><span class="w"> </span><span class="kn">import</span> <span class="n">types</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Generator</span><span class="p">,</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.agents.orchestrator</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_orchestrator</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.session.frappe_session_service</span><span class="w"> </span><span class="kn">import</span> <span class="n">FrappeSessionService</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.tools.mcp_adapter</span><span class="w"> </span><span class="kn">import</span> <span class="n">MCPToolAdapter</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">niv_ai.niv_core.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_niv_settings</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">NivA2ARunner</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Main runner for Niv AI A2A system.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">conversation_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+        <span class="n">provider_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">user</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conversation_id</span> <span class="o">=</span> <span class="n">conversation_id</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">user</span> <span class="o">=</span> <span class="n">user</span> <span class="ow">or</span> <span class="n">frappe</span><span class="o">.</span><span class="n">session</span><span class="o">.</span><span class="n">user</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">site</span> <span class="o">=</span> <span class="n">frappe</span><span class="o">.</span><span class="n">local</span><span class="o">.</span><span class="n">site</span>
+
+        <span class="c1"># Get settings</span>
+        <span class="n">settings</span> <span class="o">=</span> <span class="n">get_niv_settings</span><span class="p">()</span>
+        <span class="n">provider_name</span> <span class="o">=</span> <span class="n">provider_name</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">default_provider</span>
+        <span class="n">model_name</span> <span class="o">=</span> <span class="n">model_name</span> <span class="ow">or</span> <span class="n">settings</span><span class="o">.</span><span class="n">default_model</span>
+
+        <span class="c1"># Initialize model</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_init_model</span><span class="p">(</span><span class="n">provider_name</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+
+        <span class="c1"># Initialize tools</span>
+        <span class="n">adapter</span> <span class="o">=</span> <span class="n">MCPToolAdapter</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">site</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">tools_by_category</span> <span class="o">=</span> <span class="n">adapter</span><span class="o">.</span><span class="n">get_tools_by_category</span><span class="p">()</span>
+
+        <span class="c1"># Create orchestrator with sub-agents</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">orchestrator</span> <span class="o">=</span> <span class="n">create_orchestrator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">tools_by_category</span><span class="p">)</span>
+
+        <span class="c1"># Create app and runner</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">app</span> <span class="o">=</span> <span class="n">App</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s2">&quot;NivAI&quot;</span><span class="p">,</span> <span class="n">root_agent</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">orchestrator</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">session_service</span> <span class="o">=</span> <span class="n">FrappeSessionService</span><span class="p">()</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">runner</span> <span class="o">=</span> <span class="n">Runner</span><span class="p">(</span>
+            <span class="n">app</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">app</span><span class="p">,</span>
+            <span class="n">session_service</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">session_service</span><span class="p">,</span>
+            <span class="n">auto_create_session</span><span class="o">=</span><span class="kc">True</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_model</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">provider_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize LiteLLM model for multi-provider support.&quot;&quot;&quot;</span>
+        <span class="kn">from</span><span class="w"> </span><span class="nn">google.adk.models.lite_llm</span><span class="w"> </span><span class="kn">import</span> <span class="n">LiteLlm</span>
+
+        <span class="n">provider</span> <span class="o">=</span> <span class="n">frappe</span><span class="o">.</span><span class="n">get_doc</span><span class="p">(</span><span class="s2">&quot;Niv AI Provider&quot;</span><span class="p">,</span> <span class="n">provider_name</span><span class="p">)</span>
+        <span class="n">api_key</span> <span class="o">=</span> <span class="n">provider</span><span class="o">.</span><span class="n">get_password</span><span class="p">(</span><span class="s2">&quot;api_key&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Handle OpenAI-compatible providers</span>
+        <span class="n">model_id</span> <span class="o">=</span> <span class="n">model_name</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">any</span><span class="p">(</span><span class="n">x</span> <span class="ow">in</span> <span class="n">provider_name</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;openai&quot;</span><span class="p">,</span> <span class="s2">&quot;anthropic&quot;</span><span class="p">,</span> <span class="s2">&quot;google&quot;</span><span class="p">]):</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">model_id</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;openai/&quot;</span><span class="p">):</span>
+                <span class="n">model_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;openai/</span><span class="si">{</span><span class="n">model_id</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="k">return</span> <span class="n">LiteLlm</span><span class="p">(</span>
+            <span class="n">model</span><span class="o">=</span><span class="n">model_id</span><span class="p">,</span>
+            <span class="n">api_key</span><span class="o">=</span><span class="n">api_key</span><span class="p">,</span>
+            <span class="n">api_base</span><span class="o">=</span><span class="n">provider</span><span class="o">.</span><span class="n">base_url</span>
+        <span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Stream events from the A2A system.&quot;&quot;&quot;</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">content</span> <span class="o">=</span> <span class="n">types</span><span class="o">.</span><span class="n">Content</span><span class="p">(</span>
+                <span class="n">role</span><span class="o">=</span><span class="s2">&quot;user&quot;</span><span class="p">,</span>
+                <span class="n">parts</span><span class="o">=</span><span class="p">[</span><span class="n">types</span><span class="o">.</span><span class="n">Part</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="n">message</span><span class="p">)]</span>
+            <span class="p">)</span>
+
+            <span class="c1"># Track which agent is currently active</span>
+            <span class="n">current_agent</span> <span class="o">=</span> <span class="s2">&quot;niv_orchestrator&quot;</span>
+
+            <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span>
+                <span class="n">new_message</span><span class="o">=</span><span class="n">content</span><span class="p">,</span>
+                <span class="n">user_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">user</span><span class="p">,</span>
+                <span class="n">session_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">conversation_id</span>
+            <span class="p">):</span>
+                <span class="c1"># 1. Handle text tokens</span>
+                <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">text</span><span class="p">:</span>
+                    <span class="k">yield</span> <span class="p">{</span>
+                        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;token&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">event</span><span class="o">.</span><span class="n">text</span><span class="p">,</span>
+                        <span class="s2">&quot;agent&quot;</span><span class="p">:</span> <span class="n">event</span><span class="o">.</span><span class="n">author</span>
+                    <span class="p">}</span>
+
+                <span class="c1"># 2. Handle agent transfer</span>
+                <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">author</span> <span class="o">!=</span> <span class="n">current_agent</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">event</span><span class="o">.</span><span class="n">author</span> <span class="o">!=</span> <span class="s2">&quot;user&quot;</span><span class="p">:</span>
+                        <span class="k">yield</span> <span class="p">{</span>
+                            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;agent_transfer&quot;</span><span class="p">,</span>
+                            <span class="s2">&quot;from&quot;</span><span class="p">:</span> <span class="n">current_agent</span><span class="p">,</span>
+                            <span class="s2">&quot;to&quot;</span><span class="p">:</span> <span class="n">event</span><span class="o">.</span><span class="n">author</span>
+                        <span class="p">}</span>
+                        <span class="n">current_agent</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">author</span>
+
+                <span class="c1"># 3. Handle tool calls</span>
+                <span class="n">tool_calls</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get_function_calls</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">tool_calls</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">tc</span> <span class="ow">in</span> <span class="n">tool_calls</span><span class="p">:</span>
+                        <span class="c1"># Skip transfer_to_agent as it&#39;s internal</span>
+                        <span class="k">if</span> <span class="n">tc</span><span class="o">.</span><span class="n">name</span> <span class="o">==</span> <span class="s2">&quot;transfer_to_agent&quot;</span><span class="p">:</span>
+                            <span class="k">continue</span>
+
+                        <span class="k">yield</span> <span class="p">{</span>
+                            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;tool_call&quot;</span><span class="p">,</span>
+                            <span class="s2">&quot;tool&quot;</span><span class="p">:</span> <span class="n">tc</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                            <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="n">tc</span><span class="o">.</span><span class="n">args</span><span class="p">,</span>
+                            <span class="s2">&quot;agent&quot;</span><span class="p">:</span> <span class="n">event</span><span class="o">.</span><span class="n">author</span>
+                        <span class="p">}</span>
+
+                <span class="c1"># 4. Handle tool results</span>
+                <span class="n">tool_results</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get_function_responses</span><span class="p">()</span>
+                <span class="k">if</span> <span class="n">tool_results</span><span class="p">:</span>
+                    <span class="k">for</span> <span class="n">tr</span> <span class="ow">in</span> <span class="n">tool_results</span><span class="p">:</span>
+                        <span class="k">yield</span> <span class="p">{</span>
+                            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;tool_result&quot;</span><span class="p">,</span>
+                            <span class="s2">&quot;tool&quot;</span><span class="p">:</span> <span class="n">tr</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+                            <span class="s2">&quot;result&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">tr</span><span class="o">.</span><span class="n">response</span><span class="p">)[:</span><span class="mi">2000</span><span class="p">],</span>
+                            <span class="s2">&quot;agent&quot;</span><span class="p">:</span> <span class="n">event</span><span class="o">.</span><span class="n">author</span>
+                        <span class="p">}</span>
+
+                <span class="c1"># 5. Handle thinking/planning</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="s1">&#39;thinking&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">event</span><span class="o">.</span><span class="n">thinking</span><span class="p">:</span>
+                    <span class="k">yield</span> <span class="p">{</span>
+                        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;thought&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">event</span><span class="o">.</span><span class="n">thinking</span><span class="p">,</span>
+                        <span class="s2">&quot;agent&quot;</span><span class="p">:</span> <span class="n">event</span><span class="o">.</span><span class="n">author</span>
+                    <span class="p">}</span>
+
+                <span class="c1"># 6. Handle errors</span>
+                <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">event</span><span class="p">,</span> <span class="s1">&#39;error&#39;</span><span class="p">)</span> <span class="ow">and</span> <span class="n">event</span><span class="o">.</span><span class="n">error</span><span class="p">:</span>
+                    <span class="k">yield</span> <span class="p">{</span>
+                        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;error&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">event</span><span class="o">.</span><span class="n">error</span><span class="p">),</span>
+                        <span class="s2">&quot;agent&quot;</span><span class="p">:</span> <span class="n">event</span><span class="o">.</span><span class="n">author</span>
+                    <span class="p">}</span>
+
+            <span class="c1"># Final: Mark completion</span>
+            <span class="k">yield</span> <span class="p">{</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;done&quot;</span><span class="p">,</span> <span class="s2">&quot;agent&quot;</span><span class="p">:</span> <span class="n">current_agent</span><span class="p">}</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="n">frappe</span><span class="o">.</span><span class="n">log_error</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;A2A Stream Error: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="s2">&quot;Niv AI A2A&quot;</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="p">{</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;error&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;A2A Error: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">}</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">stream_a2a</span><span class="p">(</span>
+    <span class="n">message</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">conversation_id</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">provider_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="n">user</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Public API for streaming A2A responses.&quot;&quot;&quot;</span>
+
+    <span class="n">runner</span> <span class="o">=</span> <span class="n">NivA2ARunner</span><span class="p">(</span>
+        <span class="n">conversation_id</span><span class="o">=</span><span class="n">conversation_id</span><span class="p">,</span>
+        <span class="n">provider_name</span><span class="o">=</span><span class="n">provider_name</span><span class="p">,</span>
+        <span class="n">model_name</span><span class="o">=</span><span class="n">model_name</span><span class="p">,</span>
+        <span class="n">user</span><span class="o">=</span><span class="n">user</span>
+    <span class="p">)</span>
+
+    <span class="k">yield from</span> <span class="n">runner</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+</code></pre>
+</div>
+
+<h4 id="key-improvements-2">Key Improvements:</h4>
+
+<ul>
+<li>Async-friendly event handling</li>
+<li>Tracks agent transfers</li>
+<li>Filters internal events (transfer_to_agent)</li>
+<li>Proper error handling</li>
+<li>Session persistence</li>
+</ul>
+
+<h4 id="deliverables-6">Deliverables:</h4>
+
+<ul>
+<li>[ ] All event types handled</li>
+<li>[ ] Agent transfers tracked</li>
+<li>[ ] Errors logged and returned</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-7-testing-framework-week-4">PHASE 7: Testing Framework (Week 4)</h3>
+
+<p><strong>Goal:</strong> Comprehensive test suite for A2A</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/tests/test_a2a.py</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">frappe</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">unittest</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">..runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">stream_a2a</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestA2ABasics</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Test basic A2A functionality.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">conversation_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;test_</span><span class="si">{</span><span class="n">frappe</span><span class="o">.</span><span class="n">generate_hash</span><span class="p">(</span><span class="n">length</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_simple_greeting</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Orchestrator should handle simple greetings.&quot;&quot;&quot;</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stream_a2a</span><span class="p">(</span><span class="s2">&quot;Hello&quot;</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">conversation_id</span><span class="p">))</span>
+
+        <span class="c1"># Should have tokens</span>
+        <span class="n">tokens</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;token&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">tokens</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+
+        <span class="c1"># Should complete</span>
+        <span class="n">done</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;done&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">done</span><span class="p">),</span> <span class="mi">1</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_route_to_analyst</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Should route data questions to analyst.&quot;&quot;&quot;</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stream_a2a</span><span class="p">(</span>
+            <span class="s2">&quot;How many customers do we have?&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conversation_id</span>
+        <span class="p">))</span>
+
+        <span class="c1"># Should have agent transfer</span>
+        <span class="n">transfers</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;agent_transfer&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span><span class="nb">any</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="s2">&quot;to&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;data_analyst&quot;</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">transfers</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_route_to_coder</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Should route coding requests to coder.&quot;&quot;&quot;</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stream_a2a</span><span class="p">(</span>
+            <span class="s2">&quot;Create a DocType called Test Item&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conversation_id</span>
+        <span class="p">))</span>
+
+        <span class="n">transfers</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;agent_transfer&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span><span class="nb">any</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="s2">&quot;to&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;frappe_coder&quot;</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">transfers</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_route_to_nbfc</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Should route loan queries to NBFC specialist.&quot;&quot;&quot;</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stream_a2a</span><span class="p">(</span>
+            <span class="s2">&quot;Show me overdue loans&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conversation_id</span>
+        <span class="p">))</span>
+
+        <span class="n">transfers</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;agent_transfer&quot;</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span><span class="nb">any</span><span class="p">(</span><span class="n">t</span><span class="p">[</span><span class="s2">&quot;to&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;nbfc_specialist&quot;</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">transfers</span><span class="p">))</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_tool_execution</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Tools should execute and return results.&quot;&quot;&quot;</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stream_a2a</span><span class="p">(</span>
+            <span class="s2">&quot;List all modules in the system&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conversation_id</span>
+        <span class="p">))</span>
+
+        <span class="c1"># Should have tool calls</span>
+        <span class="n">tool_calls</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;tool_call&quot;</span><span class="p">]</span>
+        <span class="n">tool_results</span> <span class="o">=</span> <span class="p">[</span><span class="n">e</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;tool_result&quot;</span><span class="p">]</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">tool_results</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_no_hallucination</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Response should not contain obviously fake data.&quot;&quot;&quot;</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stream_a2a</span><span class="p">(</span>
+            <span class="s2">&quot;What is the total sales amount today?&quot;</span><span class="p">,</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">conversation_id</span>
+        <span class="p">))</span>
+
+        <span class="n">full_response</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="n">e</span><span class="p">[</span><span class="s2">&quot;content&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;token&quot;</span>
+        <span class="p">)</span>
+
+        <span class="c1"># Should not contain placeholder data</span>
+        <span class="n">fake_indicators</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;$1,000,000&quot;</span><span class="p">,</span> <span class="s2">&quot;example&quot;</span><span class="p">,</span> <span class="s2">&quot;dummy&quot;</span><span class="p">,</span> <span class="s2">&quot;test data&quot;</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">indicator</span> <span class="ow">in</span> <span class="n">fake_indicators</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">assertNotIn</span><span class="p">(</span><span class="n">indicator</span><span class="o">.</span><span class="n">lower</span><span class="p">(),</span> <span class="n">full_response</span><span class="o">.</span><span class="n">lower</span><span class="p">())</span>
+
+
+<span class="k">class</span><span class="w"> </span><span class="nc">TestA2ASession</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestCase</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Test session persistence.&quot;&quot;&quot;</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">test_session_persists</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Session state should persist across calls.&quot;&quot;&quot;</span>
+        <span class="n">conversation_id</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;test_</span><span class="si">{</span><span class="n">frappe</span><span class="o">.</span><span class="n">generate_hash</span><span class="p">(</span><span class="n">length</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+
+        <span class="c1"># First call</span>
+        <span class="nb">list</span><span class="p">(</span><span class="n">stream_a2a</span><span class="p">(</span><span class="s2">&quot;My name is Ravi&quot;</span><span class="p">,</span> <span class="n">conversation_id</span><span class="p">))</span>
+
+        <span class="c1"># Second call should remember</span>
+        <span class="n">events</span> <span class="o">=</span> <span class="nb">list</span><span class="p">(</span><span class="n">stream_a2a</span><span class="p">(</span><span class="s2">&quot;What is my name?&quot;</span><span class="p">,</span> <span class="n">conversation_id</span><span class="p">))</span>
+        <span class="n">response</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">e</span><span class="p">[</span><span class="s2">&quot;content&quot;</span><span class="p">]</span> <span class="k">for</span> <span class="n">e</span> <span class="ow">in</span> <span class="n">events</span> <span class="k">if</span> <span class="n">e</span><span class="p">[</span><span class="s2">&quot;type&quot;</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;token&quot;</span><span class="p">)</span>
+
+        <span class="bp">self</span><span class="o">.</span><span class="n">assertIn</span><span class="p">(</span><span class="s2">&quot;Ravi&quot;</span><span class="p">,</span> <span class="n">response</span><span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">run_tests</span><span class="p">():</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run all A2A tests.&quot;&quot;&quot;</span>
+    <span class="n">suite</span> <span class="o">=</span> <span class="n">unittest</span><span class="o">.</span><span class="n">TestLoader</span><span class="p">()</span><span class="o">.</span><span class="n">loadTestsFromTestCase</span><span class="p">(</span><span class="n">TestA2ABasics</span><span class="p">)</span>
+    <span class="n">suite</span><span class="o">.</span><span class="n">addTests</span><span class="p">(</span><span class="n">unittest</span><span class="o">.</span><span class="n">TestLoader</span><span class="p">()</span><span class="o">.</span><span class="n">loadTestsFromTestCase</span><span class="p">(</span><span class="n">TestA2ASession</span><span class="p">))</span>
+
+    <span class="n">runner</span> <span class="o">=</span> <span class="n">unittest</span><span class="o">.</span><span class="n">TextTestRunner</span><span class="p">(</span><span class="n">verbosity</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+    <span class="n">result</span> <span class="o">=</span> <span class="n">runner</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">suite</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;tests_run&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">testsRun</span><span class="p">,</span>
+        <span class="s2">&quot;failures&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">failures</span><span class="p">),</span>
+        <span class="s2">&quot;errors&quot;</span><span class="p">:</span> <span class="nb">len</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">errors</span><span class="p">),</span>
+        <span class="s2">&quot;success&quot;</span><span class="p">:</span> <span class="n">result</span><span class="o">.</span><span class="n">wasSuccessful</span><span class="p">()</span>
+    <span class="p">}</span>
+</code></pre>
+</div>
+
+<h4 id="test-coverage">Test Coverage:</h4>
+
+<ul>
+<li>[ ] Basic greeting (no transfer needed)</li>
+<li>[ ] Route to each specialist correctly</li>
+<li>[ ] Tool execution works</li>
+<li>[ ] No hallucination</li>
+<li>[ ] Session persistence</li>
+</ul>
+
+<h4 id="deliverables-7">Deliverables:</h4>
+
+<ul>
+<li>[ ] Test suite created</li>
+<li>[ ] All tests passing</li>
+<li>[ ] CI integration</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-8-ui-integration-week-5">PHASE 8: UI Integration (Week 5)</h3>
+
+<p><strong>Goal:</strong> Connect new A2A to existing UI</p>
+
+<h4 id="update-streampy-to-use-new-a2a">Update stream.py to use new A2A:</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># In niv_ai/niv_core/api/stream.py</span>
+
+<span class="c1"># Add A2A import</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">niv_ai.niv_core.a2a.runner</span><span class="w"> </span><span class="kn">import</span> <span class="n">stream_a2a</span>
+
+<span class="c1"># In stream_chat():</span>
+<span class="n">use_a2a</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">settings</span><span class="p">,</span> <span class="s2">&quot;enable_a2a&quot;</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span>
+<span class="k">if</span> <span class="n">use_a2a</span><span class="p">:</span>
+    <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">stream_a2a</span><span class="p">(</span>
+        <span class="n">message</span><span class="o">=</span><span class="n">message</span><span class="p">,</span>
+        <span class="n">conversation_id</span><span class="o">=</span><span class="n">conversation_id</span><span class="p">,</span>
+        <span class="n">provider_name</span><span class="o">=</span><span class="n">provider</span><span class="p">,</span>
+        <span class="n">model_name</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+        <span class="n">user</span><span class="o">=</span><span class="n">user</span>
+    <span class="p">):</span>
+        <span class="c1"># Map A2A events to existing SSE format</span>
+        <span class="n">event_type</span> <span class="o">=</span> <span class="n">event</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;type&quot;</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">)</span>
+
+        <span class="k">if</span> <span class="n">event_type</span> <span class="o">==</span> <span class="s2">&quot;token&quot;</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">_sse</span><span class="p">({</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;token&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s2">&quot;content&quot;</span><span class="p">]})</span>
+
+        <span class="k">elif</span> <span class="n">event_type</span> <span class="o">==</span> <span class="s2">&quot;agent_transfer&quot;</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">_sse</span><span class="p">({</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;thought&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Handing off to </span><span class="si">{</span><span class="n">event</span><span class="p">[</span><span class="s1">&#39;to&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">...&quot;</span>
+            <span class="p">})</span>
+
+        <span class="k">elif</span> <span class="n">event_type</span> <span class="o">==</span> <span class="s2">&quot;tool_call&quot;</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">_sse</span><span class="p">({</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;tool_call&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;tool&quot;</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s2">&quot;tool&quot;</span><span class="p">],</span>
+                <span class="s2">&quot;arguments&quot;</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s2">&quot;arguments&quot;</span><span class="p">]</span>
+            <span class="p">})</span>
+
+        <span class="k">elif</span> <span class="n">event_type</span> <span class="o">==</span> <span class="s2">&quot;tool_result&quot;</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">_sse</span><span class="p">({</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;tool_result&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;tool&quot;</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s2">&quot;tool&quot;</span><span class="p">],</span>
+                <span class="s2">&quot;result&quot;</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s2">&quot;result&quot;</span><span class="p">]</span>
+            <span class="p">})</span>
+
+        <span class="k">elif</span> <span class="n">event_type</span> <span class="o">==</span> <span class="s2">&quot;error&quot;</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="n">_sse</span><span class="p">({</span><span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;error&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">event</span><span class="p">[</span><span class="s2">&quot;content&quot;</span><span class="p">]})</span>
+
+    <span class="k">return</span>  <span class="c1"># Skip legacy flow</span>
+</code></pre>
+</div>
+
+<h4 id="ui-updates-for-agent-transfer">UI Updates for Agent Transfer:</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1">// In niv_chat.js, handle agent_transfer event</span>
+
+<span class="c1">// Show agent badge when transfer happens</span>
+<span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">data</span><span class="p">.</span><span class="nx">type</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">&quot;thought&quot;</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">content</span><span class="p">.</span><span class="nx">includes</span><span class="p">(</span><span class="s2">&quot;Handing off to&quot;</span><span class="p">))</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">agentName</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">data</span><span class="p">.</span><span class="nx">content</span><span class="p">.</span><span class="nx">match</span><span class="p">(</span><span class="sr">/Handing off to (.+)\.\.\./</span><span class="p">)[</span><span class="mf">1</span><span class="p">];</span>
+<span class="w">    </span><span class="k">this</span><span class="p">.</span><span class="nx">show_agent_badge</span><span class="p">(</span><span class="nx">agentName</span><span class="p">);</span>
+<span class="p">}</span>
+
+<span class="nx">show_agent_badge</span><span class="p">(</span><span class="nx">agentName</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="kd">const</span><span class="w"> </span><span class="nx">badgeHtml</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="sb">`&lt;span class=&quot;agent-badge&quot;&gt;</span><span class="si">${</span><span class="nx">agentName</span><span class="si">}</span><span class="sb">&lt;/span&gt;`</span><span class="p">;</span>
+<span class="w">    </span><span class="k">this</span><span class="p">.</span><span class="nx">$chatArea</span><span class="p">.</span><span class="nx">find</span><span class="p">(</span><span class="s2">&quot;.niv-message.assistant:last .msg-content&quot;</span><span class="p">).</span><span class="nx">prepend</span><span class="p">(</span><span class="nx">badgeHtml</span><span class="p">);</span>
+<span class="p">}</span>
+</code></pre>
+</div>
+
+<h4 id="deliverables-8">Deliverables:</h4>
+
+<ul>
+<li>[ ] A2A integrated with existing SSE stream</li>
+<li>[ ] UI shows agent transfers</li>
+<li>[ ] Backwards compatible with non-A2A mode</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-9-error-recovery-fallback-week-5-6">PHASE 9: Error Recovery &amp; Fallback (Week 5-6)</h3>
+
+<p><strong>Goal:</strong> Graceful degradation when things fail</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/recovery.py</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">frappe</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Dict</span><span class="p">,</span> <span class="n">Any</span><span class="p">,</span> <span class="n">Generator</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">A2ARecoveryHandler</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Handles errors and provides fallback mechanisms.&quot;&quot;&quot;</span>
+
+    <span class="n">MAX_RETRIES</span> <span class="o">=</span> <span class="mi">3</span>
+    <span class="n">RETRY_DELAYS</span> <span class="o">=</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">5</span><span class="p">]</span>  <span class="c1"># seconds</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">runner</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">runner</span> <span class="o">=</span> <span class="n">runner</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">error_count</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_error</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">stream_with_recovery</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">message</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Stream with automatic retry and fallback.&quot;&quot;&quot;</span>
+
+        <span class="k">for</span> <span class="n">attempt</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">MAX_RETRIES</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">yield from</span> <span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+                <span class="k">return</span>  <span class="c1"># Success, exit</span>
+
+            <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">error_count</span> <span class="o">+=</span> <span class="mi">1</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">last_error</span> <span class="o">=</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)</span>
+
+                <span class="n">frappe</span><span class="o">.</span><span class="n">log_error</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;A2A attempt </span><span class="si">{</span><span class="n">attempt</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2"> failed: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;Niv AI A2A Recovery&quot;</span>
+                <span class="p">)</span>
+
+                <span class="k">if</span> <span class="n">attempt</span> <span class="o">&lt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">MAX_RETRIES</span> <span class="o">-</span> <span class="mi">1</span><span class="p">:</span>
+                    <span class="c1"># Retry with delay</span>
+                    <span class="k">yield</span> <span class="p">{</span>
+                        <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;thought&quot;</span><span class="p">,</span>
+                        <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="sa">f</span><span class="s2">&quot;Retrying... (attempt </span><span class="si">{</span><span class="n">attempt</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">2</span><span class="si">}</span><span class="s2">)&quot;</span>
+                    <span class="p">}</span>
+                    <span class="n">time</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">RETRY_DELAYS</span><span class="p">[</span><span class="n">attempt</span><span class="p">])</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="c1"># All retries failed, use fallback</span>
+                    <span class="k">yield from</span> <span class="bp">self</span><span class="o">.</span><span class="n">_fallback_response</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_fallback_response</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">message</span><span class="p">:</span> <span class="nb">str</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Generator</span><span class="p">[</span><span class="n">Dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">],</span> <span class="kc">None</span><span class="p">,</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Fallback to legacy LangGraph agent.&quot;&quot;&quot;</span>
+
+        <span class="k">yield</span> <span class="p">{</span>
+            <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;thought&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="s2">&quot;A2A failed, using backup system...&quot;</span>
+        <span class="p">}</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="c1"># Import legacy agent</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">niv_ai.niv_core.langchain.agent</span><span class="w"> </span><span class="kn">import</span> <span class="n">create_niv_agent</span>
+
+            <span class="n">agent</span> <span class="o">=</span> <span class="n">create_niv_agent</span><span class="p">(</span>
+                <span class="n">conversation_id</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">runner</span><span class="o">.</span><span class="n">conversation_id</span><span class="p">,</span>
+                <span class="n">provider_name</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                <span class="n">model_name</span><span class="o">=</span><span class="kc">None</span>
+            <span class="p">)</span>
+
+            <span class="c1"># Stream from legacy agent</span>
+            <span class="k">for</span> <span class="n">event</span> <span class="ow">in</span> <span class="n">agent</span><span class="o">.</span><span class="n">stream</span><span class="p">(</span><span class="n">message</span><span class="p">):</span>
+                <span class="k">yield</span> <span class="n">event</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">fallback_error</span><span class="p">:</span>
+            <span class="k">yield</span> <span class="p">{</span>
+                <span class="s2">&quot;type&quot;</span><span class="p">:</span> <span class="s2">&quot;error&quot;</span><span class="p">,</span>
+                <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Both A2A and backup failed.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;A2A Error: </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">last_error</span><span class="si">}</span><span class="se">\n</span><span class="s2">&quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;Backup Error: </span><span class="si">{</span><span class="nb">str</span><span class="p">(</span><span class="n">fallback_error</span><span class="p">)</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+            <span class="p">}</span>
+</code></pre>
+</div>
+
+<h4 id="circuit-breaker-pattern">Circuit Breaker Pattern:</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/circuit_breaker.py</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">frappe</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">time</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
+
+<span class="k">class</span><span class="w"> </span><span class="nc">CircuitBreaker</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Prevents cascading failures.&quot;&quot;&quot;</span>
+
+    <span class="n">FAILURE_THRESHOLD</span> <span class="o">=</span> <span class="mi">5</span>
+    <span class="n">RECOVERY_TIMEOUT</span> <span class="o">=</span> <span class="mi">60</span>  <span class="c1"># seconds</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">name</span> <span class="o">=</span> <span class="n">name</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">failures</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">last_failure_time</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;CLOSED&quot;</span>  <span class="c1"># CLOSED, OPEN, HALF_OPEN</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">call</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">func</span><span class="p">:</span> <span class="n">Callable</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Execute function with circuit breaker protection.&quot;&quot;&quot;</span>
+
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s2">&quot;OPEN&quot;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">last_failure_time</span> <span class="o">&gt;</span> <span class="bp">self</span><span class="o">.</span><span class="n">RECOVERY_TIMEOUT</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;HALF_OPEN&quot;</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Circuit breaker </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> is OPEN&quot;</span><span class="p">)</span>
+
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">result</span> <span class="o">=</span> <span class="n">func</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s2">&quot;HALF_OPEN&quot;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;CLOSED&quot;</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">failures</span> <span class="o">=</span> <span class="mi">0</span>
+
+            <span class="k">return</span> <span class="n">result</span>
+
+        <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">failures</span> <span class="o">+=</span> <span class="mi">1</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">last_failure_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">failures</span> <span class="o">&gt;=</span> <span class="bp">self</span><span class="o">.</span><span class="n">FAILURE_THRESHOLD</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s2">&quot;OPEN&quot;</span>
+                <span class="n">frappe</span><span class="o">.</span><span class="n">log_error</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Circuit breaker </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="si">}</span><span class="s2"> OPENED after </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">failures</span><span class="si">}</span><span class="s2"> failures&quot;</span><span class="p">,</span>
+                    <span class="s2">&quot;Niv AI Circuit Breaker&quot;</span>
+                <span class="p">)</span>
+
+            <span class="k">raise</span>
+</code></pre>
+</div>
+
+<h4 id="deliverables-9">Deliverables:</h4>
+
+<ul>
+<li>[ ] Automatic retry with exponential backoff</li>
+<li>[ ] Fallback to legacy LangGraph</li>
+<li>[ ] Circuit breaker prevents cascading failures</li>
+<li>[ ] All errors logged</li>
+</ul>
+
+<hr />
+
+<h3 id="phase-10-observability-production-week-6-8">PHASE 10: Observability &amp; Production (Week 6-8)</h3>
+
+<p><strong>Goal:</strong> Full visibility and production readiness</p>
+
+<h4 id="logging-doctype">Logging DocType:</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># Create Niv A2A Log DocType</span>
+<span class="p">{</span>
+    <span class="s2">&quot;doctype&quot;</span><span class="p">:</span> <span class="s2">&quot;DocType&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="s2">&quot;Niv A2A Log&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;module&quot;</span><span class="p">:</span> <span class="s2">&quot;Niv AI&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;fields&quot;</span><span class="p">:</span> <span class="p">[</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;conversation_id&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Data&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Link&quot;</span><span class="p">,</span> <span class="s2">&quot;options&quot;</span><span class="p">:</span> <span class="s2">&quot;User&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;message&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Long Text&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;agents_invoked&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Small Text&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;tools_called&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Small Text&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;total_tokens&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Int&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;duration_ms&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Int&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Select&quot;</span><span class="p">,</span> <span class="s2">&quot;options&quot;</span><span class="p">:</span> <span class="s2">&quot;Success</span><span class="se">\n</span><span class="s2">Error</span><span class="se">\n</span><span class="s2">Fallback&quot;</span><span class="p">},</span>
+        <span class="p">{</span><span class="s2">&quot;fieldname&quot;</span><span class="p">:</span> <span class="s2">&quot;error_message&quot;</span><span class="p">,</span> <span class="s2">&quot;fieldtype&quot;</span><span class="p">:</span> <span class="s2">&quot;Long Text&quot;</span><span class="p">}</span>
+    <span class="p">]</span>
+<span class="p">}</span>
+</code></pre>
+</div>
+
+<h4 id="metrics-dashboard">Metrics Dashboard:</h4>
+
+<div class="codehilite">
+<pre><span></span><code><span class="c1"># niv_ai/niv_core/a2a/metrics.py</span>
+
+<span class="kn">import</span><span class="w"> </span><span class="nn">frappe</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">get_a2a_metrics</span><span class="p">(</span><span class="n">period</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;today&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Get A2A performance metrics.&quot;&quot;&quot;</span>
+
+    <span class="n">filters</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">if</span> <span class="n">period</span> <span class="o">==</span> <span class="s2">&quot;today&quot;</span><span class="p">:</span>
+        <span class="n">filters</span><span class="p">[</span><span class="s2">&quot;creation&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&gt;&quot;</span><span class="p">,</span> <span class="n">frappe</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">add_days</span><span class="p">(</span><span class="n">frappe</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">today</span><span class="p">(),</span> <span class="o">-</span><span class="mi">1</span><span class="p">)]</span>
+    <span class="k">elif</span> <span class="n">period</span> <span class="o">==</span> <span class="s2">&quot;week&quot;</span><span class="p">:</span>
+        <span class="n">filters</span><span class="p">[</span><span class="s2">&quot;creation&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;&gt;&quot;</span><span class="p">,</span> <span class="n">frappe</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">add_days</span><span class="p">(</span><span class="n">frappe</span><span class="o">.</span><span class="n">utils</span><span class="o">.</span><span class="n">today</span><span class="p">(),</span> <span class="o">-</span><span class="mi">7</span><span class="p">)]</span>
+
+    <span class="n">logs</span> <span class="o">=</span> <span class="n">frappe</span><span class="o">.</span><span class="n">get_all</span><span class="p">(</span>
+        <span class="s2">&quot;Niv A2A Log&quot;</span><span class="p">,</span>
+        <span class="n">filters</span><span class="o">=</span><span class="n">filters</span><span class="p">,</span>
+        <span class="n">fields</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;status&quot;</span><span class="p">,</span> <span class="s2">&quot;agents_invoked&quot;</span><span class="p">,</span> <span class="s2">&quot;tools_called&quot;</span><span class="p">,</span> <span class="s2">&quot;duration_ms&quot;</span><span class="p">,</span> <span class="s2">&quot;total_tokens&quot;</span><span class="p">]</span>
+    <span class="p">)</span>
+
+    <span class="n">total</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">logs</span><span class="p">)</span>
+    <span class="n">success</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">logs</span> <span class="k">if</span> <span class="n">l</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;Success&quot;</span><span class="p">)</span>
+    <span class="n">errors</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">logs</span> <span class="k">if</span> <span class="n">l</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;Error&quot;</span><span class="p">)</span>
+    <span class="n">fallbacks</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="mi">1</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">logs</span> <span class="k">if</span> <span class="n">l</span><span class="o">.</span><span class="n">status</span> <span class="o">==</span> <span class="s2">&quot;Fallback&quot;</span><span class="p">)</span>
+
+    <span class="n">avg_duration</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">l</span><span class="o">.</span><span class="n">duration_ms</span> <span class="ow">or</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">logs</span><span class="p">)</span> <span class="o">/</span> <span class="n">total</span> <span class="k">if</span> <span class="n">total</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span>
+    <span class="n">total_tokens</span> <span class="o">=</span> <span class="nb">sum</span><span class="p">(</span><span class="n">l</span><span class="o">.</span><span class="n">total_tokens</span> <span class="ow">or</span> <span class="mi">0</span> <span class="k">for</span> <span class="n">l</span> <span class="ow">in</span> <span class="n">logs</span><span class="p">)</span>
+
+    <span class="c1"># Agent distribution</span>
+    <span class="n">agent_counts</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">log</span> <span class="ow">in</span> <span class="n">logs</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">agent</span> <span class="ow">in</span> <span class="p">(</span><span class="n">log</span><span class="o">.</span><span class="n">agents_invoked</span> <span class="ow">or</span> <span class="s2">&quot;&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">):</span>
+            <span class="n">agent</span> <span class="o">=</span> <span class="n">agent</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
+            <span class="k">if</span> <span class="n">agent</span><span class="p">:</span>
+                <span class="n">agent_counts</span><span class="p">[</span><span class="n">agent</span><span class="p">]</span> <span class="o">=</span> <span class="n">agent_counts</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">agent</span><span class="p">,</span> <span class="mi">0</span><span class="p">)</span> <span class="o">+</span> <span class="mi">1</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;total_requests&quot;</span><span class="p">:</span> <span class="n">total</span><span class="p">,</span>
+        <span class="s2">&quot;success_rate&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">success</span> <span class="o">/</span> <span class="n">total</span> <span class="o">*</span> <span class="mi">100</span><span class="p">)</span> <span class="k">if</span> <span class="n">total</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;error_rate&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">errors</span> <span class="o">/</span> <span class="n">total</span> <span class="o">*</span> <span class="mi">100</span><span class="p">)</span> <span class="k">if</span> <span class="n">total</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;fallback_rate&quot;</span><span class="p">:</span> <span class="p">(</span><span class="n">fallbacks</span> <span class="o">/</span> <span class="n">total</span> <span class="o">*</span> <span class="mi">100</span><span class="p">)</span> <span class="k">if</span> <span class="n">total</span> <span class="o">&gt;</span> <span class="mi">0</span> <span class="k">else</span> <span class="mi">0</span><span class="p">,</span>
+        <span class="s2">&quot;avg_duration_ms&quot;</span><span class="p">:</span> <span class="n">avg_duration</span><span class="p">,</span>
+        <span class="s2">&quot;total_tokens&quot;</span><span class="p">:</span> <span class="n">total_tokens</span><span class="p">,</span>
+        <span class="s2">&quot;agent_distribution&quot;</span><span class="p">:</span> <span class="n">agent_counts</span>
+    <span class="p">}</span>
+</code></pre>
+</div>
+
+<h4 id="production-checklist">Production Checklist:</h4>
+
+<ul>
+<li>[ ] All DocTypes created (Niv A2A Session, Niv A2A Log)</li>
+<li>[ ] Error logging comprehensive</li>
+<li>[ ] Metrics dashboard working</li>
+<li>[ ] Circuit breaker tested</li>
+<li>[ ] Recovery fallback tested</li>
+<li>[ ] Load tested (100 concurrent requests)</li>
+<li>[ ] Growth System specific prompts added</li>
+<li>[ ] Documentation complete</li>
+</ul>
+
+<hr />
+
+<h2 id="architecture-diagrams">🏗️ ARCHITECTURE DIAGRAMS</h2>
+
+<h3 id="high-level-flow">High-Level Flow</h3>
+
+<pre><code>┌─────────────┐     ┌─────────────────┐     ┌──────────────────┐
+│   User      │────▶│   Orchestrator   │────▶│    Specialists    │
+│  Message    │     │   (niv_orch)     │     │                  │
+└─────────────┘     └────────┬────────┘     │ ┌──────────────┐ │
+                             │              │ │ frappe_coder │ │
+                    ┌────────▼────────┐     │ ├──────────────┤ │
+                    │  Route Decision  │     │ │ data_analyst │ │
+                    │  (LLM + Desc)    │     │ ├──────────────┤ │
+                    └────────┬────────┘     │ │nbfc_specialist│ │
+                             │              │ ├──────────────┤ │
+                    ┌────────▼────────┐     │ │sys_discovery │ │
+                    │ transfer_to_agent│────▶│ └──────────────┘ │
+                    └─────────────────┘     └──────────────────┘
+                                                      │
+                                                      ▼
+                                            ┌──────────────────┐
+                                            │    MCP Tools      │
+                                            │ (29 Frappe tools) │
+                                            └──────────────────┘
+</code></pre>
+
+<h3 id="session-flow">Session Flow</h3>
+
+<pre><code>┌─────────────┐
+│  Request 1  │
+└──────┬──────┘
+       │
+       ▼
+┌──────────────────────────────────────────┐
+│         FrappeSessionService              │
+│  ┌────────────────────────────────────┐  │
+│  │  MariaDB: Niv A2A Session          │  │
+│  │  - session_id                      │  │
+│  │  - state_json (shared state)       │  │
+│  │  - events_json (history)           │  │
+│  └────────────────────────────────────┘  │
+└──────────────────────────────────────────┘
+       │
+       ▼
+┌─────────────┐
+│  Request 2  │  ◀── Reads previous state
+└─────────────┘
+</code></pre>
+
+<hr />
+
+<h2 id="success-metrics">✅ SUCCESS METRICS</h2>
+
+<h3 id="zero-failure-criteria">Zero-Failure Criteria</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Metric</th>
+  <th>Target</th>
+  <th>Measurement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Tool Call Success Rate</td>
+  <td>100%</td>
+  <td>No failed tool calls due to context issues</td>
+</tr>
+<tr>
+  <td>Agent Transfer Accuracy</td>
+  <td>&gt;95%</td>
+  <td>Correct specialist chosen</td>
+</tr>
+<tr>
+  <td>Hallucination Rate</td>
+  <td>0%</td>
+  <td>No fake data in responses</td>
+</tr>
+<tr>
+  <td>Session Persistence</td>
+  <td>100%</td>
+  <td>State maintained across requests</td>
+</tr>
+<tr>
+  <td>Error Recovery</td>
+  <td>100%</td>
+  <td>Fallback works when A2A fails</td>
+</tr>
+</tbody>
+</table>
+
+<h3 id="performance-targets">Performance Targets</h3>
+
+<table>
+<thead>
+<tr>
+  <th>Metric</th>
+  <th>Target</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>First Token Latency</td>
+  <td>&lt;2 seconds</td>
+</tr>
+<tr>
+  <td>Full Response Time</td>
+  <td>&lt;30 seconds</td>
+</tr>
+<tr>
+  <td>Concurrent Users</td>
+  <td>50+</td>
+</tr>
+<tr>
+  <td>Memory Usage</td>
+  <td>&lt;500MB per worker</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h2 id="timeline-summary">📆 TIMELINE SUMMARY</h2>
+
+<table>
+<thead>
+<tr>
+  <th>Phase</th>
+  <th>Week</th>
+  <th>Deliverable</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>1</td>
+  <td>1</td>
+  <td>Foundation Reset</td>
+</tr>
+<tr>
+  <td>2</td>
+  <td>1-2</td>
+  <td>Session Persistence</td>
+</tr>
+<tr>
+  <td>3</td>
+  <td>2</td>
+  <td>Specialist Agents</td>
+</tr>
+<tr>
+  <td>4</td>
+  <td>2-3</td>
+  <td>Orchestrator</td>
+</tr>
+<tr>
+  <td>5</td>
+  <td>3</td>
+  <td>MCP Tool Adapter</td>
+</tr>
+<tr>
+  <td>6</td>
+  <td>3-4</td>
+  <td>Stream Handler</td>
+</tr>
+<tr>
+  <td>7</td>
+  <td>4</td>
+  <td>Testing Framework</td>
+</tr>
+<tr>
+  <td>8</td>
+  <td>5</td>
+  <td>UI Integration</td>
+</tr>
+<tr>
+  <td>9</td>
+  <td>5-6</td>
+  <td>Error Recovery</td>
+</tr>
+<tr>
+  <td>10</td>
+  <td>6-8</td>
+  <td>Production</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Total: 8 weeks for full implementation</strong></p>
+
+<hr />
+
+<h2 id="references">🔗 REFERENCES</h2>
+
+<ul>
+<li><a href="https://google.github.io/adk-docs/">Google ADK Documentation</a></li>
+<li><a href="https://google.github.io/adk-docs/agents/multi-agents/">ADK Multi-Agent Guide</a></li>
+<li><a href="https://github.com/a2aproject/A2A">A2A Protocol</a></li>
+<li><a href="https://github.com/google/adk-samples">ADK Python Samples</a></li>
+</ul>
+
+<hr />
+
+<p><strong>Created by Nova for Niv AI</strong>
+<strong>Last Updated: 2026-02-14</strong></p>
+
+</body>
+</html>
