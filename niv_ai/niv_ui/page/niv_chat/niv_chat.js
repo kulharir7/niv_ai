@@ -1394,18 +1394,13 @@ ${htmlCode}
         
         // Handle [[THOUGHT]] blocks before markdown parsing
         let processedText = text;
-        const thoughtRegex = /\[\[THOUGHT\]\]([\s\S]*?)\[\[\/THOUGHT\]\]/gi;
+        
+        // Match both closed [[THOUGHT]]content[[/THOUGHT]] and open [[THOUGHT]]content
+        const thoughtRegex = /\[\[THOUGHT\]\]([\s\S]*?)(?:\[\[\/THOUGHT\]\]|$)/gi;
         
         processedText = processedText.replace(thoughtRegex, (match, content) => {
-            const safeContent = frappe.utils.escape_html(content.trim());
-            return `<div class="thought-accordion">
-                <div class="thought-header" onclick="$(this).closest('.thought-accordion').toggleClass('open')">
-                    <i class="fa fa-brain thought-icon"></i>
-                    <span>Thinking...</span>
-                    <i class="fa fa-chevron-down thought-chevron"></i>
-                </div>
-                <div class="thought-content">${safeContent.replace(/\n/g, '<br>')}</div>
-            </div>`;
+            const safeContent = content.trim();
+            return `<div class="niv-thought-block">${safeContent.replace(/\n/g, '<br>')}</div>`;
         });
 
         if (window.marked) {

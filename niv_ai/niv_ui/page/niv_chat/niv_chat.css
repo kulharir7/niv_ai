@@ -3422,3 +3422,39 @@ body.niv-widget-mode .niv-message.user .msg-content { max-width: 90% !important;
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.01); }
 }
+
+
+/* Thought Block Styling */
+.niv-thought-block {
+    background: rgba(124, 58, 237, 0.05);
+    border-left: 3px solid #7c3aed;
+    padding: 12px 16px;
+    margin: 10px 0;
+    border-radius: 4px 8px 8px 4px;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 0.95em;
+    line-height: 1.5;
+    position: relative;
+}
+
+.niv-thought-block::before {
+    content: "💭 Thinking...";
+    display: block;
+    font-style: normal;
+    font-weight: 600;
+    font-size: 0.8em;
+    color: #a78bfa;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Tool badge inside thought */
+.niv-thought-block code {
+    background: rgba(124, 58, 237, 0.2);
+    color: #c4b5fd;
+    padding: 2px 4px;
+    border-radius: 4px;
+    font-style: normal;
+}
