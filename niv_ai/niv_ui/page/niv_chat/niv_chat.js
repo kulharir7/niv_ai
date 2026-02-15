@@ -1919,7 +1919,7 @@ ${htmlCode}
                             this.render_conversation_list();
                             if (is_active) {
                                 this.hide_typing();
-                                this.append_message("assistant", `❌ Error: ${data.message}`, { is_error: 1 });
+                                this.append_message("assistant", `❌ Error: ${data.content || data.message || "Unknown error"}`, { is_error: 1 });
                             }
                             resolve();
                         }

@@ -145,6 +145,7 @@ def stream_a2a(
     current_agent = "niv_orchestrator"
     seen_agents: List[str] = []
     yielded_results: Set[str] = set()  # Track which *_result keys we already sent
+    yielded_content_hashes: Set[int] = set()  # Track content hashes to prevent duplicate text
     has_yielded_text = False
     start_time = time.time()
     
@@ -241,9 +242,15 @@ def stream_a2a(
             # ─── TEXT (3 methods) ───
             text = _extract_text(event)
             if text and _is_meaningful_text(text):
-                has_yielded_text = True
-                yield {"type": EVENT_TOKEN, "content": text}
-                _log(f"EVENT #{event_count}: TOKEN ({len(text)} chars)")
+                # Deduplicate: don't yield same content twice
+                content_hash = hash(text.strip()[:200])  # Hash first 200 chars
+                if content_hash not in yielded_content_hashes:
+                    yielded_content_hashes.add(content_hash)
+                    has_yielded_text = True
+                    yield {"type": EVENT_TOKEN, "content": text}
+                    _log(f"EVENT #{event_count}: TOKEN ({len(text)} chars)")
+                else:
+                    _log(f"EVENT #{event_count}: SKIP duplicate token ({len(text)} chars)")
             
             # ─── TOOL CALLS ───
             if hasattr(event, "get_function_calls"):
@@ -317,19 +324,26 @@ def stream_a2a(
                         if key in ("last_tool_result", "last_tool_name") or key.startswith("tool_result_"):
                             continue
                         
-                        # Agent result keys → yield as text if meaningful
+                        # Agent result keys → yield as text if meaningful AND not duplicate
                         if key.endswith("_result") and value:
                             value_str = str(value).strip()
                             
                             # Only yield if:
                             # 1. Not already yielded this key
-                            # 2. Meaningful text (not JSON, not empty)
-                            # 3. Not a duplicate of text already sent
-                            if key not in yielded_results and _is_meaningful_text(value_str):
+                            # 2. Meaningful text
+                            # 3. Content not already sent via event.text
+                            content_hash = hash(value_str[:200])
+                            if (key not in yielded_results 
+                                and _is_meaningful_text(value_str)
+                                and content_hash not in yielded_content_hashes):
                                 yielded_results.add(key)
+                                yielded_content_hashes.add(content_hash)
                                 has_yielded_text = True
                                 yield {"type": EVENT_TOKEN, "content": value_str}
                                 _log(f"EVENT #{event_count}: STATE→TOKEN {key} ({len(value_str)} chars)")
+                            else:
+                                yielded_results.add(key)
+                                _log(f"EVENT #{event_count}: SKIP duplicate state {key}")
                             
                             # Always send state change event for tracking
                             yield {
