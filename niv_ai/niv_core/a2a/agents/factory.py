@@ -25,8 +25,23 @@ import frappe
 from google.adk.agents import LlmAgent
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.tools import FunctionTool
+from google.adk.tools.tool_context import ToolContext
 from google.adk.models.lite_llm import LiteLlm
 from google.genai.types import GenerateContentConfig
+
+
+class MCPFunctionTool(FunctionTool):
+    """
+    Custom FunctionTool that properly handles MCP tool arguments.
+    
+    ADK's FunctionTool filters arguments to match function signature,
+    which breaks **kwargs. This subclass passes all arguments directly.
+    """
+    
+    async def run_async(self, *, args: dict, tool_context: ToolContext):
+        """Override to pass all args without filtering."""
+        # Call our function directly with all args
+        return await self._invoke_callable(self.func, args)
 
 from niv_ai.niv_core.mcp_client import (
     get_all_mcp_tools_cached,
@@ -37,33 +52,11 @@ from niv_ai.niv_core.utils import get_niv_settings
 
 
 # ─────────────────────────────────────────────────────────────────
-# GLOBAL INSTRUCTION — Common context for all agents
+# GLOBAL INSTRUCTION — Minimal, fast context
 # ─────────────────────────────────────────────────────────────────
 
-GLOBAL_INSTRUCTION = f"""
-You are part of Niv AI — an intelligent assistant for Frappe/ERPNext systems.
-Today's date: {date.today()}
-
-🚨 CRITICAL — REAL DATA ONLY 🚨
-🗣️ LANGUAGE: Respond in English by default. Use a professional, clear tone.
-
-ABSOLUTE RULES (ZERO TOLERANCE):
-1. NEVER invent, assume, or hallucinate ANY data — not even as examples.
-2. ALWAYS use MCP tools to fetch REAL data from the database.
-3. If a tool fails → say "Tool failed: [error]" — DO NOT make up alternative data.
-4. If no data exists → say "No records found" — DO NOT create mock records.
-5. Numbers, names, dates, amounts — ALL must come from tool results.
-6. NEVER say "for example" or "let's assume" with fake data.
-7. If you don't have real data, ASK the user or run a tool.
-
-WORKFLOW:
-1. User asks question → Run appropriate tool
-2. Tool returns data → Use ONLY that data in response
-3. Tool fails/empty → Report failure honestly, suggest next steps
-4. NEVER fill gaps with imagination
-
-For NBFC/Growth System: Every loan number, amount, date, borrower name MUST be real.
-"""
+GLOBAL_INSTRUCTION = f"""You are Niv AI for Frappe/ERPNext. Date: {date.today()}
+RULE: Use tools for ALL data. Never invent data. If tool fails, say so."""
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -120,96 +113,28 @@ def store_tool_result_in_state(
 
 def init_agent_state(callback_context: CallbackContext) -> None:
     """
-    Initialize state before agent runs.
-    Loads: System Knowledge Graph, NBFC Context, User Memory, Dev Reference
+    Initialize state before agent runs. FAST version - minimal loading.
     """
     state = callback_context.state
     
-    # Initialize result placeholders if not present
+    # Initialize result placeholders
     for key in ["coder_result", "analyst_result", "nbfc_result", "discovery_result", 
                 "critique_result", "planner_result", "orchestrator_result"]:
         if key not in state:
             state[key] = ""
     
-    # ─── SYSTEM KNOWLEDGE GRAPH ───
-    # This gives agents awareness of what DocTypes exist in the system
+    # Skip heavy loading - agents can use tools to discover
     if "system_doctypes" not in state:
-        try:
-            cache = frappe.cache().get_value("niv_system_knowledge_graph")
-            
-            # Auto-run system scan if not cached
-            if not cache:
-                try:
-                    from niv_ai.niv_core.knowledge.system_map import update_knowledge_graph
-                    graph = update_knowledge_graph()
-                    cache = json.dumps(graph)
-                except Exception:
-                    cache = None
-            
-            if cache:
-                graph = json.loads(cache) if isinstance(cache, str) else cache
-                # Create a compact summary for prompts
-                doctypes = list(graph.get("doctypes", {}).keys())
-                modules = graph.get("modules", {})
-                
-                summary_parts = []
-                summary_parts.append(f"Total DocTypes: {len(doctypes)}")
-                
-                # Group by module for readability
-                for module, dts in list(modules.items())[:10]:  # Top 10 modules
-                    if dts:
-                        summary_parts.append(f"  {module}: {', '.join(dts[:5])}" + ("..." if len(dts) > 5 else ""))
-                
-                state["system_doctypes"] = "\n".join(summary_parts)
-                state["system_doctype_list"] = doctypes[:100]  # Keep list for lookups
-            else:
-                # Fallback: fetch common DocTypes directly
-                try:
-                    common_dts = frappe.get_all("DocType", 
-                        filters={"istable": 0, "issingle": 0},
-                        fields=["name", "module"],
-                        limit=50
-                    )
-                    summary = f"Common DocTypes ({len(common_dts)}):\n"
-                    summary += ", ".join([d.name for d in common_dts[:20]])
-                    state["system_doctypes"] = summary
-                    state["system_doctype_list"] = [d.name for d in common_dts]
-                except Exception:
-                    state["system_doctypes"] = "System scan not available."
-                    state["system_doctype_list"] = []
-        except Exception as e:
-            state["system_doctypes"] = f"Could not load system knowledge: {e}"
-            state["system_doctype_list"] = []
+        state["system_doctypes"] = "Use tools to query DocTypes."
     
-    # ─── NBFC CONTEXT ───
     if "nbfc_context" not in state:
-        try:
-            cache = frappe.cache().get_value("niv_system_discovery_map")
-            if cache:
-                data = json.loads(cache) if isinstance(cache, str) else cache
-                state["nbfc_context"] = data.get("nbfc_related", {})
-            else:
-                state["nbfc_context"] = {}
-        except Exception:
-            state["nbfc_context"] = {}
-
-    # ─── USER MEMORY ───
-    if "user_memory" not in state or not state["user_memory"]:
-        try:
-            from niv_ai.niv_core.knowledge.memory_service import MemoryService
-            user = frappe.session.user
-            mem = MemoryService.get_user_memory(user)
-            state["user_memory"] = mem or "No prior memory."
-        except Exception:
-            state["user_memory"] = "Could not load long-term memory."
+        state["nbfc_context"] = {}
     
-    # ─── DEV QUICK REFERENCE (for coder agent) ───
+    if "user_memory" not in state:
+        state["user_memory"] = ""
+    
     if "dev_reference" not in state:
-        try:
-            from niv_ai.niv_core.knowledge.dev_quick_reference import DEV_QUICK_REFERENCE
-            state["dev_reference"] = DEV_QUICK_REFERENCE
-        except Exception:
-            state["dev_reference"] = ""
+        state["dev_reference"] = ""
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -478,7 +403,7 @@ class NivAgentFactory:
         """
         Convert MCP tools to ADK FunctionTools.
         
-        Proper Frappe context initialization in tool executor.
+        Uses MCPFunctionTool which bypasses ADK's argument filtering.
         """
         adk_tools = {}
         
@@ -490,7 +415,8 @@ class NivAgentFactory:
             
             description = func_def.get("description", name)
             
-            tool = FunctionTool(
+            # Create tool with our custom MCPFunctionTool
+            tool = MCPFunctionTool(
                 func=self._make_tool_executor(name, description)
             )
             adk_tools[name] = tool
@@ -506,7 +432,11 @@ class NivAgentFactory:
         """
         site = self.site  # Capture at creation time
         
-        def execute_tool(**kwargs) -> str:
+        async def execute_tool(arguments: dict) -> str:
+            """Execute MCP tool."""
+            # Log for debugging
+            frappe.log_error(f"ADK Tool Call: {tool_name}\nArgs: {arguments}", "Niv AI Debug")
+            
             # Re-initialize Frappe context (ADK runs in thread pool)
             try:
                 if not getattr(frappe.local, "site", None):
@@ -536,7 +466,7 @@ class NivAgentFactory:
                 result = call_tool_fast(
                     server_name=server_name,
                     tool_name=tool_name,
-                    arguments=kwargs,
+                    arguments=arguments,
                 )
                 
                 # Extract text from MCP response
@@ -611,8 +541,6 @@ class NivAgentFactory:
     def create_coder_agent(self) -> LlmAgent:
         """
         Frappe/ERPNext Development Specialist.
-        
-        From travel-concierge pattern: sub-agent with full control flags.
         """
         tool_names = [
             "create_document", "update_document", "delete_document",
@@ -623,45 +551,28 @@ class NivAgentFactory:
             name="frappe_coder",
             model=self.adk_model,
             
-            # ROUTING: Parent reads this to decide transfer
             description=(
-                "EXPERT Frappe/ERPNext developer. "
-                "Handles: DocType creation, Server Scripts, Client Scripts, "
-                "Custom Fields, Workflows, Print Formats, Web Forms. "
-                "DO NOT use for data queries or NBFC operations."
+                "Frappe developer: DocTypes, Scripts, Fields, Workflows. "
+                "Use for: create/modify code, add fields, server scripts."
             ),
             
             instruction=(
-                "You are an expert Frappe/ERPNext developer.\n\n"
-                "📚 SYSTEM KNOWLEDGE:\n"
-                "{system_doctypes}\n\n"
-                "🚨 REAL DATA ONLY:\n"
-                "1. Before creating ANYTHING → run 'get_doctype_info' to see what exists.\n"
-                "2. Before modifying → run 'get_document' to fetch current state.\n"
-                "3. Tool results are your ONLY source of truth.\n"
-                "4. If tool says 'DocType not found' → it doesn't exist. Period.\n"
-                "5. NEVER describe hypothetical fields — only actual fields from tool.\n\n"
-                "WORKFLOW:\n"
-                "- Create DocType? First: get_doctype_info → see structure.\n"
-                "- Add field? First: get_document → see existing fields.\n"
-                "- Modify? First: fetch current → then update.\n\n"
-                "📖 FRAPPE DEVELOPMENT REFERENCE:\n"
-                "{dev_reference}"
+                "Frappe developer. Run tools IMMEDIATELY.\n\n"
+                "TOOL SELECTION:\n"
+                "- Check DocType → get_doctype_info(doctype='X')\n"
+                "- Get record → get_document(doctype='X', name='ID')\n"
+                "- Create → create_document(doctype='X', data={...})\n"
+                "- Update → update_document(doctype='X', name='ID', data={...})\n"
+                "- Run code → run_python_code(code='...')\n\n"
+                "DO: Check what exists first, then modify.\n"
+                "DON'T: Assume fields exist. Verify with tool."
             ),
             
-            # STATE: Save output for orchestrator to read
             output_key="coder_result",
-            
-            # CONTROL: Stay focused, don't transfer back mid-task
             disallow_transfer_to_parent=True,
             disallow_transfer_to_peers=True,
-            
-            # TEMPERATURE: Slightly creative for code generation
             generate_content_config=CREATIVE_CONFIG,
-            
-            # CRITICAL: Store tool results in state for sharing
             after_tool_callback=store_tool_result_in_state,
-            
             tools=self._get_tools(tool_names),
         )
 
@@ -679,40 +590,27 @@ class NivAgentFactory:
             model=self.adk_model,
             
             description=(
-                "Business Intelligence and Data Analysis specialist. "
-                "Handles: SQL queries, reports, data aggregation, analytics, dashboards. "
-                "DO NOT use for development or NBFC-specific loan operations."
+                "Data queries: counts, lists, reports, SQL. "
+                "Use for: 'show customers', 'how many X', 'list all Y', reports."
             ),
             
             instruction=(
-                "You are a Business Intelligence specialist.\n\n"
-                "📚 AVAILABLE DOCTYPES IN THIS SYSTEM:\n"
-                "{system_doctypes}\n\n"
-                "🚨 REAL DATA ONLY — ZERO MOCK DATA:\n"
-                "1. EVERY number you mention MUST come from a tool result.\n"
-                "2. If asked for counts/totals → run SQL query first.\n"
-                "3. If asked for reports → run report tool first.\n"
-                "4. NEVER say 'approximately' or 'around X' without real data.\n"
-                "5. If tool fails → say 'Query failed' — don't invent numbers.\n\n"
-                "TABLE NAMING CONVENTION:\n"
-                "- DocType 'Sales Order' → SQL table 'tabSales Order'\n"
-                "- DocType 'Customer' → SQL table 'tabCustomer'\n"
-                "- Always prefix table names with 'tab'\n\n"
-                "WORKFLOW:\n"
-                "- Unknown tables? Run: SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'tab%'\n"
-                "- Need count? Run: SELECT COUNT(*) FROM `tabXXX`\n"
-                "- Always show the query you ran and its result.\n"
-                "- ALWAYS provide a clear answer to the user after getting data."
+                "Data analyst. Run tools IMMEDIATELY.\n\n"
+                "TOOL SELECTION (pick ONE):\n"
+                "- List records → list_documents(doctype='X', limit=10)\n"
+                "- Get one record → get_document(doctype='X', name='ID')\n"
+                "- Count/SQL → run_database_query(query='SELECT...')\n"
+                "- Reports → generate_report()\n\n"
+                "TABLE NAMES: DocType 'Customer' = table `tabCustomer`\n\n"
+                "DO: Run tool first, then answer with result.\n"
+                "DON'T: Explain what you'll do. Just do it."
             ),
             
             output_key="analyst_result",
             disallow_transfer_to_parent=True,
             disallow_transfer_to_peers=True,
             generate_content_config=FACTUAL_CONFIG,
-            
-            # CRITICAL: Store tool results in state for sharing
             after_tool_callback=store_tool_result_in_state,
-            
             tools=self._get_tools(tool_names),
         )
 
@@ -730,38 +628,24 @@ class NivAgentFactory:
             model=self.adk_model,
             
             description=(
-                "NBFC operations expert for Growth System. "
-                "Handles: Loan applications, EMI schedules, repayment tracking, "
-                "borrower info, disbursements, LOS, LMS, interest calculations, "
-                "due loans, overdue recovery. "
-                "DO NOT use for general development or non-NBFC queries."
+                "NBFC/Loans: EMI, borrowers, repayments, due loans. "
+                "Use for: loan queries, overdue, disbursements."
             ),
             
             instruction=(
-                "You are an NBFC operations expert for Growth System.\n\n"
-                "NBFC CONTEXT (from state):\n"
-                "- Known DocTypes: {nbfc_context}\n\n"
-                "🚨 REAL DATA ONLY — STRICT MODE:\n"
-                "1. Loan numbers, borrower names, amounts → MUST be from tool results.\n"
-                "2. Before answering ANY loan question → run list_documents or run_database_query.\n"
-                "3. Due Loans: SELECT * FROM `tabRepayment Schedule` WHERE status != 'Cleared'\n"
-                "4. NEVER say 'Loan XYZ-001' unless that exact ID came from database.\n"
-                "5. If no loan data found → say 'No loans found' — don't make up loans.\n"
-                "6. EMI amounts, interest rates → MUST be queried, not assumed.\n\n"
-                "EXAMPLE BAD (NEVER DO):\n"
-                "'Customer ABC has 5 loans...' ← WHERE DID THIS COME FROM?\n\n"
-                "EXAMPLE GOOD:\n"
-                "'Running query... Found 3 loans: [actual IDs from result]'"
+                "NBFC specialist. Run tools IMMEDIATELY.\n\n"
+                "COMMON QUERIES:\n"
+                "- List loans → list_documents(doctype='Loan')\n"
+                "- Due loans → run_database_query('SELECT * FROM `tabRepayment Schedule` WHERE status!=\"Cleared\"')\n"
+                "- Borrower info → get_document(doctype='Customer', name='X')\n\n"
+                "All loan IDs/amounts MUST come from tool results."
             ),
             
             output_key="nbfc_result",
             disallow_transfer_to_parent=True,
             disallow_transfer_to_peers=True,
             generate_content_config=FACTUAL_CONFIG,
-            
-            # CRITICAL: Store tool results in state for sharing
             after_tool_callback=store_tool_result_in_state,
-            
             tools=self._get_tools(tool_names),
         )
 
@@ -778,105 +662,65 @@ class NivAgentFactory:
             model=self.adk_model,
             
             description=(
-                "System Discovery specialist. "
-                "Handles: System scanning, DocType discovery, workflow analysis, "
-                "data structure understanding, onboarding. "
-                "DO NOT use for development, reports, or NBFC operations."
+                "System scan: DocTypes, relationships, workflows. "
+                "Use for: 'what DocTypes exist', 'system structure', 'scan system'."
             ),
             
             instruction=(
-                "You are the System Discovery Specialist.\n\n"
-                "🚨 REAL DATA ONLY:\n"
-                "1. Run 'get_system_knowledge_graph' FIRST to see the full relationship map.\n"
-                "2. Use 'introspect_system' for a high-level overview if the graph is too large.\n"
-                "3. DocType names and relationships → MUST come from the graph or tool results.\n"
-                "4. NEVER guess connections — if the graph shows a Link, mention it.\n\n"
-                "JOB: Scan Frappe instance and report ACTUAL findings using the Knowledge Graph:\n"
-                "- Map of Custom DocTypes and their modules\n"
-                "- Link relationships (e.g. Loan links to Customer)\n"
-                "- Active Workflows and their states\n\n"
-                "Your goal is to be the 'brain' that understands how everything is connected."
+                "System scanner. Run tools IMMEDIATELY.\n\n"
+                "TOOLS:\n"
+                "- Full map → get_system_knowledge_graph()\n"
+                "- Visual → visualize_system_map()\n"
+                "- DocType info → get_doctype_info(doctype='X')\n\n"
+                "Report actual DocTypes and relationships found."
             ),
             
             output_key="discovery_result",
             disallow_transfer_to_parent=True,
             disallow_transfer_to_peers=True,
             generate_content_config=FACTUAL_CONFIG,
-            
-            # CRITICAL: Store tool results in state for sharing
             after_tool_callback=store_tool_result_in_state,
-            
             tools=self._get_tools(tool_names),
         )
 
     def create_critique_agent(self) -> LlmAgent:
         """
         Quality Control & Self-Reflection Specialist.
-        Ensures REAL DATA ONLY and zero hallucinations.
         """
         return LlmAgent(
             name="niv_critique",
             model=self.adk_model,
             
-            description=(
-                "Quality control agent. Reviews other agents' work for accuracy, "
-                "hallucinations, and mock data. DO NOT use for original tasks."
-            ),
+            description="Verify accuracy. Check for mock/fake data.",
             
             instruction=(
-                "You are the Niv AI Critique Agent. Your ONLY job is to verify accuracy.\n\n"
-                "🚨 CRITICAL VERIFICATION RULES:\n"
-                "1. CHECK FOR MOCK DATA: If you see names like 'John Doe', 'Company X', "
-                "or IDs like 'INV-001' that didn't come from a tool result → REJECT.\n"
-                "2. CHECK FOR TOOLS: Did the previous agent actually run a tool? If not, "
-                "and they provided data → REJECT.\n"
-                "3. CHECK LOGIC: Is the calculation correct based on the tool output?\n"
-                "4. REAL DATA ONLY: If the data looks suspicious or 'too perfect', flag it.\n\n"
-                "RESPONSE FORMAT:\n"
-                "- If OK: 'PASSED'\n"
-                "- If FAIL: 'FAILED: [Reason and what to fix]'"
+                "Verify accuracy. Check if data came from tools.\n"
+                "Reply: PASSED or FAILED: [reason]"
             ),
             
             output_key="critique_result",
-            generate_content_config=ROUTING_CONFIG, # Very strict
+            generate_content_config=ROUTING_CONFIG,
         )
 
     def create_planner_agent(self) -> LlmAgent:
         """
         Task Planning & Decomposition Specialist.
-        Breaks complex requests into actionable steps.
         """
         return LlmAgent(
             name="niv_planner",
             model=self.adk_model,
             
-            description=(
-                "Architect and Planner. Use this when the user request is complex, "
-                "multi-step, or involves creating entire modules/systems. "
-                "DO NOT use for simple data queries."
-            ),
+            description="Complex projects: break into steps. Multi-step tasks.",
             
             instruction=(
-                "You are the Niv AI Architect. Your job is to break complex projects into steps.\n\n"
-                "PLANNING RULES:\n"
-                "1. Break large tasks into 3-7 manageable steps.\n"
-                "2. Assign each step to the correct agent (frappe_coder, data_analyst, nbfc_specialist).\n"
-                "3. Use the 'create_task_plan' tool to save the plan to the database.\n"
-                "4. After creating the plan, present it to the user clearly.\n\n"
-                "WORKFLOW:\n"
-                "- Analyze the project (e.g. 'Build a Loan App').\n"
-                "- Step 1: Research structure (Discovery).\n"
-                "- Step 2: Create DocTypes (Coder).\n"
-                "- Step 3: Add Logic/Scripts (Coder).\n"
-                "- Step 4: Create Reports (Analyst)."
+                "Break complex tasks into 3-7 steps.\n"
+                "Use create_task_plan() to save plan.\n"
+                "Assign steps to: frappe_coder, data_analyst, nbfc_specialist."
             ),
             
             output_key="planner_result",
             generate_content_config=FACTUAL_CONFIG,
-            
-            # CRITICAL: Store tool results in state for sharing
             after_tool_callback=store_tool_result_in_state,
-            
             tools=[self.adk_tools["create_task_plan"]]
         )
 
@@ -906,59 +750,28 @@ class NivAgentFactory:
             name="niv_orchestrator",
             model=self.adk_model,
             
-            description=(
-                "Main coordinator that routes requests to specialist agents."
-            ),
+            description="Routes requests to specialists.",
             
             # COMMON CONTEXT for all agents
             global_instruction=GLOBAL_INSTRUCTION,
             
             instruction=(
-                "You are Niv AI Orchestrator — the main coordinator.\n\n"
-                "📚 SYSTEM KNOWLEDGE:\n"
-                "{system_doctypes}\n\n"
-                "🧠 USER MEMORY:\n"
-                "{user_memory}\n\n"
-                "🚨 CRITICAL RULES:\n"
-                "1. EVERY response with data MUST come from tool execution.\n"
-                "2. NEVER guess, assume, or provide example data.\n"
-                "3. After getting specialist result → ALWAYS format and return it to user!\n\n"
-                "ROUTING RULES:\n"
-                "• Data queries (count, list, show) → 'data_analyst'\n"
-                "• Coding/DocTypes/Scripts → 'frappe_coder'\n"
-                "• Loans/EMI/NBFC → 'nbfc_specialist'\n"
-                "• System scan → 'system_discovery'\n\n"
-                "⚡ WORKFLOW (IMPORTANT):\n"
-                "1. User asks question → Route to specialist\n"
-                "2. Specialist runs tools and returns result\n"
-                "3. YOU MUST read the specialist result and respond to user!\n"
-                "4. Format the answer clearly for the user.\n\n"
-                "SPECIALIST RESULTS (read these after delegation):\n"
-                "- analyst_result: {analyst_result}\n"
-                "- coder_result: {coder_result}\n"
-                "- nbfc_result: {nbfc_result}\n"
-                "- discovery_result: {discovery_result}\n\n"
-                "EXAMPLE:\n"
-                "User: 'How many customers?'\n"
-                "1. Transfer to data_analyst\n"
-                "2. data_analyst runs: SELECT COUNT(*) FROM tabCustomer → returns '9'\n"
-                "3. YOU read analyst_result='9' and respond: 'You have 9 customers in the system.'"
+                "Route user requests to specialists. Be FAST.\n\n"
+                "ROUTING (pick ONE immediately):\n"
+                "- Data/list/count/show/report → data_analyst\n"
+                "- Code/DocType/Script/Field → frappe_coder\n"
+                "- Loan/EMI/NBFC/Borrower → nbfc_specialist\n"
+                "- System scan/DocTypes map → system_discovery\n\n"
+                "SIMPLE QUERIES: Handle directly with your tools.\n"
+                "COMPLEX QUERIES: Route to specialist.\n\n"
+                "After specialist returns, format their result for user."
             ),
             
             output_key="orchestrator_result",
-            
-            # STATE INIT
             before_agent_callback=init_agent_state,
-            
-            # ROUTING TEMPERATURE: Very low for consistent decisions
             generate_content_config=ROUTING_CONFIG,
-            
-            # CRITICAL: Store tool results in state for sharing
             after_tool_callback=store_tool_result_in_state,
-            
             tools=self._get_tools(orc_tool_names),
-            
-            # HIERARCHY: ADK enables transfers automatically
             sub_agents=[coder, analyst, nbfc, discovery, critique, planner],
         )
 
