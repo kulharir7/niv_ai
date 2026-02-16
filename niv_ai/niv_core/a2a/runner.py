@@ -547,18 +547,26 @@ def stream_a2a(
                         if key.endswith("_result") and value:
                             value_str = str(value).strip()
                             
-                            # Only yield if:
-                            # 1. Not already yielded this key
-                            # 2. Meaningful text
-                            # 3. Content not already sent via event.text
+                            # IMPROVED DUPLICATE CHECK:
+                            # 1. Check if key already processed
+                            # 2. Check if content hash matches
+                            # 3. Check if content is substring of already yielded text
+                            # 4. Check if already yielded text is substring of this content
                             content_hash = hash(value_str[:200])
-                            if (key not in yielded_results 
-                                and _is_meaningful_text(value_str)
-                                and content_hash not in yielded_content_hashes):
+                            
+                            is_duplicate = (
+                                key in yielded_results or
+                                content_hash in yielded_content_hashes or
+                                (len(value_str) > 50 and value_str[:100] in yielded_full_text) or
+                                (len(yielded_full_text) > 50 and yielded_full_text[:100] in value_str)
+                            )
+                            
+                            if not is_duplicate and _is_meaningful_text(value_str):
                                 yielded_results.add(key)
                                 yielded_content_hashes.add(content_hash)
                                 has_yielded_text = True
                                 yield {"type": EVENT_TOKEN, "content": value_str}
+                                yielded_full_text += value_str
                                 _log(f"EVENT #{event_count}: STATE→TOKEN {key} ({len(value_str)} chars)")
                             else:
                                 yielded_results.add(key)
