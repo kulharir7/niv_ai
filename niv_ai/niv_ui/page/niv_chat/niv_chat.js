@@ -388,7 +388,11 @@ class NivChat {
     }
 
     async load_artifacts_list() {
-        if (!this.$artifactSelect || !this.$artifactSelect.length) return;
+        // Re-query element in case it wasn't ready at init
+        if (!this.$artifactSelect || !this.$artifactSelect.length) {
+            this.$artifactSelect = this.wrapper.find(".niv-artifact-select");
+        }
+        if (!this.$artifactSelect.length) return;
         try {
             const r = await frappe.call({
                 method: "niv_ai.niv_core.api.artifacts.list_artifacts",
