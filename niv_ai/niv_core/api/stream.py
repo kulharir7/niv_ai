@@ -297,6 +297,13 @@ def stream_chat(**kwargs):
             if use_a2a:
                 try:
                     from niv_ai.niv_core.a2a.runner import stream_a2a
+                    
+                    # Set dev mode in Redis for tool executor (cross-thread safe)
+                    # CRITICAL: Must be set BEFORE tools run, so confirmation flow works
+                    set_active_dev_conversation(conversation_id)
+                    if dev_mode:
+                        _set_dev_mode(True, conversation_id)
+                    
                     for event in stream_a2a(
                         message=message,
                         conversation_id=conversation_id,
@@ -350,12 +357,20 @@ def stream_chat(**kwargs):
                         save_assistant_message(conversation_id, full_response, tool_calls_data)
                         auto_title(conversation_id)
                     
-                    # Send done event
+                    # Send done event and cleanup
                     yield _sse({"type": "done", "content": ""})
+                    # Cleanup dev mode flags
+                    set_active_dev_conversation("")
+                    if dev_mode:
+                        _set_dev_mode(False, conversation_id)
                     return
                 except Exception as adk_err:
                     frappe.log_error(f"Niv AI: ADK failed, falling back to LangGraph: {adk_err}", "Niv AI Stream")
                     adk_failed = True
+                    # Cleanup dev mode flags on error (LangGraph will re-set them)
+                    set_active_dev_conversation("")
+                    if dev_mode:
+                        _set_dev_mode(False, conversation_id)
 
             # ─── Legacy LangGraph Branch (or Fallback) ───
             # Always set active conversation for confirmation tracking (both dev and normal mode)
