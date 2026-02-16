@@ -283,6 +283,7 @@ class NivChat {
         this.wrapper.find(".btn-artifact-split").on("click", () => this.toggle_artifact_split());
         this.wrapper.find(".btn-artifact-copy").on("click", () => this.copy_artifact_code());
         this.wrapper.find(".btn-artifact-download").on("click", () => this.download_artifact());
+        this.wrapper.find(".btn-artifact-apply").on("click", () => this.apply_artifact_to_system());
         this.$artifactSelect.on("change", (e) => this.select_artifact(e.target.value));
         this.wrapper.find(".niv-artifact-tab").on("click", (e) => this.switch_artifact_tab($(e.currentTarget).data("tab")));
         
@@ -595,6 +596,152 @@ class NivChat {
         a.click();
         URL.revokeObjectURL(url);
         frappe.show_alert({ message: "Downloaded!", indicator: "green" });
+    }
+
+    async apply_artifact_to_system() {
+        if (!this.current_artifact_content || !this.active_artifact_id) {
+            frappe.show_alert({ message: "No artifact selected", indicator: "orange" });
+            return;
+        }
+        
+        // Get artifact details
+        const artifact = this.artifact_list.find(a => a.name === this.active_artifact_id);
+        const title = artifact?.artifact_title || "Untitled";
+        const artifactType = artifact?.artifact_type || "App";
+        
+        // Detect what to create based on content and type
+        const content = this.current_artifact_content;
+        let doctype = null;
+        let docData = {};
+        
+        // Detect Print Format
+        if (content.includes("print-format") || content.includes("print_format") || 
+            title.toLowerCase().includes("print") || artifactType === "PrintFormat") {
+            // Ask which DocType this print format is for
+            const doctypes = await this._get_common_doctypes();
+            frappe.prompt([
+                { fieldname: "doc_type", label: "For DocType", fieldtype: "Select", options: doctypes.join("\n"), reqd: 1 },
+                { fieldname: "format_name", label: "Print Format Name", fieldtype: "Data", default: title, reqd: 1 },
+            ], async (values) => {
+                await this._create_print_format(values.format_name, values.doc_type, content);
+            }, "Create Print Format", "Create");
+            return;
+        }
+        
+        // Detect Client Script
+        if (content.includes("frappe.ui") || content.includes("cur_frm") || 
+            title.toLowerCase().includes("client script") || artifactType === "ClientScript") {
+            const doctypes = await this._get_common_doctypes();
+            frappe.prompt([
+                { fieldname: "dt", label: "For DocType", fieldtype: "Select", options: doctypes.join("\n"), reqd: 1 },
+                { fieldname: "script_name", label: "Script Name", fieldtype: "Data", default: title, reqd: 1 },
+            ], async (values) => {
+                await this._create_client_script(values.script_name, values.dt, content);
+            }, "Create Client Script", "Create");
+            return;
+        }
+        
+        // Detect Server Script
+        if (content.includes("def ") || content.includes("frappe.") || 
+            title.toLowerCase().includes("server script") || artifactType === "ServerScript") {
+            frappe.prompt([
+                { fieldname: "script_name", label: "Script Name", fieldtype: "Data", default: title, reqd: 1 },
+                { fieldname: "script_type", label: "Script Type", fieldtype: "Select", 
+                  options: "DocType Event\nScheduler Event\nPermission Query\nAPI", default: "DocType Event", reqd: 1 },
+            ], async (values) => {
+                await this._create_server_script(values.script_name, values.script_type, content);
+            }, "Create Server Script", "Create");
+            return;
+        }
+        
+        // Default: Show options
+        frappe.prompt([
+            { fieldname: "apply_type", label: "Apply As", fieldtype: "Select", 
+              options: "Print Format\nClient Script\nServer Script\nWeb Page", reqd: 1 },
+        ], async (values) => {
+            if (values.apply_type === "Print Format") {
+                this.apply_artifact_to_system(); // Will now detect as print format
+            } else {
+                frappe.show_alert({ message: `${values.apply_type} creation not yet implemented`, indicator: "orange" });
+            }
+        }, "Apply Artifact to System", "Next");
+    }
+
+    async _get_common_doctypes() {
+        try {
+            const r = await frappe.call({
+                method: "frappe.client.get_list",
+                args: { doctype: "DocType", filters: { istable: 0, issingle: 0 }, fields: ["name"], limit_page_length: 100 }
+            });
+            return (r.message || []).map(d => d.name).sort();
+        } catch (e) {
+            return ["Sales Order", "Sales Invoice", "Purchase Order", "Purchase Invoice", "Customer", "Supplier", "Item"];
+        }
+    }
+
+    async _create_print_format(name, dt, html) {
+        try {
+            await frappe.call({
+                method: "frappe.client.insert",
+                args: {
+                    doc: {
+                        doctype: "Print Format",
+                        name: name,
+                        doc_type: dt,
+                        html: html,
+                        standard: "No",
+                        custom_format: 1,
+                        print_format_type: "Jinja",
+                    }
+                }
+            });
+            frappe.show_alert({ message: `Print Format "${name}" created!`, indicator: "green" });
+            frappe.set_route("Form", "Print Format", name);
+        } catch (e) {
+            frappe.msgprint(`Failed to create Print Format: ${e.message || e}`);
+        }
+    }
+
+    async _create_client_script(name, dt, script) {
+        try {
+            await frappe.call({
+                method: "frappe.client.insert",
+                args: {
+                    doc: {
+                        doctype: "Client Script",
+                        name: name,
+                        dt: dt,
+                        script: script,
+                        enabled: 1,
+                    }
+                }
+            });
+            frappe.show_alert({ message: `Client Script "${name}" created!`, indicator: "green" });
+            frappe.set_route("Form", "Client Script", name);
+        } catch (e) {
+            frappe.msgprint(`Failed to create Client Script: ${e.message || e}`);
+        }
+    }
+
+    async _create_server_script(name, scriptType, script) {
+        try {
+            await frappe.call({
+                method: "frappe.client.insert",
+                args: {
+                    doc: {
+                        doctype: "Server Script",
+                        name: name,
+                        script_type: scriptType,
+                        script: script,
+                        disabled: 0,
+                    }
+                }
+            });
+            frappe.show_alert({ message: `Server Script "${name}" created!`, indicator: "green" });
+            frappe.set_route("Form", "Server Script", name);
+        } catch (e) {
+            frappe.msgprint(`Failed to create Server Script: ${e.message || e}`);
+        }
     }
 
     prompt_new_artifact() {
