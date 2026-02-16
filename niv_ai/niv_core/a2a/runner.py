@@ -251,6 +251,27 @@ def stream_a2a(
             event_count += 1
             elapsed = time.time() - start_time
             
+            # ─── DEBUG: Inspect event structure ───
+            if event_count <= 10:  # Only log first 10 events to avoid spam
+                event_attrs = []
+                for attr in ['text', 'content', 'parts', 'author', 'actions', 'error', 'is_final']:
+                    if hasattr(event, attr):
+                        val = getattr(event, attr)
+                        if val is not None:
+                            event_attrs.append(f"{attr}={type(val).__name__}")
+                
+                # Check for function calls
+                if hasattr(event, "get_function_calls"):
+                    calls = event.get_function_calls()
+                    if calls:
+                        call_info = []
+                        for c in calls:
+                            c_attrs = {a: type(getattr(c, a, None)).__name__ for a in dir(c) if not a.startswith('_') and hasattr(c, a)}
+                            call_info.append(f"call:{c_attrs}")
+                        event_attrs.append(f"function_calls=[{','.join(call_info[:3])}]")
+                
+                _log(f"EVENT #{event_count} type={type(event).__name__}: {', '.join(event_attrs)}")
+            
             # Safety timeout (3 minutes)
             if elapsed > 180:
                 _log(f"TIMEOUT after {elapsed:.0f}s, {event_count} events")
@@ -359,10 +380,89 @@ def stream_a2a(
                 calls = event.get_function_calls()
                 if calls:
                     for tc in calls:
-                        name = getattr(tc, "name", "unknown")
-                        args = getattr(tc, "args", {})
+                        # Try multiple ways to get tool name (ADK/LiteLLM version compatibility)
+                        name = None
+                        
+                        # Method 1: Direct .name attribute (ADK standard)
+                        if hasattr(tc, "name") and tc.name:
+                            name = str(tc.name)
+                        
+                        # Method 2: function.name (OpenAI format via LiteLLM)
+                        if not name and hasattr(tc, "function"):
+                            fc = tc.function
+                            if hasattr(fc, "name") and fc.name:
+                                name = str(fc.name)
+                            elif isinstance(fc, dict) and fc.get("name"):
+                                name = str(fc["name"])
+                        
+                        # Method 3: function_call.name (older format)
+                        if not name and hasattr(tc, "function_call"):
+                            fc = tc.function_call
+                            if hasattr(fc, "name") and fc.name:
+                                name = str(fc.name)
+                            elif isinstance(fc, dict) and fc.get("name"):
+                                name = str(fc["name"])
+                        
+                        # Method 4: Check for id attribute (Ollama returns call_xxx IDs)
+                        if not name and hasattr(tc, "id") and tc.id and not tc.id.startswith("call_"):
+                            name = str(tc.id)
+                        
+                        # Method 5: String representation parsing
+                        if not name:
+                            tc_str = str(tc)
+                            # Try to find name= in string repr
+                            if "name=" in tc_str:
+                                try:
+                                    name = tc_str.split("name=")[1].split(",")[0].split(")")[0].strip("'\"")
+                                except:
+                                    pass
+                            # Also check for 'name': format (JSON-like)
+                            if not name and "'name':" in tc_str:
+                                try:
+                                    name = tc_str.split("'name':")[1].split(",")[0].strip(" '\"")
+                                except:
+                                    pass
+                        
+                        # Final fallback
+                        if not name:
+                            name = "unknown_tool"
+                            _log(f"EVENT #{event_count}: TOOL_CALL with unknown name. tc={tc}, type={type(tc)}, attrs={dir(tc)}")
+                        
+                        # Get arguments with multiple fallbacks
+                        args = {}
+                        if hasattr(tc, "args") and tc.args:
+                            args = tc.args if isinstance(tc.args, dict) else {}
+                        elif hasattr(tc, "arguments") and tc.arguments:
+                            # Could be a JSON string
+                            if isinstance(tc.arguments, str):
+                                try:
+                                    args = json.loads(tc.arguments)
+                                except:
+                                    args = {"raw": tc.arguments}
+                            else:
+                                args = tc.arguments if isinstance(tc.arguments, dict) else {}
+                        elif hasattr(tc, "function"):
+                            fc = tc.function
+                            # OpenAI format: function.arguments is a JSON string
+                            if hasattr(fc, "arguments"):
+                                if isinstance(fc.arguments, str):
+                                    try:
+                                        args = json.loads(fc.arguments)
+                                    except:
+                                        args = {"raw": fc.arguments}
+                                elif isinstance(fc.arguments, dict):
+                                    args = fc.arguments
+                            elif isinstance(fc, dict) and fc.get("arguments"):
+                                if isinstance(fc["arguments"], str):
+                                    try:
+                                        args = json.loads(fc["arguments"])
+                                    except:
+                                        args = {"raw": fc["arguments"]}
+                                else:
+                                    args = fc["arguments"]
+                        
                         # Skip internal transfer_to_agent tool display
-                        if name == "transfer_to_agent":
+                        if name == "transfer_to_agent" or name.startswith("transfer_"):
                             _log(f"EVENT #{event_count}: TRANSFER via tool → {args}")
                         else:
                             yield {
@@ -371,17 +471,34 @@ def stream_a2a(
                                 "arguments": args,
                                 "agent": current_agent,
                             }
-                            _log(f"EVENT #{event_count}: TOOL_CALL {name}")
+                            _log(f"EVENT #{event_count}: TOOL_CALL {name} (type={type(tc).__name__})")
             
             # ─── TOOL RESULTS ───
             if hasattr(event, "get_function_responses"):
                 responses = event.get_function_responses()
                 if responses:
                     for tr in responses:
-                        name = getattr(tr, "name", "unknown")
-                        response = getattr(tr, "response", str(tr))
+                        # Try multiple ways to get tool name
+                        name = None
+                        if hasattr(tr, "name") and tr.name:
+                            name = str(tr.name)
+                        elif hasattr(tr, "id") and tr.id:
+                            name = str(tr.id)
+                        else:
+                            name = "unknown_tool"
                         
-                        if name == "transfer_to_agent":
+                        # Get response with fallbacks
+                        response = None
+                        if hasattr(tr, "response"):
+                            response = tr.response
+                        elif hasattr(tr, "result"):
+                            response = tr.result
+                        elif hasattr(tr, "content"):
+                            response = tr.content
+                        else:
+                            response = str(tr)
+                        
+                        if name == "transfer_to_agent" or name.startswith("transfer_"):
                             continue  # Skip transfer results
                         
                         result_str = str(response)
@@ -513,11 +630,13 @@ def stream_a2a(
 # ─────────────────────────────────────────────────────────────────
 
 def _log(msg: str):
-    """Debug log for A2A events."""
+    """Debug log for A2A events. Also prints to stdout for debugging."""
     try:
         frappe.logger("niv_a2a").info(msg)
+        # Also print for immediate visibility in logs
+        print(f"[NIV_A2A] {msg}")
     except Exception:
-        pass  # Don't fail on logging
+        print(f"[NIV_A2A] {msg}")  # Fallback to print
 
 
 # ─────────────────────────────────────────────────────────────────

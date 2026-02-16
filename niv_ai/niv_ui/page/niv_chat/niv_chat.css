@@ -1611,11 +1611,14 @@ pre:hover .code-copy-btn { opacity: 1; }
 .niv-empty-state .empty-greeting {
     font-size: 28px;
     font-weight: 650;
-    color: var(--niv-text);
+    color: #1a1a1a;
     margin-bottom: 8px;
     line-height: 1.2;
     letter-spacing: -0.03em;
     animation: emptyTextIn 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.15s both;
+}
+body.niv-dark-mode .niv-empty-state .empty-greeting {
+    color: #ffffff;
 }
 .niv-empty-state .empty-subtitle {
     font-size: 16px;

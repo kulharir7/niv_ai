@@ -26,17 +26,33 @@ class NivAgentFactory:
         
         from google.adk.models.lite_llm import LiteLlm
         
-        # Determine provider type for LiteLLM
-        # For custom OpenAI compatible (like ollama-cloud), use 'openai/' prefix
+        # For custom OpenAI-compatible APIs (like Ollama Cloud),
+        # Use custom_openai provider with explicit base URL
         model_id = model_name
-        if "openai" not in provider_name.lower() and "anthropic" not in provider_name.lower() and "google" not in provider_name.lower():
+        base_url = provider.base_url.rstrip('/')
+        
+        # Detect provider type and format model ID accordingly
+        provider_lower = provider_name.lower()
+        if "anthropic" in provider_lower or "claude" in provider_lower:
+            if not model_id.startswith("anthropic/"):
+                model_id = f"anthropic/{model_id}"
+        elif "google" in provider_lower or "gemini" in provider_lower:
+            if not model_id.startswith("gemini/"):
+                model_id = f"gemini/{model_id}"
+        else:
+            # OpenAI-compatible (Ollama, custom, etc.)
+            # Use openai/* with api_base - LiteLLM should use api_base for the endpoint
+            # But ensure base_url is the full URL with /v1
             if not model_id.startswith("openai/"):
                 model_id = f"openai/{model_id}"
+            # Ensure base URL ends with /v1 for OpenAI-compatible APIs
+            if not base_url.endswith('/v1'):
+                base_url = base_url + '/v1'
         
         self.adk_model = LiteLlm(
             model=model_id,
             api_key=api_key,
-            api_base=provider.base_url
+            api_base=base_url
         )
         
         self.all_mcp_tools = get_all_mcp_tools_cached()
