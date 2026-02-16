@@ -483,24 +483,18 @@ class NivAgentFactory:
                                 text_parts.append(str(c))
                         final_text = "\n".join(text_parts)
                         
-                        # Guard: Mark empty results clearly
+                        # Guard: Mark empty results clearly with user-friendly message
                         if not final_text.strip() or final_text.strip() in ("[]", "{}", "null", "None"):
-                            return json.dumps({
-                                "result": "EMPTY",
-                                "message": f"Tool '{tool_name}' returned no data.",
-                                "instruction": "Report 'No data found' to user. DO NOT invent data."
-                            })
+                            friendly_msg = self._get_empty_result_message(tool_name, arguments)
+                            return f"No data found. {friendly_msg}"
                         return final_text
                 
                 if isinstance(result, (dict, list)):
                     json_str = json.dumps(result, default=str, ensure_ascii=False)
-                    # Guard: Mark empty results clearly
+                    # Guard: Mark empty results clearly with user-friendly message
                     if json_str in ("[]", "{}", "null"):
-                        return json.dumps({
-                            "result": "EMPTY",
-                            "message": f"Tool '{tool_name}' returned empty result.",
-                            "instruction": "Report 'No records found' to user. DO NOT invent data."
-                        })
+                        friendly_msg = self._get_empty_result_message(tool_name, arguments)
+                        return f"No records found. {friendly_msg}"
                     return json_str
                 return str(result)
                 
@@ -529,6 +523,35 @@ class NivAgentFactory:
             return "Missing required fields. Use 'get_doctype_info' to see required fields."
         
         return "Try a different approach or break into smaller steps."
+
+    def _get_empty_result_message(self, tool_name: str, arguments: dict) -> str:
+        """Generate user-friendly message for empty results."""
+        # Extract context from arguments
+        doctype = arguments.get("doctype", arguments.get("doc_type", ""))
+        filters = arguments.get("filters", arguments.get("filter", ""))
+        query = arguments.get("query", "")
+        name = arguments.get("name", arguments.get("document_name", ""))
+        
+        if tool_name == "list_documents":
+            if doctype:
+                return f"No {doctype} records exist yet, or filters don't match any records."
+            return "No documents found matching your criteria."
+        
+        if tool_name == "get_document":
+            if doctype and name:
+                return f"{doctype} '{name}' does not exist."
+            return "The requested document was not found."
+        
+        if tool_name == "run_database_query":
+            return "The query returned no results. Check table name and filters."
+        
+        if tool_name == "search_documents" or tool_name == "search_doctype":
+            return "No matching records found. Try different search terms."
+        
+        if "report" in tool_name.lower():
+            return "Report generated no data for the given parameters."
+        
+        return "The operation completed but returned no data."
 
     def _get_tools(self, tool_names: List[str]) -> List[FunctionTool]:
         """Get ADK tools by name."""

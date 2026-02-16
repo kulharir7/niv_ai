@@ -464,11 +464,11 @@ class NivChat {
             if (content && (content.includes("<") || content.includes("{"))) {
                 this.show_live_preview(content);
             } else {
+                // Show "No preview" message - use show_live_preview to handle blob cleanup
                 const noPreviewHtml = `<!DOCTYPE html><html><body style="display:flex;align-items:center;justify-content:center;height:100vh;margin:0;color:#666;font-family:system-ui;background:#fafafa;">
                     <p>No preview available</p>
                 </body></html>`;
-                const blob = new Blob([noPreviewHtml], { type: "text/html;charset=utf-8" });
-                this.$artifactIframe.attr("src", URL.createObjectURL(blob));
+                this.show_live_preview(noPreviewHtml);
             }
         } catch (e) {
             this.$artifactCode.text("// Error loading artifact");
