@@ -465,13 +465,16 @@ class NivAgentFactory:
         async def execute_tool(arguments: dict) -> str:
             """Execute MCP tool."""
             # Log for debugging
-            frappe.log_error(f"ADK Tool Call: {tool_name}\nArgs: {arguments}", "Niv AI Debug")
+            print(f"[NIV_A2A_DEBUG] Tool: {tool_name}, Conv: {conversation_id}, Args: {arguments}")
+            frappe.log_error(f"ADK Tool Call: {tool_name}\nConv: {conversation_id}\nArgs: {arguments}", "Niv AI Debug")
             
             # ─── Confirmation Flow for Dangerous Tools ───
             needs_confirmation = False
             confirmation_reason = ""
             
             if tool_name in NivAgentFactory.DANGEROUS_TOOLS:
+                print(f"[NIV_A2A_DEBUG] DANGEROUS TOOL DETECTED: {tool_name}")
+                frappe.log_error(f"DANGEROUS TOOL: {tool_name}, needs_confirmation=True, conv={conversation_id}", "Niv AI Confirm")
                 needs_confirmation = True
                 confirmation_reason = tool_name
             elif tool_name == "update_document":
