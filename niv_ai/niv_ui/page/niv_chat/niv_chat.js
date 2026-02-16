@@ -280,6 +280,7 @@ class NivChat {
         this.wrapper.find(".btn-artifact-close").on("click", () => this.toggle_artifacts_panel(false));
         this.wrapper.find(".btn-artifact-new").on("click", () => this.prompt_new_artifact());
         this.wrapper.find(".btn-artifact-fullscreen").on("click", () => this.toggle_artifact_fullscreen());
+        this.wrapper.find(".btn-artifact-split").on("click", () => this.toggle_artifact_split());
         this.wrapper.find(".btn-artifact-copy").on("click", () => this.copy_artifact_code());
         this.wrapper.find(".btn-artifact-download").on("click", () => this.download_artifact());
         this.$artifactSelect.on("change", (e) => this.select_artifact(e.target.value));
@@ -539,6 +540,22 @@ class NivChat {
         this.$artifactPanel.toggleClass("fullscreen");
         const icon = this.$artifactPanel.hasClass("fullscreen") ? "fa-compress" : "fa-expand";
         this.wrapper.find(".btn-artifact-fullscreen i").attr("class", "fa " + icon);
+    }
+
+    toggle_artifact_split() {
+        this.$artifactPanel.toggleClass("split-view");
+        const isSplit = this.$artifactPanel.hasClass("split-view");
+        this.wrapper.find(".btn-artifact-split").toggleClass("active", isSplit);
+        if (isSplit) {
+            // In split view, show both tabs
+            this.wrapper.find(".niv-artifact-tab-content").addClass("active");
+        } else {
+            // Exit split view, show only preview
+            this.wrapper.find(".niv-artifact-tab-content").removeClass("active");
+            this.wrapper.find('.niv-artifact-tab-content[data-content="preview"]').addClass("active");
+            this.wrapper.find(".niv-artifact-tab").removeClass("active");
+            this.wrapper.find('.niv-artifact-tab[data-tab="preview"]').addClass("active");
+        }
     }
 
     copy_artifact_code() {
