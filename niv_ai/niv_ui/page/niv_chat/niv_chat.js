@@ -794,6 +794,62 @@ class NivChat {
     show_live_preview(htmlCode) {
         if (!this.$artifactIframe || !this.$artifactIframe.length) return;
         
+        // Frappe CSS and JS for proper styling
+        const frappeAssets = `
+    <!-- Frappe CSS for proper styling -->
+    <link rel="stylesheet" href="/assets/frappe/css/bootstrap.css">
+    <link rel="stylesheet" href="/assets/frappe/css/frappe-web.css">
+    <link rel="stylesheet" href="/assets/css/frappe-web.bundle.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/frappe-charts@1.6.2/dist/frappe-charts.min.iife.js"></script>
+    <style>
+        /* Base styles */
+        * { box-sizing: border-box; }
+        body { 
+            margin: 0; 
+            padding: 20px; 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+            background: #fff; 
+            color: #1a1a1a;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+        /* Print format styles */
+        .print-format { padding: 20px; }
+        .print-format h1, .print-format h2, .print-format h3 { margin-top: 0; color: #1a1a1a; }
+        .print-format table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+        .print-format table th, .print-format table td { 
+            border: 1px solid #d1d5db; 
+            padding: 8px 12px; 
+            text-align: left; 
+        }
+        .print-format table th { background: #f3f4f6; font-weight: 600; }
+        .print-format .header { border-bottom: 2px solid #1a1a1a; padding-bottom: 10px; margin-bottom: 20px; }
+        .print-format .footer { border-top: 1px solid #d1d5db; padding-top: 10px; margin-top: 20px; font-size: 12px; color: #6b7280; }
+        /* Dashboard/Card styles */
+        .card { background: #fff; border: 1px solid #e5e7eb; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+        .card-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+        .stat-card { text-align: center; }
+        .stat-value { font-size: 32px; font-weight: 700; color: #7c3aed; }
+        .stat-label { font-size: 12px; color: #6b7280; text-transform: uppercase; }
+        /* Button styles */
+        .btn { display: inline-block; padding: 8px 16px; border-radius: 6px; font-weight: 500; cursor: pointer; border: none; }
+        .btn-primary { background: #7c3aed; color: #fff; }
+        .btn-secondary { background: #f3f4f6; color: #1a1a1a; border: 1px solid #d1d5db; }
+        /* Form styles */
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-weight: 500; margin-bottom: 4px; }
+        .form-control { width: 100%; padding: 8px 12px; border: 1px solid #d1d5db; border-radius: 6px; font-size: 14px; }
+        /* Grid */
+        .row { display: flex; flex-wrap: wrap; margin: 0 -8px; }
+        .col { flex: 1; padding: 0 8px; }
+        .col-6 { flex: 0 0 50%; padding: 0 8px; }
+        .col-4 { flex: 0 0 33.333%; padding: 0 8px; }
+        .col-3 { flex: 0 0 25%; padding: 0 8px; }
+        /* Chart container */
+        .chart-container { margin-bottom: 20px; }
+    </style>`;
+        
         // Ensure complete HTML document
         let finalHtml = htmlCode;
         if (!htmlCode.includes("<!DOCTYPE") && !htmlCode.includes("<html")) {
@@ -802,20 +858,15 @@ class NivChat {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://cdn.jsdelivr.net/npm/frappe-charts@1.6.2/dist/frappe-charts.min.iife.js"></script>
-    <style>
-        * { box-sizing: border-box; } 
-        body { margin: 0; padding: 20px; font-family: system-ui, -apple-system, sans-serif; background: #fff; color: #1a1a1a; }
-        .chart-container { margin-bottom: 20px; }
-    </style>
+    ${frappeAssets}
 </head>
 <body>
 ${htmlCode}
 </body>
 </html>`;
-        } else if (!htmlCode.includes("frappe-charts")) {
-            // Inject frappe-charts if missing but it's a full HTML
-            finalHtml = htmlCode.replace("</head>", '<script src="https://cdn.jsdelivr.net/npm/frappe-charts@1.6.2/dist/frappe-charts.min.iife.js"></script></head>');
+        } else if (!htmlCode.includes("frappe-web.css") && !htmlCode.includes("bootstrap.css")) {
+            // Inject Frappe assets if missing but it's a full HTML
+            finalHtml = htmlCode.replace("</head>", frappeAssets + "</head>");
         }
         
         // Add error handling script to catch runtime errors in artifact
