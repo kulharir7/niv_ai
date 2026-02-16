@@ -687,6 +687,15 @@ body.niv-chat-active .col-lg-12 {
     background: var(--niv-border);
 }
 
+.niv-artifact-footer .btn-artifact-apply {
+    background: linear-gradient(135deg, #10b981, #059669);
+    border: none;
+    color: white;
+}
+.niv-artifact-footer .btn-artifact-apply:hover {
+    opacity: 0.9;
+}
+
 .niv-artifact-footer .btn-artifact-new {
     background: var(--niv-primary);
     border: none;
