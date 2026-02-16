@@ -158,17 +158,24 @@ def _is_same_server(server_name, url):
 # Calls FAC's MCPServer internals directly — bypasses HTTP auth layer.
 
 _fac_mcp_server = None  # Cached FAC MCP server instance
+_fac_mcp_server_time = 0  # Timestamp when cache was set
+_FAC_CACHE_TTL = 300  # 5 minutes — refresh FAC tools periodically
 
 
 def _get_fac_server():
-    """Get the FAC MCPServer instance with tools registered. Cached.
-    Works on any FAC version that has mcp.server.MCPServer."""
-    global _fac_mcp_server
-    if _fac_mcp_server is not None:
+    """Get the FAC MCPServer instance with tools registered.
+    
+    Cached for 5 minutes to allow tool updates without worker restart.
+    Works on any FAC version that has mcp.server.MCPServer.
+    """
+    global _fac_mcp_server, _fac_mcp_server_time
+    
+    # Check if cache is still valid
+    if _fac_mcp_server is not None and time.time() - _fac_mcp_server_time < _FAC_CACHE_TTL:
         return _fac_mcp_server
 
     from frappe_assistant_core.api.fac_endpoint import mcp, _import_tools
-    _import_tools()  # Register all enabled tools
+    _import_tools()  # Register all enabled tools (re-imports on cache refresh)
 
     # Verify MCPServer has the methods we need (future-proofing)
     if not hasattr(mcp, "_handle_tools_list") or not hasattr(mcp, "_handle_tools_call"):
@@ -178,6 +185,7 @@ def _get_fac_server():
         )
 
     _fac_mcp_server = mcp
+    _fac_mcp_server_time = time.time()
     return _fac_mcp_server
 
 

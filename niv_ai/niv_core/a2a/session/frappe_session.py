@@ -31,10 +31,10 @@ _PREFIX_SESSION = "niv_a2a:session:"
 _PREFIX_STATE = "niv_a2a:state:"
 _PREFIX_EVENTS = "niv_a2a:events:"
 
-# TTL settings
-_SESSION_TTL = 7200  # 2 hours
-_STATE_TTL = 7200
-_EVENTS_TTL = 3600  # 1 hour
+# TTL settings (extended for long conversations)
+_SESSION_TTL = 86400  # 24 hours (was 2 hours)
+_STATE_TTL = 86400    # 24 hours
+_EVENTS_TTL = 43200   # 12 hours (was 1 hour)
 
 # Limits
 _MAX_EVENTS = 100

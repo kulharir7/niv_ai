@@ -1,7 +1,7 @@
 
 import frappe
 import json
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 class SystemMapper:
     """
@@ -11,7 +11,16 @@ class SystemMapper:
     - Link Field Relationships
     - Child Table Relationships
     - Module Grouping
+    
+    Now configurable to scan all installed apps, not just NBFC modules.
     """
+    
+    # Core Frappe modules to EXCLUDE (internal framework DocTypes)
+    FRAPPE_CORE_MODULES = {
+        "Core", "Desk", "Email", "Printing", "Workflow", "Website", 
+        "Integrations", "Automation", "Event Streaming", "Social",
+        "Data Migration", "Contacts", "Custom", "Geo"
+    }
     
     def __init__(self):
         self.graph = {
@@ -20,15 +29,34 @@ class SystemMapper:
             "modules": {}
         }
 
-    def map_system(self):
-        """Scan all DocTypes and build relationship map."""
-        # Get custom DocTypes OR DocTypes from Growth System related modules
-        nbfc_modules = ["LOS", "LMS", "Co-Lending", "Accounting", "Litigation", "HR"]
+    def map_system(self, include_modules: Optional[List[str]] = None, exclude_frappe_core: bool = True):
+        """
+        Scan DocTypes and build relationship map.
+        
+        Args:
+            include_modules: List of modules to scan. If None, scans ALL non-Frappe-core modules.
+            exclude_frappe_core: If True, excludes Frappe's internal modules (Core, Desk, etc.)
+        """
+        if include_modules is None:
+            # Get all modules from installed apps (except frappe core)
+            all_modules = frappe.get_all(
+                "Module Def", 
+                filters={"app_name": ["not in", ["frappe"]]} if exclude_frappe_core else {},
+                pluck="name"
+            )
+            # Also exclude specific core modules that might slip through
+            if exclude_frappe_core:
+                all_modules = [m for m in all_modules if m not in self.FRAPPE_CORE_MODULES]
+            include_modules = all_modules
+        
+        # Always include "Custom" for user-created DocTypes
+        if "Custom" not in include_modules:
+            include_modules.append("Custom")
         
         doctypes = frappe.get_all("DocType", filters=[
             ["istable", "=", 0],
             ["issingle", "=", 0],
-            ["module", "in", nbfc_modules + ["Custom"]]
+            ["module", "in", include_modules]
         ])
         
         for dt in doctypes:

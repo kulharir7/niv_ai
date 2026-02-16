@@ -65,11 +65,20 @@ def get_current_user_api_key() -> Optional[str]:
     return getattr(_thread_local, "user_api_key", None)
 
 
-# ─── Dev Mode Confirmation ─────────────────────────────────────────
-# Write tools in dev mode require user confirmation before executing.
+# ─── Confirmation Flow ─────────────────────────────────────────────
+# Dev Mode: ALL write tools require confirmation before executing.
+# Normal Mode: Only DANGEROUS tools require confirmation.
 # NOTE: Can't use threading.local() because LangGraph runs tools in
 # separate ThreadPoolExecutor threads. Use Redis flag instead.
+
+# All write tools (dev mode confirms ALL of these)
 _WRITE_TOOLS = {"create_document", "update_document", "delete_document", "submit_document"}
+
+# Dangerous tools (normal mode confirms ONLY these)
+_DANGEROUS_TOOLS = {"delete_document", "run_python_code", "submit_document"}
+
+# Critical fields that require confirmation even in normal mode update
+_CRITICAL_FIELDS = {"docstatus", "status", "workflow_state", "owner", "modified_by"}
 
 
 def set_dev_mode(enabled: bool = False, conversation_id: str = ""):
@@ -443,26 +452,74 @@ def _make_mcp_executor(tool_name: str, input_schema: dict = None):
         # Remove None values — MCP servers don't expect them
         clean_args = {k: v for k, v in kwargs.items() if v is not None}
 
-        # Dev Mode: intercept write tools → require confirmation
+        # ─── Confirmation Flow ───
+        # Dev Mode: ALL write tools need confirmation
+        # Normal Mode: Only DANGEROUS tools need confirmation
         _dm = is_dev_mode()
+        conv_id = get_active_dev_conv_id() or getattr(_thread_local, "dev_conversation_id", "")
+        
+        needs_confirmation = False
+        confirmation_reason = ""
+        
         if _dm and tool_name in _WRITE_TOOLS:
-            conv_id = get_active_dev_conv_id() or getattr(_thread_local, "dev_conversation_id", "")
+            # Dev mode: confirm all writes
+            needs_confirmation = True
+            confirmation_reason = "dev_mode"
+        elif not _dm and tool_name in _DANGEROUS_TOOLS:
+            # Normal mode: confirm dangerous tools
+            needs_confirmation = True
+            if tool_name == "delete_document":
+                confirmation_reason = "delete_operation"
+            elif tool_name == "run_python_code":
+                confirmation_reason = "code_execution"
+            elif tool_name == "submit_document":
+                confirmation_reason = "submit_operation"
+        elif not _dm and tool_name == "update_document":
+            # Normal mode: confirm updates to critical fields
+            data = clean_args.get("data", {})
+            critical_changes = [f for f in data.keys() if f in _CRITICAL_FIELDS]
+            if critical_changes:
+                needs_confirmation = True
+                confirmation_reason = f"critical_fields:{','.join(critical_changes)}"
+        
+        if needs_confirmation and conv_id:
             # Store action and return confirmation prompt
             set_pending_dev_action(conv_id, {
                 "tool_name": tool_name,
                 "arguments": clean_args,
+                "reason": confirmation_reason,
             })
             # Build human-readable summary
             doctype = clean_args.get("doctype", "Unknown")
+            doc_name = clean_args.get("name", "")
             data = clean_args.get("data", {})
-            summary_parts = [f"📋 **{tool_name}** on `{doctype}`"]
-            for k, v in list(data.items())[:8]:
-                val = str(v)[:100]
-                summary_parts.append(f"  - {k}: {val}")
-            summary = "\n".join(summary_parts)
+            code = clean_args.get("code", "")
+            
+            # Different messages for different operations
+            if tool_name == "delete_document":
+                summary = f"🗑️ **DELETE** `{doctype}`: **{doc_name}**\n\n⚠️ This action cannot be undone!"
+                prompt_msg = "Ask the user to confirm deletion by replying 'yes' or 'ha'. Reply 'no' to cancel."
+            elif tool_name == "run_python_code":
+                code_preview = code[:500] + ("..." if len(code) > 500 else "")
+                summary = f"🐍 **RUN PYTHON CODE:**\n```python\n{code_preview}\n```"
+                prompt_msg = "Ask the user to confirm code execution by replying 'yes' or 'ha'. Reply 'no' to cancel."
+            elif tool_name == "submit_document":
+                summary = f"📤 **SUBMIT** `{doctype}`: **{doc_name}**\n\n⚠️ Submitted documents cannot be easily modified!"
+                prompt_msg = "Ask the user to confirm submission by replying 'yes' or 'ha'. Reply 'no' to cancel."
+            else:
+                # create/update
+                summary_parts = [f"📋 **{tool_name}** on `{doctype}`"]
+                if doc_name:
+                    summary_parts[0] += f": **{doc_name}**"
+                for k, v in list(data.items())[:8]:
+                    val = str(v)[:100]
+                    summary_parts.append(f"  - {k}: {val}")
+                summary = "\n".join(summary_parts)
+                prompt_msg = "Tell the user what will be created/modified and ask them to reply 'yes' to confirm or 'no' to cancel."
+            
             return (
-                f"ACTION QUEUED FOR CONFIRMATION.\n\n{summary}\n\n"
-                "Tell the user exactly what will be created/modified and ask them to reply 'yes' to confirm or 'no' to cancel. "
+                f"⏸️ **ACTION QUEUED FOR CONFIRMATION**\n\n{summary}\n\n"
+                f"{prompt_msg}\n"
                 "DO NOT call any more create/update/delete tools. STOP HERE and wait for user confirmation."
             )
 

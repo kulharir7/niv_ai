@@ -1805,8 +1805,10 @@ ${htmlCode}
                             this.conv_progress[conv_id].fullContent = fullContent;
                             
                             if (is_active) {
+                                // Clear typing indicator (including "Delegating to..." from agent_transfer)
+                                this.hide_typing();
+                                
                                 if (!$msgEl) {
-                                    this.hide_typing();
                                     $msgEl = this.append_message("assistant", "", {
                                         model: this.selected_model || data.model || ""
                                     });
