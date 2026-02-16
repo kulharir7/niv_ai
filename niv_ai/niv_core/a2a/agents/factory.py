@@ -15,6 +15,8 @@ FEATURES IMPLEMENTED:
 7. ✅ generate_content_config — temperature control
 8. ✅ before_agent_callback — state initialization
 9. ✅ Proper Frappe context in tool executor
+
+FIX v2: Dynamic schema - NO HARDCODED LOAN REFERENCES
 """
 
 import json
@@ -60,9 +62,11 @@ def _build_global_instruction() -> str:
     Build global instruction with LIVE SCHEMA from cache.
     Called when creating orchestrator, not at module load.
     
-    If cache empty, triggers rebuild and waits for it.
+    CRITICAL: Only includes DocTypes that ACTUALLY EXIST in this system.
+    No hardcoded Loan references - schema is fully dynamic.
     """
     schema_text = ""
+    existing_doctypes = []
     
     try:
         cached_graph = frappe.cache().get_value("niv_system_knowledge_graph")
@@ -71,8 +75,7 @@ def _build_global_instruction() -> str:
         if not cached_graph:
             try:
                 from niv_ai.niv_core.knowledge.system_map import update_knowledge_graph
-                graph_data = update_knowledge_graph()  # Returns the graph dict
-                # Also store in cache (update_knowledge_graph does this, but let's be sure)
+                graph_data = update_knowledge_graph()
                 frappe.cache().set_value("niv_system_knowledge_graph", json.dumps(graph_data))
             except Exception as rebuild_err:
                 frappe.log_error(f"Schema cache rebuild failed: {rebuild_err}", "Niv AI")
@@ -81,44 +84,56 @@ def _build_global_instruction() -> str:
             graph_data = json.loads(cached_graph) if isinstance(cached_graph, str) else cached_graph
         
         doctypes_info = graph_data.get("doctypes", {})
+        existing_doctypes = list(doctypes_info.keys())
         
         if doctypes_info:
-            # Priority DocTypes with fields
-            priority_doctypes = [
-                "Loan", "Repayment Schedule", "Customer", "Loan Application",
-                "Loan Disbursement", "Loan Repayment", "Sales Invoice", 
-                "Sales Order", "Purchase Order", "Item"
+            # DYNAMIC priority — only include DocTypes that ACTUALLY EXIST
+            potential_priority = [
+                "Customer", "Sales Invoice", "Sales Order", "Purchase Order", 
+                "Item", "Supplier", "Employee", "Stock Entry", "Journal Entry",
+                "Payment Entry", "Quotation", "Delivery Note", "Purchase Receipt",
+                # Loan-related ONLY if they exist
+                "Loan", "Loan Application", "Loan Disbursement", "Loan Repayment",
+                "Repayment Schedule"
             ]
             
+            # Filter to only DocTypes that actually exist
+            priority_doctypes = [dt for dt in potential_priority if dt in doctypes_info]
+            
             schema_lines = []
-            for dt_name in priority_doctypes:
-                if dt_name in doctypes_info:
-                    fields = doctypes_info[dt_name].get("fields", [])
-                    field_names = [
-                        f["fieldname"] for f in fields 
-                        if f.get("fieldtype") not in ["Section Break", "Column Break", "Tab Break", "HTML", "Button"]
-                    ][:10]
-                    if field_names:
-                        schema_lines.append(f"• {dt_name}: {', '.join(field_names)}")
+            for dt_name in priority_doctypes[:15]:  # Limit to top 15
+                fields = doctypes_info[dt_name].get("fields", [])
+                field_names = [
+                    f["fieldname"] for f in fields 
+                    if f.get("fieldtype") not in ["Section Break", "Column Break", "Tab Break", "HTML", "Button"]
+                ][:10]
+                if field_names:
+                    schema_lines.append(f"• {dt_name}: {', '.join(field_names)}")
             
             if schema_lines:
-                schema_text = "SYSTEM SCHEMA (use these exact field names):\n" + "\n".join(schema_lines)
+                schema_text = "SYSTEM SCHEMA (ONLY these DocTypes exist):\n" + "\n".join(schema_lines)
+            
+            # Add count of total DocTypes
+            schema_text += f"\n\nTotal DocTypes in system: {len(existing_doctypes)}"
     except Exception as e:
         frappe.log_error(f"_build_global_instruction schema fetch failed: {e}", "Niv AI")
     
+    # Build the instruction WITHOUT hardcoded references
     return f"""You are Niv AI for Frappe/ERPNext. Date: {date.today()}
 
 {schema_text}
 
-SQL TABLES: DocType "Loan" = table `tabLoan` (always prefix with "tab")
+SQL TABLES: DocType "Customer" becomes table `tabCustomer` (always prefix with "tab")
 
 CRITICAL RULES:
-1. USE SCHEMA ABOVE - Use exact field names shown. Don't guess.
-2. CALL TOOLS FIRST - Never describe what you'll do. Just do it.
-3. NO CONFIRMATION PROMPTS - System handles confirmations. You just call tools.
-4. Use tools for ALL data. Never invent data.
-5. If tool returns "CONFIRMATION REQUIRED", relay that message to user and STOP.
-6. If tool fails, say so honestly."""
+1. ONLY USE DOCTYPES SHOWN ABOVE. If a DocType is NOT listed in the schema, it DOES NOT EXIST in this system.
+2. DO NOT HALLUCINATE. Never invent DocTypes, fields, or data that isn't shown above.
+3. If asked about something not in schema (e.g., Loan management when Loan isn't listed), say: "This DocType doesn't exist in your system. You may need to install the relevant module."
+4. CALL TOOLS FIRST - Never describe what you'll do. Just do it.
+5. NO CONFIRMATION PROMPTS - System handles confirmations. You just call tools.
+6. Use tools for ALL data. Never invent data.
+7. If tool returns "CONFIRMATION REQUIRED", relay that message to user and STOP.
+8. If tool fails, say so honestly."""
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -133,43 +148,29 @@ def store_tool_result_in_state(
 ) -> Optional[Dict]:
     """
     After-tool callback: Store tool results in session state.
-    
-    This is CRITICAL for A2A — allows agents to share data via state.
-    
-    Pattern from official ADK samples:
-    - data-science/sub_agents/bigquery/agent.py
-    - travel-concierge/sub_agents/planning/agent.py
     """
     try:
         tool_name = getattr(tool, "name", str(tool))
-        
-        # Store result in state with tool name as key
         result_key = f"tool_result_{tool_name}"
         
-        # Convert response to string if needed
         if isinstance(tool_response, dict):
             result_str = json.dumps(tool_response, default=str, ensure_ascii=False)
         else:
             result_str = str(tool_response)
         
-        # Truncate if too long (avoid state bloat)
         if len(result_str) > 5000:
             result_str = result_str[:5000] + "... (truncated)"
         
         tool_context.state[result_key] = result_str
-        
-        # Also store last tool result for easy access
         tool_context.state["last_tool_result"] = result_str
         tool_context.state["last_tool_name"] = tool_name
         
     except Exception as e:
-        # Don't fail the tool call, just log
         try:
             frappe.log_error(f"store_tool_result_in_state error: {e}", "Niv AI A2A")
         except:
             pass
     
-    # Return None to not modify the tool response
     return None
 
 
@@ -177,8 +178,8 @@ def init_agent_state(callback_context: CallbackContext) -> None:
     """
     Initialize state before agent runs.
     
-    Loads system DocTypes WITH KEY FIELDS from cache.
-    This gives agents actual schema knowledge, not just DocType names.
+    CRITICAL: Only includes DocTypes that ACTUALLY EXIST.
+    No hardcoded Loan references.
     """
     state = callback_context.state
     
@@ -196,43 +197,46 @@ def init_agent_state(callback_context: CallbackContext) -> None:
                 graph_data = json.loads(cached_graph) if isinstance(cached_graph, str) else cached_graph
                 doctypes_info = graph_data.get("doctypes", {})
                 
-                # Priority DocTypes — these get FULL field details
-                priority_doctypes = [
-                    "Loan", "Repayment Schedule", "Customer", "Loan Application",
-                    "Loan Disbursement", "Loan Repayment", "Sales Invoice", 
-                    "Sales Order", "Purchase Order", "Item", "Stock Entry"
+                # DYNAMIC priority — check what actually exists
+                potential_priority = [
+                    "Customer", "Sales Invoice", "Sales Order", "Purchase Order",
+                    "Item", "Supplier", "Employee", "Stock Entry", "Journal Entry",
+                    "Payment Entry", "Quotation", "Delivery Note", "Purchase Receipt",
+                    # Loan-related ONLY if they exist
+                    "Loan", "Loan Application", "Loan Disbursement", "Loan Repayment",
+                    "Repayment Schedule"
                 ]
                 
-                schema_lines = ["SYSTEM SCHEMA (use exact field names):"]
+                # Filter to only DocTypes that actually exist
+                priority_doctypes = [dt for dt in potential_priority if dt in doctypes_info]
                 
-                # Add priority DocTypes with their fields
-                for dt_name in priority_doctypes:
-                    if dt_name in doctypes_info:
-                        dt_info = doctypes_info[dt_name]
-                        fields = dt_info.get("fields", [])
-                        
-                        # Get important field names (skip layout fields)
-                        field_names = [
-                            f["fieldname"] for f in fields 
-                            if f.get("fieldtype") not in ["Section Break", "Column Break", "Tab Break", "HTML", "Button"]
-                        ][:12]  # Limit to 12 fields per DocType
-                        
-                        if field_names:
-                            schema_lines.append(f"• {dt_name}: {', '.join(field_names)}")
+                schema_lines = ["SYSTEM SCHEMA (ONLY these DocTypes exist - do NOT invent others):"]
                 
-                # Add SQL hint
+                for dt_name in priority_doctypes[:15]:
+                    dt_info = doctypes_info[dt_name]
+                    fields = dt_info.get("fields", [])
+                    
+                    field_names = [
+                        f["fieldname"] for f in fields 
+                        if f.get("fieldtype") not in ["Section Break", "Column Break", "Tab Break", "HTML", "Button"]
+                    ][:12]
+                    
+                    if field_names:
+                        schema_lines.append(f"• {dt_name}: {', '.join(field_names)}")
+                
                 schema_lines.append("")
-                schema_lines.append("SQL TABLES: DocType 'Loan' → table `tabLoan` (always prefix 'tab')")
+                schema_lines.append("SQL TABLES: DocType 'Customer' → table `tabCustomer` (always prefix 'tab')")
                 
-                # Add other DocTypes as just names (for awareness)
                 other_doctypes = [dt for dt in list(doctypes_info.keys())[:40] 
                                  if dt not in priority_doctypes]
                 if other_doctypes:
                     schema_lines.append(f"Other DocTypes: {', '.join(other_doctypes[:25])}...")
                 
+                schema_lines.append("")
+                schema_lines.append("⚠️ WARNING: If a DocType is NOT listed above, it DOES NOT EXIST. Do not hallucinate.")
+                
                 state["system_doctypes"] = "\n".join(schema_lines)
             else:
-                # Cache miss — trigger rebuild, use minimal placeholder
                 state["system_doctypes"] = "Schema loading... Use get_doctype_info(doctype) for field details."
                 try:
                     from niv_ai.niv_core.knowledge.system_map import update_knowledge_graph
@@ -257,13 +261,8 @@ def init_agent_state(callback_context: CallbackContext) -> None:
 # GENERATE CONTENT CONFIG — Temperature control
 # ─────────────────────────────────────────────────────────────────
 
-# Low temperature for consistent, factual responses
 FACTUAL_CONFIG = GenerateContentConfig(temperature=0.1, top_p=0.8)
-
-# Medium temperature for creative tasks (code generation)
 CREATIVE_CONFIG = GenerateContentConfig(temperature=0.3, top_p=0.9)
-
-# Very low for strict routing decisions
 ROUTING_CONFIG = GenerateContentConfig(temperature=0.05, top_p=0.5)
 
 
@@ -274,13 +273,6 @@ ROUTING_CONFIG = GenerateContentConfig(temperature=0.05, top_p=0.5)
 class NivAgentFactory:
     """
     Creates ADK agents with COMPLETE official patterns.
-    
-    Every specialist agent has:
-    - description — for parent routing
-    - output_key — for state sharing
-    - disallow_transfer_to_parent — stay focused
-    - disallow_transfer_to_peers — no sibling confusion
-    - generate_content_config — temperature control
     """
 
     def __init__(
@@ -293,35 +285,22 @@ class NivAgentFactory:
         self.provider_name = provider_name
         self.model_name = model_name
         
-        # Store site name for tool execution context
         self.site = getattr(frappe.local, "site", None) or frappe.local.site
-        
-        # Initialize ADK model via LiteLLM (multi-provider support)
         self.adk_model = self._init_model(provider_name, model_name)
-        
-        # Load and convert MCP tools to ADK format
         self.all_mcp_tools = get_all_mcp_tools_cached()
         self.adk_tools = self._convert_mcp_to_adk()
         
-        # Add Native Knowledge Graph Tool
+        # Add Native Tools
         self.adk_tools["get_system_knowledge_graph"] = FunctionTool(
             func=self._make_knowledge_graph_tool()
         )
-        
-        # Add Native Memory Tool
         self.adk_tools["save_to_user_memory"] = FunctionTool(
             func=self._make_memory_tool()
         )
-
-        # Add Native Planning Tools
         self.adk_tools["create_task_plan"] = FunctionTool(func=self._make_create_plan_tool())
         self.adk_tools["update_task_plan"] = FunctionTool(func=self._make_update_plan_tool())
         self.adk_tools["get_task_plan"] = FunctionTool(func=self._make_get_plan_tool())
-        
-        # Add Visualizer Tool
         self.adk_tools["visualize_system_map"] = FunctionTool(func=self._make_visualize_graph_tool())
-        
-        # Add Auditor Tool
         self.adk_tools["run_nbfc_audit"] = FunctionTool(func=self._make_auditor_tool())
 
     def _make_auditor_tool(self):
@@ -343,7 +322,6 @@ class NivAgentFactory:
                 from niv_ai.niv_core.knowledge.system_map import get_graph_elements
                 elements = get_graph_elements()
                 
-                # Full self-contained HTML Document (Optimized for speed)
                 html_content = f"""<!DOCTYPE html>
 <html>
 <head>
@@ -501,8 +479,6 @@ class NivAgentFactory:
         provider = frappe.get_doc("Niv AI Provider", provider_name)
         api_key = provider.get_password("api_key")
         
-        # Determine provider type for LiteLLM
-        # For custom OpenAI compatible (like ollama-cloud), use 'openai/' prefix
         model_id = model_name
         provider_lower = provider_name.lower()
         if not any(p in provider_lower for p in ("openai", "anthropic", "google", "gemini")):
@@ -516,11 +492,7 @@ class NivAgentFactory:
         )
 
     def _convert_mcp_to_adk(self) -> Dict[str, FunctionTool]:
-        """
-        Convert MCP tools to ADK FunctionTools.
-        
-        Uses MCPFunctionTool which bypasses ADK's argument filtering.
-        """
+        """Convert MCP tools to ADK FunctionTools."""
         adk_tools = {}
         
         for tool_def in self.all_mcp_tools:
@@ -531,7 +503,6 @@ class NivAgentFactory:
             
             description = func_def.get("description", name)
             
-            # Create tool with our custom MCPFunctionTool
             tool = MCPFunctionTool(
                 func=self._make_tool_executor(name, description)
             )
@@ -539,52 +510,37 @@ class NivAgentFactory:
         
         return adk_tools
 
-    # Dangerous tools that require user confirmation before execution (normal mode)
     DANGEROUS_TOOLS = {"delete_document", "run_python_code", "submit_document"}
-    # All write tools that require confirmation in dev mode
     WRITE_TOOLS = {"create_document", "update_document", "delete_document", "submit_document"}
     CRITICAL_FIELDS = {"docstatus", "status", "workflow_state", "owner", "modified_by"}
 
     def _make_tool_executor(self, tool_name: str, tool_description: str):
-        """
-        Create tool executor with proper Frappe context handling.
-        
-        CRITICAL: ADK runs tools in ThreadPoolExecutor.
-        Must re-init Frappe context in each tool call.
-        
-        Also handles confirmation flow for dangerous operations.
-        """
-        site = self.site  # Capture at creation time
-        conversation_id = self.conversation_id  # Capture for confirmation tracking
+        """Create tool executor with proper Frappe context handling."""
+        site = self.site
+        conversation_id = self.conversation_id
         
         async def execute_tool(arguments: dict) -> str:
             """Execute MCP tool."""
-            # Log for debugging
             print(f"[NIV_A2A_DEBUG] Tool: {tool_name}, Conv: {conversation_id}, Args: {arguments}")
             frappe.log_error(f"ADK Tool Call: {tool_name}\nConv: {conversation_id}\nArgs: {arguments}", "Niv AI Debug")
             
-            # ─── Confirmation Flow ───
-            # Check dev mode from Redis
             from niv_ai.niv_core.langchain.tools import is_dev_mode_for
             is_dev_mode = is_dev_mode_for(conversation_id) if conversation_id else False
             
             needs_confirmation = False
             confirmation_reason = ""
             
-            # Dev mode: ALL write tools need confirmation
             if is_dev_mode and tool_name in NivAgentFactory.WRITE_TOOLS:
                 print(f"[NIV_A2A_DEBUG] DEV MODE WRITE TOOL: {tool_name}")
                 frappe.log_error(f"DEV MODE WRITE: {tool_name}, needs_confirmation=True, conv={conversation_id}", "Niv AI Confirm")
                 needs_confirmation = True
                 confirmation_reason = f"dev_mode:{tool_name}"
-            # Normal mode: Only dangerous tools need confirmation
             elif not is_dev_mode and tool_name in NivAgentFactory.DANGEROUS_TOOLS:
                 print(f"[NIV_A2A_DEBUG] DANGEROUS TOOL DETECTED: {tool_name}")
                 frappe.log_error(f"DANGEROUS TOOL: {tool_name}, needs_confirmation=True, conv={conversation_id}", "Niv AI Confirm")
                 needs_confirmation = True
                 confirmation_reason = tool_name
             elif not is_dev_mode and tool_name == "update_document":
-                # Normal mode: Check if updating critical fields
                 data = arguments.get("data", {})
                 critical_changes = [f for f in data.keys() if f in NivAgentFactory.CRITICAL_FIELDS]
                 if critical_changes:
@@ -592,7 +548,6 @@ class NivAgentFactory:
                     confirmation_reason = f"critical_fields:{','.join(critical_changes)}"
             
             if needs_confirmation and conversation_id:
-                # Store pending action for confirmation
                 from niv_ai.niv_core.langchain.tools import set_pending_dev_action
                 set_pending_dev_action(conversation_id, {
                     "tool_name": tool_name,
@@ -600,7 +555,6 @@ class NivAgentFactory:
                     "reason": confirmation_reason,
                 })
                 
-                # Build confirmation message for the LLM to relay to user
                 doctype = arguments.get("doctype", "Unknown")
                 doc_name = arguments.get("name", "")
                 data = arguments.get("data", {})
@@ -630,7 +584,6 @@ class NivAgentFactory:
                         f"Ask the user to reply 'yes' or 'ha' to confirm, or 'no' to cancel."
                     )
                 elif tool_name == "create_document":
-                    # Show what will be created
                     summary_parts = [f"➕ **CREATE** `{doctype}`"]
                     for k, v in list(data.items())[:8]:
                         val_str = str(v)[:100]
@@ -641,7 +594,6 @@ class NivAgentFactory:
                         f"Ask the user to reply 'yes' or 'ha' to confirm, or 'no' to cancel."
                     )
                 else:
-                    # update with critical fields
                     summary_parts = [f"📋 **{tool_name}** on `{doctype}`"]
                     if doc_name:
                         summary_parts[0] += f": **{doc_name}**"
@@ -653,13 +605,11 @@ class NivAgentFactory:
                         f"Ask the user to reply 'yes' or 'ha' to confirm, or 'no' to cancel."
                     )
             
-            # Re-initialize Frappe context (ADK runs in thread pool)
             try:
                 if not getattr(frappe.local, "site", None):
                     frappe.init(site=site)
                     frappe.connect()
                 else:
-                    # Verify DB connection is alive
                     try:
                         frappe.db.sql("SELECT 1")
                     except Exception:
@@ -670,7 +620,6 @@ class NivAgentFactory:
                     "recovery_hint": "Try again or use a different tool."
                 })
             
-            # Find MCP server
             server_name = find_tool_server(tool_name)
             if not server_name:
                 return json.dumps({
@@ -685,7 +634,6 @@ class NivAgentFactory:
                     arguments=arguments,
                 )
                 
-                # Extract text from MCP response
                 if isinstance(result, dict) and "content" in result:
                     contents = result["content"]
                     if isinstance(contents, list):
@@ -699,7 +647,6 @@ class NivAgentFactory:
                                 text_parts.append(str(c))
                         final_text = "\n".join(text_parts)
                         
-                        # Guard: Mark empty results clearly with user-friendly message
                         if not final_text.strip() or final_text.strip() in ("[]", "{}", "null", "None"):
                             friendly_msg = self._get_empty_result_message(tool_name, arguments)
                             return f"No data found. {friendly_msg}"
@@ -707,7 +654,6 @@ class NivAgentFactory:
                 
                 if isinstance(result, (dict, list)):
                     json_str = json.dumps(result, default=str, ensure_ascii=False)
-                    # Guard: Mark empty results clearly with user-friendly message
                     if json_str in ("[]", "{}", "null"):
                         friendly_msg = self._get_empty_result_message(tool_name, arguments)
                         return f"No records found. {friendly_msg}"
@@ -742,7 +688,6 @@ class NivAgentFactory:
 
     def _get_empty_result_message(self, tool_name: str, arguments: dict) -> str:
         """Generate user-friendly message for empty results."""
-        # Extract context from arguments
         doctype = arguments.get("doctype", arguments.get("doc_type", ""))
         filters = arguments.get("filters", arguments.get("filter", ""))
         query = arguments.get("query", "")
@@ -778,9 +723,7 @@ class NivAgentFactory:
     # ─────────────────────────────────────────────────────────────
 
     def create_coder_agent(self) -> LlmAgent:
-        """
-        Frappe/ERPNext Development Specialist.
-        """
+        """Frappe/ERPNext Development Specialist."""
         tool_names = [
             "create_document", "update_document", "delete_document",
             "get_document", "get_doctype_info", "search_doctype", "run_python_code",
@@ -817,9 +760,7 @@ class NivAgentFactory:
         )
 
     def create_analyst_agent(self) -> LlmAgent:
-        """
-        Data Analysis & Reports Specialist.
-        """
+        """Data Analysis & Reports Specialist."""
         tool_names = [
             "run_database_query", "generate_report", "report_list",
             "report_requirements", "list_documents", "fetch", "get_document",
@@ -854,9 +795,7 @@ class NivAgentFactory:
         )
 
     def create_nbfc_agent(self) -> LlmAgent:
-        """
-        NBFC/Lending Operations Specialist for Growth System.
-        """
+        """NBFC/Lending Operations Specialist for Growth System."""
         tool_names = [
             "run_nbfc_audit", "run_database_query", "list_documents", "get_doctype_info",
             "get_document", "search_documents",
@@ -873,11 +812,13 @@ class NivAgentFactory:
             
             instruction=(
                 "NBFC specialist. Run tools IMMEDIATELY.\n\n"
-                "COMMON QUERIES:\n"
+                "IMPORTANT: First check if Loan DocType exists using get_doctype_info('Loan').\n"
+                "If it doesn't exist, inform the user that Loan Management module is not installed.\n\n"
+                "COMMON QUERIES (only if Loan exists):\n"
                 "- List loans → list_documents(doctype='Loan')\n"
                 "- Due loans → run_database_query('SELECT * FROM `tabRepayment Schedule` WHERE status!=\"Cleared\"')\n"
                 "- Borrower info → get_document(doctype='Customer', name='X')\n\n"
-                "All loan IDs/amounts MUST come from tool results."
+                "All loan IDs/amounts MUST come from tool results. Never invent data."
             ),
             
             output_key="nbfc_result",
@@ -889,9 +830,7 @@ class NivAgentFactory:
         )
 
     def create_discovery_agent(self) -> LlmAgent:
-        """
-        System Discovery & Introspection Specialist.
-        """
+        """System Discovery & Introspection Specialist."""
         tool_names = [
             "get_system_knowledge_graph", "visualize_system_map", "introspect_system", "get_doctype_info", "search_doctype", "list_documents",
         ]
@@ -911,7 +850,7 @@ class NivAgentFactory:
                 "- Full map → get_system_knowledge_graph()\n"
                 "- Visual → visualize_system_map()\n"
                 "- DocType info → get_doctype_info(doctype='X')\n\n"
-                "Report actual DocTypes and relationships found."
+                "Report ONLY actual DocTypes and relationships found. NEVER invent DocTypes that don't exist."
             ),
             
             output_key="discovery_result",
@@ -923,9 +862,7 @@ class NivAgentFactory:
         )
 
     def create_critique_agent(self) -> LlmAgent:
-        """
-        Quality Control & Self-Reflection Specialist.
-        """
+        """Quality Control & Self-Reflection Specialist."""
         return LlmAgent(
             name="niv_critique",
             model=self.adk_model,
@@ -942,9 +879,7 @@ class NivAgentFactory:
         )
 
     def create_planner_agent(self) -> LlmAgent:
-        """
-        Task Planning & Decomposition Specialist.
-        """
+        """Task Planning & Decomposition Specialist."""
         return LlmAgent(
             name="niv_planner",
             model=self.adk_model,
@@ -968,13 +903,7 @@ class NivAgentFactory:
     # ─────────────────────────────────────────────────────────────
 
     def create_orchestrator(self) -> LlmAgent:
-        """
-        Main Orchestrator — routes to specialists.
-        
-        Uses sub_agents (NOT TransferToAgentTool).
-        ADK automatically enables transfers based on descriptions.
-        """
-        # Create all specialists
+        """Main Orchestrator — routes to specialists."""
         coder = self.create_coder_agent()
         analyst = self.create_analyst_agent()
         nbfc = self.create_nbfc_agent()
@@ -982,10 +911,9 @@ class NivAgentFactory:
         critique = self.create_critique_agent()
         planner = self.create_planner_agent()
         
-        # Orchestrator's own tools (lightweight + high-value query tools)
         orc_tool_names = [
             "universal_search", "list_documents", "get_doctype_info", 
-            "run_database_query",  # Added: allows orchestrator to handle simple SQL directly
+            "run_database_query",
             "save_to_user_memory", "update_task_plan", "get_task_plan"
         ]
         
@@ -995,7 +923,7 @@ class NivAgentFactory:
             
             description="Routes requests to specialists.",
             
-            # COMMON CONTEXT for all agents — built dynamically with live schema
+            # DYNAMIC schema — built at runtime
             global_instruction=_build_global_instruction(),
             
             instruction=(
@@ -1019,6 +947,7 @@ class NivAgentFactory:
                 "- 'Build a loan management module' → niv_planner (complex)\n\n"
                 "SIMPLE QUERIES: Handle directly with your tools (list_documents, run_database_query).\n"
                 "AMBIGUOUS: If unsure, prefer data_analyst for data questions, frappe_coder for changes.\n\n"
+                "CRITICAL: If a DocType is not in the schema, it DOES NOT EXIST. Do not hallucinate.\n\n"
                 "After specialist returns, format their result clearly for the user."
             ),
             
@@ -1040,15 +969,7 @@ def get_orchestrator(
     provider_name: str = None,
     model_name: str = None,
 ) -> LlmAgent:
-    """
-    Get the main orchestrator agent.
-    
-    Usage:
-        from niv_ai.niv_core.a2a import get_orchestrator
-        
-        orchestrator = get_orchestrator(conversation_id="conv123")
-        # Use with ADK Runner
-    """
+    """Get the main orchestrator agent."""
     factory = NivAgentFactory(
         conversation_id=conversation_id,
         provider_name=provider_name,
