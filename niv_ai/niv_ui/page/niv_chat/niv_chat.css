@@ -443,14 +443,60 @@ body.niv-chat-active .col-lg-12 {
     right: 0;
     bottom: 0;
     width: 50%;
-    min-width: 400px;
-    max-width: 700px;
+    min-width: 380px;
+    max-width: 800px;
     border-left: 1px solid var(--niv-border);
     background: var(--niv-bg);
     z-index: 25;
     display: flex;
     flex-direction: column;
-    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+    box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+    transition: width 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Resize handle for artifact panel */
+.niv-artifact-resize-handle {
+    position: absolute;
+    left: -4px;
+    top: 0;
+    bottom: 0;
+    width: 8px;
+    cursor: ew-resize;
+    z-index: 30;
+    background: transparent;
+}
+.niv-artifact-resize-handle:hover,
+.niv-artifact-resize-handle.dragging {
+    background: var(--niv-primary);
+    opacity: 0.3;
+}
+
+/* Loading state for artifact */
+.niv-artifact-loading {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--niv-bg);
+    z-index: 5;
+}
+.niv-artifact-loading-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--niv-border);
+    border-top-color: var(--niv-primary);
+    border-radius: 50%;
+    animation: artifactSpin 0.8s linear infinite;
+}
+@keyframes artifactSpin {
+    to { transform: rotate(360deg); }
+}
+.niv-artifact-loading-text {
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--niv-text-muted);
 }
 
 .niv-artifact-panel.fullscreen {
@@ -463,27 +509,45 @@ body.niv-chat-active .col-lg-12 {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px 16px;
+    padding: 10px 16px;
     border-bottom: 1px solid var(--niv-border);
-    background: var(--niv-sidebar-bg);
+    background: var(--niv-bg);
+    gap: 12px;
 }
 
-.niv-artifact-header-left { flex: 1; }
+.niv-artifact-header-left {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.niv-artifact-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--niv-text);
+    white-space: nowrap;
+}
 
 .niv-artifact-select {
-    width: 100%;
-    max-width: 280px;
-    padding: 8px 12px;
+    flex: 1;
+    max-width: 240px;
+    padding: 7px 10px;
     border-radius: 8px;
     border: 1px solid var(--niv-border);
-    background: var(--niv-bg);
+    background: var(--niv-hover);
     color: var(--niv-text);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
     outline: none;
+    text-overflow: ellipsis;
 }
-.niv-artifact-select:focus { border-color: var(--niv-primary); }
+.niv-artifact-select:focus {
+    border-color: var(--niv-primary);
+    box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.1);
+}
 
 .niv-artifact-header-right {
     display: flex;
@@ -553,15 +617,23 @@ body.niv-chat-active .col-lg-12 {
 
 .niv-artifact-code {
     margin: 0;
-    padding: 16px;
+    padding: 20px;
     background: #1e1e2e;
     color: #cdd6f4;
-    font-size: 12px;
-    line-height: 1.6;
-    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', Consolas, monospace;
+    font-size: 13px;
+    line-height: 1.7;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', 'JetBrains Mono', Consolas, monospace;
     white-space: pre-wrap;
     word-break: break-word;
     min-height: 100%;
+    tab-size: 2;
+    -moz-tab-size: 2;
+}
+.niv-artifact-code code {
+    font-family: inherit;
+    font-size: inherit;
+    background: transparent;
+    padding: 0;
 }
 
 .niv-artifact-footer {
