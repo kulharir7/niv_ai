@@ -106,13 +106,28 @@ def _is_meaningful_text(text: str) -> bool:
         return False
     
     # Skip critique agent outputs (internal signals, not user-facing)
-    _critique_signals = {"PASSED", "FAILED", "APPROVED", "REJECTED"}
-    if stripped.upper() in _critique_signals:
+    # Be STRICT: only filter exact matches or very specific patterns
+    _critique_signals = {"PASSED", "FAILED", "APPROVED", "REJECTED", "PASS", "FAIL"}
+    upper_stripped = stripped.upper()
+    
+    # Only filter if it's EXACTLY a critique signal (not "Passed! Here's your data")
+    if upper_stripped in _critique_signals:
         return False
-    if stripped.upper().startswith("PASSED") and len(stripped) < 20:
-        return False
-    if stripped.upper().startswith("FAILED:") and len(stripped) < 100:
-        return False
+    
+    # Filter "PASSED" or "FAILED:" only if followed by nothing meaningful
+    # e.g., "PASSED." or "FAILED: validation" but NOT "Passed! Here's your data"
+    if upper_stripped.startswith("PASSED") and len(stripped) < 15:
+        # Check if it's just "PASSED" with punctuation
+        clean = stripped.upper().replace("PASSED", "").strip(".,!: ")
+        if not clean:
+            return False
+    
+    if upper_stripped.startswith("FAILED:"):
+        # Only filter short failure messages that look like internal signals
+        after_failed = stripped[7:].strip()
+        if len(after_failed) < 30 and not any(c.islower() for c in after_failed):
+            # Looks like "FAILED: VALIDATION_ERROR" (internal), not a real message
+            return False
     
     # Skip pure JSON objects (tool results get stored in state too)
     if stripped.startswith("{") and stripped.endswith("}"):
@@ -590,13 +605,39 @@ def stream_a2a(
                 break
         
         # ─── POST-LOOP: Flush thought buffer if any ───
-        if thought_buffer:
-            # Thought block never closed — yield as text
-            clean = re.sub(r'\[\[THOUGHT\]\]|\[\[/THOUGHT\]\]', '', thought_buffer).strip()
-            if clean and _is_meaningful_text(clean):
-                yield {"type": EVENT_TOKEN, "content": clean}
-                has_yielded_text = True
+        if thought_buffer or in_thought_block:
+            # Thought block never closed — try to extract and yield
+            buffer_to_process = thought_buffer
+            
+            # Check if there's a partial closing tag we missed
+            # e.g., "content[[/THOUGHT" without final "]]"
+            partial_close_patterns = ['[[/THOUGHT', '[[/THOUG', '[[/THOU', '[[/THO', '[[/TH', '[[/T', '[[/']
+            for pattern in partial_close_patterns:
+                if buffer_to_process.endswith(pattern):
+                    # Complete the closing tag
+                    buffer_to_process = buffer_to_process[:-len(pattern)] + '[[/THOUGHT]]'
+                    break
+            
+            # Try to extract thought content with regex
+            thought_match = _thought_pattern.search(buffer_to_process)
+            if thought_match:
+                thought_content = thought_match.group(1).strip()
+                if thought_content:
+                    yield {"type": EVENT_THOUGHT, "content": thought_content}
+                # Get any text after the thought
+                after_thought = _thought_pattern.sub('', buffer_to_process).strip()
+                if after_thought and _is_meaningful_text(after_thought):
+                    yield {"type": EVENT_TOKEN, "content": after_thought}
+                    has_yielded_text = True
+            else:
+                # No valid thought pattern — yield as regular text
+                clean = re.sub(r'\[\[THOUGHT\]\]|\[\[/THOUGHT\]\]|\[\[/THOUGHT|\[\[THOUGHT', '', buffer_to_process).strip()
+                if clean and _is_meaningful_text(clean):
+                    yield {"type": EVENT_TOKEN, "content": clean}
+                    has_yielded_text = True
+            
             thought_buffer = ""
+            in_thought_block = False
         
         # ─── POST-LOOP: Check if we got any text ───
         if not has_yielded_text:

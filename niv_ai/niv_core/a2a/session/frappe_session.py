@@ -42,6 +42,9 @@ _MAX_EVENTS = 100
 # Singleton
 _session_service: Optional["FrappeSessionService"] = None
 
+# Session cleanup settings
+_CLEANUP_AGE_DAYS = 7  # Delete sessions older than 7 days
+
 
 # ─────────────────────────────────────────────────────────────────
 # SESSION SERVICE
@@ -288,3 +291,63 @@ def get_session_service(site: str = None) -> FrappeSessionService:
     elif site and _session_service.site != site:
         _session_service.site = site
     return _session_service
+
+
+# ─────────────────────────────────────────────────────────────────
+# SESSION CLEANUP (Scheduled Task)
+# ─────────────────────────────────────────────────────────────────
+
+def cleanup_stale_sessions():
+    """
+    Clean up old A2A sessions from Redis to prevent bloat.
+    Called daily by scheduler.
+    
+    Sessions are stored with TTLs, but this provides additional cleanup
+    for any orphaned keys or sessions that should have expired.
+    """
+    import frappe
+    
+    try:
+        # Get all session keys
+        cache = frappe.cache()
+        
+        # Count cleaned sessions
+        cleaned_count = 0
+        checked_count = 0
+        
+        # Clean up session metadata keys
+        # Note: Redis SCAN would be ideal but Frappe cache doesn't expose it directly
+        # Instead, we rely on Redis TTL to auto-expire most sessions
+        # This function is a safety net for any edge cases
+        
+        # Log cleanup run
+        frappe.logger("niv_a2a").info(f"A2A session cleanup started")
+        
+        # Get all Niv Conversations and clean up their session data if conversation is deleted
+        deleted_convs = frappe.db.sql("""
+            SELECT name FROM `tabNiv Conversation` 
+            WHERE modified < DATE_SUB(NOW(), INTERVAL %s DAY)
+            AND name NOT IN (
+                SELECT DISTINCT conversation_id FROM `tabNiv Message` 
+                WHERE creation > DATE_SUB(NOW(), INTERVAL %s DAY)
+            )
+        """, (_CLEANUP_AGE_DAYS, _CLEANUP_AGE_DAYS), as_dict=True)
+        
+        for conv in deleted_convs:
+            session_id = conv.get("name")
+            if session_id:
+                # Delete session data from Redis
+                for prefix in [_PREFIX_SESSION, _PREFIX_STATE, _PREFIX_EVENTS]:
+                    try:
+                        cache.delete_value(f"{prefix}{session_id}")
+                        cleaned_count += 1
+                    except Exception:
+                        pass
+                checked_count += 1
+        
+        frappe.logger("niv_a2a").info(
+            f"A2A session cleanup complete: checked={checked_count}, cleaned={cleaned_count}"
+        )
+        
+    except Exception as e:
+        frappe.log_error(f"A2A session cleanup failed: {e}", "Niv AI A2A")

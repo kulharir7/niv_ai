@@ -75,6 +75,7 @@ scheduler_events = {
         "niv_ai.niv_core.api.scheduler.run_scheduled_reports",
         "niv_ai.niv_core.api.automation.run_daily_auto_actions",
         "niv_ai.niv_core.knowledge.auditor_service.run_daily_audit",
+        "niv_ai.niv_core.a2a.session.frappe_session.cleanup_stale_sessions",  # Redis session cleanup
     ],
     "weekly": [
         "niv_ai.niv_billing.api.billing.generate_usage_summary"

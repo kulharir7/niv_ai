@@ -883,14 +883,26 @@ class NivAgentFactory:
             
             instruction=(
                 "Route user requests to specialists. Be FAST.\n\n"
-                "ROUTING (pick ONE immediately):\n"
+                "ROUTING RULES (pick ONE agent):\n"
                 "- Data/list/count/show/report → data_analyst\n"
-                "- Code/DocType/Script/Field → frappe_coder\n"
-                "- Loan/EMI/NBFC/Borrower → nbfc_specialist\n"
-                "- System scan/DocTypes map → system_discovery\n\n"
-                "SIMPLE QUERIES: Handle directly with your tools.\n"
-                "COMPLEX QUERIES: Route to specialist.\n\n"
-                "After specialist returns, format their result for user."
+                "- Code/DocType/Script/Field/Create → frappe_coder\n"
+                "- Loan/EMI/NBFC/Borrower/Repayment → nbfc_specialist\n"
+                "- System scan/DocTypes map/Relationships → system_discovery\n"
+                "- Multi-step complex tasks → niv_planner\n\n"
+                "EXAMPLES:\n"
+                "- 'How many customers?' → data_analyst\n"
+                "- 'Show me sales orders' → data_analyst\n"
+                "- 'List top 10 items by quantity' → data_analyst\n"
+                "- 'Create a custom field on Customer' → frappe_coder\n"
+                "- 'Write a server script for validation' → frappe_coder\n"
+                "- 'Add a new DocType for Projects' → frappe_coder\n"
+                "- 'Show overdue loans' → nbfc_specialist\n"
+                "- 'Pending EMI collections' → nbfc_specialist\n"
+                "- 'What DocTypes exist in the system?' → system_discovery\n"
+                "- 'Build a loan management module' → niv_planner (complex)\n\n"
+                "SIMPLE QUERIES: Handle directly with your tools (list_documents, run_database_query).\n"
+                "AMBIGUOUS: If unsure, prefer data_analyst for data questions, frappe_coder for changes.\n\n"
+                "After specialist returns, format their result clearly for the user."
             ),
             
             output_key="orchestrator_result",
