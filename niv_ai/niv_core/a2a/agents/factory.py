@@ -59,15 +59,30 @@ def _build_global_instruction() -> str:
     """
     Build global instruction with LIVE SCHEMA from cache.
     Called when creating orchestrator, not at module load.
+    
+    If cache empty, triggers rebuild and waits for it.
     """
     schema_text = ""
     
     try:
         cached_graph = frappe.cache().get_value("niv_system_knowledge_graph")
-        if cached_graph:
+        
+        # Cache miss — rebuild synchronously (first request only, then cached)
+        if not cached_graph:
+            try:
+                from niv_ai.niv_core.knowledge.system_map import update_knowledge_graph
+                graph_data = update_knowledge_graph()  # Returns the graph dict
+                # Also store in cache (update_knowledge_graph does this, but let's be sure)
+                frappe.cache().set_value("niv_system_knowledge_graph", json.dumps(graph_data))
+            except Exception as rebuild_err:
+                frappe.log_error(f"Schema cache rebuild failed: {rebuild_err}", "Niv AI")
+                graph_data = {}
+        else:
             graph_data = json.loads(cached_graph) if isinstance(cached_graph, str) else cached_graph
-            doctypes_info = graph_data.get("doctypes", {})
-            
+        
+        doctypes_info = graph_data.get("doctypes", {})
+        
+        if doctypes_info:
             # Priority DocTypes with fields
             priority_doctypes = [
                 "Loan", "Repayment Schedule", "Customer", "Loan Application",
