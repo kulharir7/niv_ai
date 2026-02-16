@@ -78,6 +78,11 @@ def deduct_tokens(user=None, input_tokens=0, output_tokens=0,
         wallet.save(ignore_permissions=True)
         remaining = wallet.balance
 
+    # Calculate cost based on rates
+    cost_per_1k_input = flt(getattr(settings, 'cost_per_1k_input', 0) or 0)
+    cost_per_1k_output = flt(getattr(settings, 'cost_per_1k_output', 0) or 0)
+    token_cost = (input_tokens / 1000 * cost_per_1k_input) + (output_tokens / 1000 * cost_per_1k_output)
+
     # Log usage (always, both modes)
     try:
         frappe.get_doc({
@@ -89,6 +94,8 @@ def deduct_tokens(user=None, input_tokens=0, output_tokens=0,
             "input_tokens": input_tokens,
             "output_tokens": output_tokens,
             "total_tokens": total_tokens,
+            "token_cost": token_cost,
+            "cost": token_cost,
         }).insert(ignore_permissions=True)
     except Exception:
         pass
