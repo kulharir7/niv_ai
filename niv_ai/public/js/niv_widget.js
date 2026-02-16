@@ -77,22 +77,60 @@
                 iframe.onload = function() {
                     loading.style.display = "none";
                     iframe.style.display = "block";
-                    // Hide Frappe navbar inside iframe
+                    // Hide Frappe navbar inside iframe and fix layout
                     try {
                         var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
                         var style = iframeDoc.createElement("style");
                         style.textContent = [
+                            "/* Widget mode - complete reset */",
                             "* { box-sizing: border-box !important; }",
-                            ".navbar, .page-head, #page-niv-chat > .page-head, .frappe-list-sidebar, .niv-sidebar-footer, .niv-model-badge-wrapper, .niv-model-dropdown, .niv-model-popover, .niv-header-actions, .msg-tokens { display: none !important; }",
-                            "html, body { padding: 0 !important; margin: 0 !important; overflow: hidden !important; width: 100% !important; height: 100% !important; }",
-                            ".container, .container.page-body, .page-container, .main-section, .layout-main, .layout-main-section, .page-body { padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; }",
-                            ".niv-chat-container { --niv-chat-width: 100% !important; height: 100vh !important; width: 100% !important; border-radius: 0 !important; }",
-                            ".niv-main { width: 100% !important; padding: 0 !important; margin: 0 !important; }",
-                            ".niv-chat-messages { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 12px !important; }",
-                            ".niv-message { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 10px 0 !important; }",
-                            ".niv-input-area { padding: 0 12px 12px !important; width: 100% !important; }",
+                            "",
+                            "/* Hide ALL unnecessary elements */",
+                            ".navbar, .page-head, #page-niv-chat > .page-head, .frappe-list-sidebar, .niv-sidebar-footer, .niv-model-badge-wrapper, .niv-model-dropdown, .niv-model-popover, .niv-header-actions, .msg-tokens, .niv-chat-header, .niv-header, .niv-sidebar, .niv-chat-sidebar { display: none !important; }",
+                            "",
+                            "/* Full viewport reset - FORCE LIGHT THEME */",
+                            "html, body { padding: 0 !important; margin: 0 !important; overflow: hidden !important; width: 100% !important; height: 100% !important; background: #ffffff !important; }",
+                            "body { --niv-bg: #ffffff !important; --niv-text: #1a1a1a !important; --niv-text-muted: #666666 !important; }",
+                            "",
+                            "/* Container reset - remove ALL padding/margins */",
+                            ".container, .container.page-body, .page-container, .main-section, .layout-main, .layout-main-section, .page-body, #page-niv-chat, #page-niv-chat .layout-main-section-wrapper, #page-niv-chat .layout-main-section { padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; height: 100% !important; background: #ffffff !important; border: none !important; }",
+                            "",
+                            "/* Chat container - fill completely with WHITE background */",
+                            ".niv-chat-container { --niv-chat-width: 100% !important; height: 100% !important; width: 100% !important; border-radius: 0 !important; display: flex !important; flex-direction: column !important; border: none !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: #ffffff !important; }",
+                            ".niv-chat-container::before, .niv-chat-container::after { display: none !important; }",
+                            "",
+                            "/* Main area - flex fill */",
+                            ".niv-main { width: 100% !important; padding: 0 !important; margin: 0 !important; height: 100% !important; display: flex !important; flex-direction: column !important; flex: 1 !important; min-height: 0 !important; background: #ffffff !important; }",
+                            "",
+                            "/* Messages area - scrollable */",
+                            ".niv-chat-messages { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 16px !important; flex: 1 !important; overflow-y: auto !important; min-height: 0 !important; }",
+                            "",
+                            "/* Individual messages */",
+                            ".niv-message { max-width: 100% !important; margin: 0 !important; padding: 8px 0 !important; }",
+                            "",
+                            "/* Input area - fixed at bottom with proper spacing */",
+                            ".niv-input-area { padding: 12px 16px 16px !important; width: 100% !important; flex-shrink: 0 !important; background: #ffffff !important; border-top: 1px solid #e5e5e5 !important; }",
                             ".niv-input-pill { max-width: 100% !important; width: 100% !important; margin: 0 !important; }",
-                            ".niv-attach-preview, .niv-welcome-container, .niv-disclaimer, .niv-typing-indicator, .niv-empty-state, .niv-input-footer { max-width: 100% !important; width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; }",
+                            "",
+                            "/* Hide disclaimer in widget */",
+                            ".niv-disclaimer, .niv-input-footer { display: none !important; }",
+                            "",
+                            "/* Welcome screen */",
+                            ".niv-welcome-container { flex: 1 !important; display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 20px !important; }",
+                            "",
+                            "/* Empty state - force full width and proper colors */",
+                            ".niv-empty-state { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 40px 16px !important; }",
+                            ".niv-empty-state .empty-greeting { color: #1a1a1a !important; font-weight: 600 !important; }",
+                            ".niv-empty-state .empty-subtitle { color: #666666 !important; }",
+                            "",
+                            "/* User message - white text on dark bubble */",
+                            ".niv-message.user .msg-content { background: #1a1a1a !important; color: #ffffff !important; }",
+                            "",
+                            "/* Assistant message - dark text */",
+                            ".niv-message.assistant .msg-content { color: #1a1a1a !important; }",
+                            "",
+                            "/* Other elements */",
+                            ".niv-attach-preview, .niv-typing-indicator, .niv-input-footer { max-width: 100% !important; width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; }",
                         ].join("\n");
                         iframeDoc.head.appendChild(style);
                     } catch(e) { console.log("[NivWidget] Could not inject iframe styles:", e); }
@@ -111,6 +149,8 @@
             isOpen = false;
             panel.classList.remove("open");
             fab.classList.remove("hidden");
+            // Cleanup: ensure parent body doesn't have chat-active class
+            document.body.classList.remove("niv-chat-active");
         }
 
         fab.addEventListener("click", openPanel);
@@ -130,6 +170,10 @@
             var onChat = window.location.pathname.indexOf("/app/niv-chat") === 0;
             root.style.display = onChat ? "none" : "block";
             if (onChat && isOpen) closePanel();
+            // Safety: remove niv-chat-active from body when NOT on chat page
+            if (!onChat) {
+                document.body.classList.remove("niv-chat-active");
+            }
         }
         // Check immediately on init
         checkRoute();

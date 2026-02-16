@@ -1837,16 +1837,25 @@ ${htmlCode}
                             }
                         } else if (data.type === "tool_call") {
                             if (is_active) {
+                                // Skip if tool name is empty, unknown, or internal
+                                const toolName = data.tool || "";
+                                if (!toolName || toolName === "unknown_tool" || toolName === "unknown" || 
+                                    toolName.startsWith("transfer_") || toolName === "transfer_to_agent") {
+                                    // Don't show empty/internal tool calls
+                                    continue;
+                                }
+                                
                                 if (!$msgEl) {
                                     this.hide_typing();
                                     $msgEl = this.append_message("assistant", "");
                                 }
-                                this.update_typing_text("Niv is calling tools...");
+                                this.update_typing_text(`Calling ${toolName}...`);
                                 var $toolHtml = $(`
-                                    <div class="tool-call-accordion running">
+                                    <div class="tool-call-accordion running" data-tool="${frappe.utils.escape_html(toolName)}">
                                         <div class="tool-call-header">
                                             <i class="fa fa-spinner fa-spin tool-status-icon"></i>
-                                            <span class="tool-name">${frappe.utils.escape_html(data.tool)}</span>
+                                            <span class="tool-name">${frappe.utils.escape_html(toolName)}</span>
+                                            <i class="fa fa-chevron-right tool-chevron"></i>
                                         </div>
                                     </div>
                                 `);
@@ -1858,12 +1867,27 @@ ${htmlCode}
                             }
                         } else if (data.type === "tool_result") {
                             if (is_active && $msgEl) {
-                                var $running = $msgEl.find(".tool-call-accordion.running").first();
-                                $running.removeClass("running");
-                                $running.find(".tool-status-icon").removeClass("fa-spinner fa-spin").addClass("fa-check-circle");
-                                var resultStr = JSON.stringify(data.result || {}, null, 2).substring(0, 2000);
-                                $running.find(".tool-call-header").attr("onclick", "$(this).closest('.tool-call-accordion').toggleClass('open')");
-                                $running.append(`<div class="tool-call-body"><pre><code>${frappe.utils.escape_html(resultStr)}</code></pre></div>`);
+                                const toolName = data.tool || "";
+                                // Skip unknown/internal tool results
+                                if (!toolName || toolName === "unknown_tool" || toolName === "unknown" || 
+                                    toolName.startsWith("transfer_")) {
+                                    continue;
+                                }
+                                
+                                // Find the matching running tool call by name, or first running
+                                var $running = $msgEl.find(`.tool-call-accordion.running[data-tool="${toolName}"]`).first();
+                                if (!$running.length) {
+                                    $running = $msgEl.find(".tool-call-accordion.running").first();
+                                }
+                                
+                                if ($running.length) {
+                                    $running.removeClass("running");
+                                    $running.find(".tool-status-icon").removeClass("fa-spinner fa-spin").addClass("fa-check-circle");
+                                    var resultStr = typeof data.result === "string" ? data.result : JSON.stringify(data.result || {}, null, 2);
+                                    resultStr = resultStr.substring(0, 2000);
+                                    $running.find(".tool-call-header").attr("onclick", "$(this).closest('.tool-call-accordion').toggleClass('open')");
+                                    $running.append(`<div class="tool-call-body"><pre><code>${frappe.utils.escape_html(resultStr)}</code></pre></div>`);
+                                }
                             }
                         } else if (data.type === "agent_transfer") {
                             // A2A: Show which agent is handling the request
