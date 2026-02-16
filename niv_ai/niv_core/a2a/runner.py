@@ -599,19 +599,44 @@ def stream_a2a(
                     app_name="NivAI", user_id=user, session_id=session_id
                 )
                 if final_session and final_session.state:
-                    # Try orchestrator_result first, then any specialist result
+                    # Collect all non-empty results
+                    all_results = []
                     for key in ["orchestrator_result", "analyst_result", "coder_result", 
                                 "discovery_result", "nbfc_result", "planner_result"]:
                         val = final_session.state.get(key, "")
                         if val and _is_meaningful_text(str(val)):
-                            yield {"type": EVENT_TOKEN, "content": str(val)}
-                            _log(f"FALLBACK: Found text in state[{key}]")
+                            all_results.append((key, str(val)))
+                    
+                    # If we have results, yield the best one
+                    if all_results:
+                        # Prefer orchestrator, then analyst, then others
+                        priority = {"orchestrator_result": 0, "analyst_result": 1, "coder_result": 2,
+                                   "nbfc_result": 3, "discovery_result": 4, "planner_result": 5}
+                        all_results.sort(key=lambda x: priority.get(x[0], 99))
+                        best_key, best_val = all_results[0]
+                        
+                        yield {"type": EVENT_TOKEN, "content": best_val}
+                        _log(f"FALLBACK: Found text in state[{best_key}] ({len(best_val)} chars)")
+                        has_yielded_text = True
+                    
+                    # Also check tool results in state
+                    if not has_yielded_text:
+                        last_result = final_session.state.get("last_tool_result", "")
+                        if last_result and _is_meaningful_text(str(last_result)):
+                            # Format tool result as response
+                            summary = f"Tool result:\n{str(last_result)[:2000]}"
+                            yield {"type": EVENT_TOKEN, "content": summary}
+                            _log(f"FALLBACK: Using last_tool_result")
                             has_yielded_text = True
-                            break
+                            
             except Exception as e:
                 _log(f"FALLBACK state read failed: {e}")
             
-            # No fallback error message — stream.py handles empty responses
+            # Final fallback: provide error message if nothing worked
+            if not has_yielded_text:
+                error_msg = "I processed your request but couldn't generate a response. The tools may have run but no text output was captured. Please try rephrasing your question."
+                yield {"type": EVENT_TOKEN, "content": error_msg}
+                _log("FALLBACK: Sent error message")
         
         elapsed = time.time() - start_time
         _log(f"A2A COMPLETE: {event_count} events, {elapsed:.1f}s, agents={seen_agents}")
