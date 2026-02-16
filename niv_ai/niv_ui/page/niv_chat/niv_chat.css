@@ -439,7 +439,7 @@ body.niv-chat-active .col-lg-12 {
 
 .niv-artifact-panel {
     position: absolute;
-    top: 0;
+    top: 51px; /* Below chat header (50px + 1px border) */
     right: 0;
     bottom: 0;
     width: 50%;
