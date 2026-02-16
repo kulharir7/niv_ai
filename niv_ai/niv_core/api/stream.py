@@ -132,115 +132,154 @@ def stream_chat(**kwargs):
     if not (kwargs.get("model") or (frappe.request.method == "POST" and (frappe.request.get_json(silent=True) or {}).get("model"))):
         model = _smart_route_model(message, model, dev_mode, settings)
 
-    # Dev Mode: check if user is confirming a pending action
-    if dev_mode:
-        _confirm_words = {"yes", "y", "ha", "haan", "ok", "confirm", "proceed", "kar do", "kardo"}
-        _cancel_words = {"no", "n", "nahi", "nhi", "cancel", "mat karo", "ruk"}
-        msg_lower = message.strip().lower()
+    # ─── Confirmation Flow (works in BOTH dev mode and normal mode) ───
+    # Dev mode: confirms all writes
+    # Normal mode: confirms dangerous operations (delete, submit, run_python_code)
+    _confirm_words = {"yes", "y", "ha", "haan", "ok", "confirm", "proceed", "kar do", "kardo", "haa"}
+    _cancel_words = {"no", "n", "nahi", "nhi", "cancel", "mat karo", "ruk", "nope", "stop"}
+    _undo_words = {"undo", "rollback", "revert", "wapas", "vapas", "hatao", "delete last"}
+    msg_lower = message.strip().lower()
 
-        from niv_ai.niv_core.langchain.tools import (
-            get_pending_dev_action, execute_pending_dev_action,
-            clear_pending_dev_action, set_dev_mode as _set_dev_mode,
-            get_undo_stack, execute_undo
-        )
+    from niv_ai.niv_core.langchain.tools import (
+        get_pending_dev_action, execute_pending_dev_action,
+        clear_pending_dev_action, set_dev_mode as _set_dev_mode,
+        get_undo_stack, execute_undo, set_active_dev_conversation
+    )
 
-        _undo_words = {"undo", "rollback", "revert", "wapas", "vapas", "hatao", "delete last"}
+    # Check if there's a pending action (regardless of dev_mode)
+    pending = get_pending_dev_action(conversation_id)
 
-        # Handle undo
-        if msg_lower in _undo_words:
-            undo_stack = get_undo_stack(conversation_id)
-            if undo_stack:
-                def generate_undo():
-                    try:
-                        result = execute_undo(conversation_id)
-                        if result:
-                            yield _sse({"type": "token", "content": f"↩️ **Undo Complete:**\n\n{result}"})
-                            try:
-                                frappe.db.sql("SELECT 1")
-                            except Exception:
-                                frappe.db.connect()
-                            save_assistant_message(conversation_id, f"↩️ Undo Complete:\n\n{result}", [])
-                        else:
-                            msg = "Nothing to undo."
-                            yield _sse({"type": "token", "content": msg})
-                            save_assistant_message(conversation_id, msg, [])
-                    except Exception as e:
-                        err = f"Undo failed: {str(e)}"
-                        yield _sse({"type": "error", "content": err})
-                    yield _sse({"type": "done", "content": ""})
-                from werkzeug.wrappers import Response
-                return Response(generate_undo(), content_type="text/event-stream",
-                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
-            else:
-                def generate_no_undo():
-                    msg = "❌ Nothing to undo. No recent dev actions found."
-                    yield _sse({"type": "token", "content": msg})
-                    save_assistant_message(conversation_id, msg, [])
-                    yield _sse({"type": "done", "content": msg})
-                from werkzeug.wrappers import Response
-                return Response(generate_no_undo(), content_type="text/event-stream",
-                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
-
-        pending = get_pending_dev_action(conversation_id)
-        if pending and msg_lower in _confirm_words:
-            # Execute all pending actions directly
-            def generate_confirm():
-                _set_dev_mode(False)  # Don't intercept during execution
+    # Handle undo (dev mode only for now)
+    if dev_mode and msg_lower in _undo_words:
+        undo_stack = get_undo_stack(conversation_id)
+        if undo_stack:
+            def generate_undo():
                 try:
-                    # Show tool calls being executed
-                    for action in pending:
-                        yield _sse({"type": "tool_call", "tool": action.get("tool_name", ""), "arguments": action.get("arguments", {})})
-
-                    result = execute_pending_dev_action(conversation_id)
+                    result = execute_undo(conversation_id)
                     if result:
-                        yield _sse({"type": "tool_result", "tool": "dev_actions", "result": (result or "")[:2000]})
-                        # Let AI summarize
-                        from niv_ai.niv_core.langchain.agent import stream_agent as _sa
-                        summary_msg = f"Developer actions executed successfully. Results:\n{result}\n\nSummarize what was done for the user. Be concise."
-                        full_resp = ""
-                        for evt in _sa(message=summary_msg, conversation_id=conversation_id, provider_name=provider, model=model, user=user, dev_mode=False):
-                            if evt.get("type") == "token":
-                                full_resp += evt.get("content", "")
-                                yield _sse(evt)
+                        yield _sse({"type": "token", "content": f"↩️ **Undo Complete:**\n\n{result}"})
                         try:
                             frappe.db.sql("SELECT 1")
                         except Exception:
                             frappe.db.connect()
-                        tc_data = [{"tool": a.get("tool_name", ""), "arguments": a.get("arguments", {})} for a in pending]
-                        save_assistant_message(conversation_id, full_resp, tc_data)
+                        save_assistant_message(conversation_id, f"↩️ Undo Complete:\n\n{result}", [])
                     else:
-                        msg = "No pending action found to execute."
+                        msg = "Nothing to undo."
                         yield _sse({"type": "token", "content": msg})
                         save_assistant_message(conversation_id, msg, [])
                 except Exception as e:
-                    err_msg = f"Error executing actions: {str(e)}"
-                    yield _sse({"type": "error", "content": err_msg})
-                finally:
-                    _set_dev_mode(False)
+                    err = f"Undo failed: {str(e)}"
+                    yield _sse({"type": "error", "content": err})
                 yield _sse({"type": "done", "content": ""})
-
             from werkzeug.wrappers import Response
-            return Response(generate_confirm(), content_type="text/event-stream",
+            return Response(generate_undo(), content_type="text/event-stream",
                           headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
-
-        elif pending and msg_lower in _cancel_words:
-            clear_pending_dev_action(conversation_id)
-            def generate_cancel():
-                msg = "❌ Action cancelled. What would you like to do instead?"
+        else:
+            def generate_no_undo():
+                msg = "❌ Nothing to undo. No recent dev actions found."
                 yield _sse({"type": "token", "content": msg})
                 save_assistant_message(conversation_id, msg, [])
                 yield _sse({"type": "done", "content": msg})
             from werkzeug.wrappers import Response
-            return Response(generate_cancel(), content_type="text/event-stream",
+            return Response(generate_no_undo(), content_type="text/event-stream",
                           headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
 
+    # ─── Handle Pending Confirmations (works for BOTH dev mode and normal mode) ───
+    if pending and msg_lower in _confirm_words:
+        # Execute all pending actions directly
+        def generate_confirm():
+            _set_dev_mode(False)  # Don't intercept during execution
+            try:
+                # Show tool calls being executed
+                for action in pending:
+                    yield _sse({"type": "tool_call", "tool": action.get("tool_name", ""), "arguments": action.get("arguments", {})})
+
+                result = execute_pending_dev_action(conversation_id)
+                if result:
+                    yield _sse({"type": "tool_result", "tool": "confirmed_actions", "result": (result or "")[:2000]})
+                    # Let AI summarize
+                    from niv_ai.niv_core.langchain.agent import stream_agent as _sa
+                    
+                    # Build context-aware summary prompt based on what was done
+                    action_types = [a.get("tool_name", "") for a in pending]
+                    if "delete_document" in action_types:
+                        summary_msg = f"Document deletion completed. Results:\n{result}\n\nConfirm to the user what was deleted. Be concise and reassuring."
+                    elif "run_python_code" in action_types:
+                        summary_msg = f"Code execution completed. Results:\n{result}\n\nSummarize the code execution results for the user. Be concise."
+                    elif "submit_document" in action_types:
+                        summary_msg = f"Document submission completed. Results:\n{result}\n\nConfirm to the user what was submitted. Mention any important next steps."
+                    else:
+                        summary_msg = f"Actions executed successfully. Results:\n{result}\n\nSummarize what was done for the user. Be concise."
+                    
+                    full_resp = ""
+                    for evt in _sa(message=summary_msg, conversation_id=conversation_id, provider_name=provider, model=model, user=user, dev_mode=False):
+                        if evt.get("type") == "token":
+                            full_resp += evt.get("content", "")
+                            yield _sse(evt)
+                    try:
+                        frappe.db.sql("SELECT 1")
+                    except Exception:
+                        frappe.db.connect()
+                    tc_data = [{"tool": a.get("tool_name", ""), "arguments": a.get("arguments", {})} for a in pending]
+                    save_assistant_message(conversation_id, full_resp, tc_data)
+                else:
+                    msg = "No pending action found to execute."
+                    yield _sse({"type": "token", "content": msg})
+                    save_assistant_message(conversation_id, msg, [])
+            except Exception as e:
+                err_msg = f"Error executing actions: {str(e)}"
+                yield _sse({"type": "error", "content": err_msg})
+            finally:
+                _set_dev_mode(False)
+            yield _sse({"type": "done", "content": ""})
+
+        from werkzeug.wrappers import Response
+        return Response(generate_confirm(), content_type="text/event-stream",
+                      headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+
+    elif pending and msg_lower in _cancel_words:
+        clear_pending_dev_action(conversation_id)
+        def generate_cancel():
+            # Provide context-aware cancellation message
+            action_types = [a.get("tool_name", "") for a in pending]
+            if "delete_document" in action_types:
+                msg = "🛑 Deletion cancelled. Your data is safe. What would you like to do instead?"
+            elif "run_python_code" in action_types:
+                msg = "🛑 Code execution cancelled. What would you like to do instead?"
+            elif "submit_document" in action_types:
+                msg = "🛑 Submission cancelled. The document remains in draft. What would you like to do instead?"
+            else:
+                msg = "❌ Action cancelled. What would you like to do instead?"
+            yield _sse({"type": "token", "content": msg})
+            save_assistant_message(conversation_id, msg, [])
+            yield _sse({"type": "done", "content": msg})
+        from werkzeug.wrappers import Response
+        return Response(generate_cancel(), content_type="text/event-stream",
+                      headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no", "Connection": "keep-alive"})
+
     def generate():
+        import time as _time
         full_response = ""
         tool_calls_data = []
         tool_results_data = []
         saw_token = False
         saw_tool_activity = False
         saw_error = False
+        last_db_check = _time.time()  # Track last DB heartbeat
+
+        def _ensure_db_connection():
+            """Heartbeat check — reconnect DB if stale (long streams lose connection)."""
+            nonlocal last_db_check
+            if _time.time() - last_db_check > 30:  # Check every 30 seconds
+                try:
+                    frappe.db.sql("SELECT 1")
+                except Exception:
+                    try:
+                        frappe.db.connect()
+                    except Exception:
+                        frappe.init(site=_site_name)
+                        frappe.connect()
+                last_db_check = _time.time()
 
         try:
             # Always re-init frappe context inside generator
@@ -319,10 +358,13 @@ def stream_chat(**kwargs):
                     adk_failed = True
 
             # ─── Legacy LangGraph Branch (or Fallback) ───
+            # Always set active conversation for confirmation tracking (both dev and normal mode)
+            # This allows dangerous tool confirmations to work in normal mode too
+            set_active_dev_conversation(conversation_id)
+            
             # Set dev mode on tools layer (Redis flag + global conv_id for cross-thread)
             if dev_mode:
                 _set_dev_mode(True, conversation_id)
-                set_active_dev_conversation(conversation_id)
 
             for event in stream_agent(
                 message=message,
@@ -332,6 +374,9 @@ def stream_chat(**kwargs):
                 user=user,
                 dev_mode=dev_mode,
             ):
+                # Heartbeat: ensure DB connection is alive during long streams
+                _ensure_db_connection()
+                
                 event_type = event.get("type", "")
 
                 if event_type == "token":
@@ -366,10 +411,11 @@ def stream_chat(**kwargs):
                 print(f"[Niv AI Stream] Error: {e}")
             yield _sse({"type": "error", "content": full_response})
         finally:
-            # Clear dev mode flag
+            # Always clear active conversation (for both dev and normal mode confirmation tracking)
+            set_active_dev_conversation("")
+            # Clear dev mode flag if it was set
             if dev_mode:
                 _set_dev_mode(False, conversation_id)
-                set_active_dev_conversation("")
 
         # Ensure final text exists when tools ran but model text was empty or garbage
         # Force a summary LLM call (no tools) so user always gets a text answer

@@ -113,7 +113,10 @@ def store_tool_result_in_state(
 
 def init_agent_state(callback_context: CallbackContext) -> None:
     """
-    Initialize state before agent runs. FAST version - minimal loading.
+    Initialize state before agent runs.
+    
+    Loads system DocTypes from cache (fast) or triggers scan if not cached.
+    This gives agents context about what DocTypes exist without calling tools.
     """
     state = callback_context.state
     
@@ -123,9 +126,29 @@ def init_agent_state(callback_context: CallbackContext) -> None:
         if key not in state:
             state[key] = ""
     
-    # Skip heavy loading - agents can use tools to discover
+    # Load system DocTypes from cache (or trigger lazy scan)
     if "system_doctypes" not in state:
-        state["system_doctypes"] = "Use tools to query DocTypes."
+        try:
+            # Try to get from Redis cache first (fast path)
+            cached_graph = frappe.cache().get_value("niv_system_knowledge_graph")
+            if cached_graph:
+                graph_data = json.loads(cached_graph) if isinstance(cached_graph, str) else cached_graph
+                doctype_names = list(graph_data.get("doctypes", {}).keys())[:100]  # Limit to 100 for prompt size
+                state["system_doctypes"] = f"Available DocTypes: {', '.join(doctype_names)}"
+            else:
+                # Cache miss — run scan in background, use placeholder for now
+                # This avoids blocking the agent start
+                state["system_doctypes"] = "Use get_system_knowledge_graph() tool to discover DocTypes."
+                # Trigger async cache refresh (non-blocking)
+                try:
+                    from niv_ai.niv_core.knowledge.system_map import update_knowledge_graph
+                    # Run scan and cache result (will be available for next request)
+                    update_knowledge_graph()
+                except Exception:
+                    pass  # Don't fail agent init if scan fails
+        except Exception as e:
+            frappe.log_error(f"init_agent_state failed to load DocTypes: {e}", "Niv AI A2A")
+            state["system_doctypes"] = "Use get_system_knowledge_graph() tool to discover DocTypes."
     
     if "nbfc_context" not in state:
         state["nbfc_context"] = {}
@@ -766,8 +789,12 @@ class NivAgentFactory:
         critique = self.create_critique_agent()
         planner = self.create_planner_agent()
         
-        # Orchestrator's own tools (lightweight)
-        orc_tool_names = ["universal_search", "list_documents", "get_doctype_info", "save_to_user_memory", "update_task_plan", "get_task_plan"]
+        # Orchestrator's own tools (lightweight + high-value query tools)
+        orc_tool_names = [
+            "universal_search", "list_documents", "get_doctype_info", 
+            "run_database_query",  # Added: allows orchestrator to handle simple SQL directly
+            "save_to_user_memory", "update_task_plan", "get_task_plan"
+        ]
         
         return LlmAgent(
             name="niv_orchestrator",
