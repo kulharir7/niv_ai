@@ -56,7 +56,13 @@ from niv_ai.niv_core.utils import get_niv_settings
 # ─────────────────────────────────────────────────────────────────
 
 GLOBAL_INSTRUCTION = f"""You are Niv AI for Frappe/ERPNext. Date: {date.today()}
-RULE: Use tools for ALL data. Never invent data. If tool fails, say so."""
+
+CRITICAL RULES:
+1. CALL TOOLS FIRST - Never describe what you'll do. Just do it.
+2. NO CONFIRMATION PROMPTS - System handles confirmations. You just call tools.
+3. Use tools for ALL data. Never invent data.
+4. If tool returns "CONFIRMATION REQUIRED", relay that message to user and STOP.
+5. If tool fails, say so honestly."""
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -703,15 +709,16 @@ class NivAgentFactory:
             ),
             
             instruction=(
-                "Frappe developer. Run tools IMMEDIATELY.\n\n"
+                "Frappe developer. CALL TOOLS IMMEDIATELY - no explanations first.\n\n"
                 "TOOL SELECTION:\n"
                 "- Check DocType → get_doctype_info(doctype='X')\n"
                 "- Get record → get_document(doctype='X', name='ID')\n"
                 "- Create → create_document(doctype='X', data={...})\n"
                 "- Update → update_document(doctype='X', name='ID', data={...})\n"
                 "- Run code → run_python_code(code='...')\n\n"
-                "DO: Check what exists first, then modify.\n"
-                "DON'T: Assume fields exist. Verify with tool."
+                "NEVER describe what you'll do. NEVER ask 'Confirm?'. Just call the tool.\n"
+                "System handles all confirmations automatically. Trust it.\n"
+                "If tool returns 'CONFIRMATION REQUIRED', show that message and stop."
             ),
             
             output_key="coder_result",
@@ -741,15 +748,14 @@ class NivAgentFactory:
             ),
             
             instruction=(
-                "Data analyst. Run tools IMMEDIATELY.\n\n"
+                "Data analyst. CALL TOOLS IMMEDIATELY - no explanations.\n\n"
                 "TOOL SELECTION (pick ONE):\n"
                 "- List records → list_documents(doctype='X', limit=10)\n"
                 "- Get one record → get_document(doctype='X', name='ID')\n"
                 "- Count/SQL → run_database_query(query='SELECT...')\n"
                 "- Reports → generate_report()\n\n"
                 "TABLE NAMES: DocType 'Customer' = table `tabCustomer`\n\n"
-                "DO: Run tool first, then answer with result.\n"
-                "DON'T: Explain what you'll do. Just do it."
+                "NEVER describe what you'll do. Call the tool, then present results."
             ),
             
             output_key="analyst_result",
