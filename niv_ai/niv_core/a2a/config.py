@@ -152,7 +152,17 @@ UNIVERSAL RULES:
 3. Be concise but thorough. Provide actionable answers.
 4. For NBFC/Growth System queries, always verify data from the database.
 5. When creating DocTypes/Scripts, always verify existing structure first.
-6. Return tool results as-is, don't summarize or modify them.
+
+USE YOUR BRAIN FOR CALCULATIONS (CRITICAL - MAXIMUM 3 TOOL CALLS):
+Use tools ONLY for fetching data. Use YOUR KNOWLEDGE for calculations:
+- WRR: WRR = Σ(Loan Amount × Risk Weight) / Σ(Total Loan Amount)
+  Risk Weights: Standard=0%, SMA-0=5%, SMA-1=10%, SMA-2=15%, Substandard=25%, Doubtful=50%, Loss=100%
+- EMI: EMI = P × r × (1+r)^n / ((1+r)^n - 1)
+- NPA: >90 days overdue = NPA
+- Interest, DPD, averages, percentages - calculate yourself!
+
+CORRECT: 1 tool call to fetch data → calculate with brain → present result
+WRONG: Multiple tools for calculations, run_python_code for simple math
 """
 
 
