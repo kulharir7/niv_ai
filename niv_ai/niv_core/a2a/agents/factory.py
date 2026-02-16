@@ -446,8 +446,10 @@ class NivAgentFactory:
         
         return adk_tools
 
-    # Dangerous tools that require user confirmation before execution
+    # Dangerous tools that require user confirmation before execution (normal mode)
     DANGEROUS_TOOLS = {"delete_document", "run_python_code", "submit_document"}
+    # All write tools that require confirmation in dev mode
+    WRITE_TOOLS = {"create_document", "update_document", "delete_document", "submit_document"}
     CRITICAL_FIELDS = {"docstatus", "status", "workflow_state", "owner", "modified_by"}
 
     def _make_tool_executor(self, tool_name: str, tool_description: str):
@@ -468,17 +470,28 @@ class NivAgentFactory:
             print(f"[NIV_A2A_DEBUG] Tool: {tool_name}, Conv: {conversation_id}, Args: {arguments}")
             frappe.log_error(f"ADK Tool Call: {tool_name}\nConv: {conversation_id}\nArgs: {arguments}", "Niv AI Debug")
             
-            # ─── Confirmation Flow for Dangerous Tools ───
+            # ─── Confirmation Flow ───
+            # Check dev mode from Redis
+            from niv_ai.niv_core.langchain.tools import is_dev_mode_for
+            is_dev_mode = is_dev_mode_for(conversation_id) if conversation_id else False
+            
             needs_confirmation = False
             confirmation_reason = ""
             
-            if tool_name in NivAgentFactory.DANGEROUS_TOOLS:
+            # Dev mode: ALL write tools need confirmation
+            if is_dev_mode and tool_name in NivAgentFactory.WRITE_TOOLS:
+                print(f"[NIV_A2A_DEBUG] DEV MODE WRITE TOOL: {tool_name}")
+                frappe.log_error(f"DEV MODE WRITE: {tool_name}, needs_confirmation=True, conv={conversation_id}", "Niv AI Confirm")
+                needs_confirmation = True
+                confirmation_reason = f"dev_mode:{tool_name}"
+            # Normal mode: Only dangerous tools need confirmation
+            elif not is_dev_mode and tool_name in NivAgentFactory.DANGEROUS_TOOLS:
                 print(f"[NIV_A2A_DEBUG] DANGEROUS TOOL DETECTED: {tool_name}")
                 frappe.log_error(f"DANGEROUS TOOL: {tool_name}, needs_confirmation=True, conv={conversation_id}", "Niv AI Confirm")
                 needs_confirmation = True
                 confirmation_reason = tool_name
-            elif tool_name == "update_document":
-                # Check if updating critical fields
+            elif not is_dev_mode and tool_name == "update_document":
+                # Normal mode: Check if updating critical fields
                 data = arguments.get("data", {})
                 critical_changes = [f for f in data.keys() if f in NivAgentFactory.CRITICAL_FIELDS]
                 if critical_changes:
@@ -521,6 +534,17 @@ class NivAgentFactory:
                         f"⏸️ **CONFIRMATION REQUIRED**\n\n"
                         f"📤 **SUBMIT** `{doctype}`: **{doc_name}**\n\n"
                         f"⚠️ Submitted documents cannot be easily modified!\n\n"
+                        f"Ask the user to reply 'yes' or 'ha' to confirm, or 'no' to cancel."
+                    )
+                elif tool_name == "create_document":
+                    # Show what will be created
+                    summary_parts = [f"➕ **CREATE** `{doctype}`"]
+                    for k, v in list(data.items())[:8]:
+                        val_str = str(v)[:100]
+                        summary_parts.append(f"  - {k}: {val_str}")
+                    return (
+                        f"⏸️ **CONFIRMATION REQUIRED**\n\n"
+                        f"{chr(10).join(summary_parts)}\n\n"
                         f"Ask the user to reply 'yes' or 'ha' to confirm, or 'no' to cancel."
                     )
                 else:
