@@ -446,19 +446,92 @@ class NivAgentFactory:
         
         return adk_tools
 
+    # Dangerous tools that require user confirmation before execution
+    DANGEROUS_TOOLS = {"delete_document", "run_python_code", "submit_document"}
+    CRITICAL_FIELDS = {"docstatus", "status", "workflow_state", "owner", "modified_by"}
+
     def _make_tool_executor(self, tool_name: str, tool_description: str):
         """
         Create tool executor with proper Frappe context handling.
         
         CRITICAL: ADK runs tools in ThreadPoolExecutor.
         Must re-init Frappe context in each tool call.
+        
+        Also handles confirmation flow for dangerous operations.
         """
         site = self.site  # Capture at creation time
+        conversation_id = self.conversation_id  # Capture for confirmation tracking
         
         async def execute_tool(arguments: dict) -> str:
             """Execute MCP tool."""
             # Log for debugging
             frappe.log_error(f"ADK Tool Call: {tool_name}\nArgs: {arguments}", "Niv AI Debug")
+            
+            # ─── Confirmation Flow for Dangerous Tools ───
+            needs_confirmation = False
+            confirmation_reason = ""
+            
+            if tool_name in NivAgentFactory.DANGEROUS_TOOLS:
+                needs_confirmation = True
+                confirmation_reason = tool_name
+            elif tool_name == "update_document":
+                # Check if updating critical fields
+                data = arguments.get("data", {})
+                critical_changes = [f for f in data.keys() if f in NivAgentFactory.CRITICAL_FIELDS]
+                if critical_changes:
+                    needs_confirmation = True
+                    confirmation_reason = f"critical_fields:{','.join(critical_changes)}"
+            
+            if needs_confirmation and conversation_id:
+                # Store pending action for confirmation
+                from niv_ai.niv_core.langchain.tools import set_pending_dev_action
+                set_pending_dev_action(conversation_id, {
+                    "tool_name": tool_name,
+                    "arguments": arguments,
+                    "reason": confirmation_reason,
+                })
+                
+                # Build confirmation message for the LLM to relay to user
+                doctype = arguments.get("doctype", "Unknown")
+                doc_name = arguments.get("name", "")
+                data = arguments.get("data", {})
+                code = arguments.get("code", "")
+                
+                if tool_name == "delete_document":
+                    return (
+                        f"⏸️ **CONFIRMATION REQUIRED**\n\n"
+                        f"🗑️ **DELETE** `{doctype}`: **{doc_name}**\n\n"
+                        f"⚠️ This action cannot be undone!\n\n"
+                        f"Ask the user to reply 'yes' or 'ha' to confirm, or 'no' to cancel. "
+                        f"DO NOT proceed without explicit confirmation."
+                    )
+                elif tool_name == "run_python_code":
+                    code_preview = code[:300] + ("..." if len(code) > 300 else "")
+                    return (
+                        f"⏸️ **CONFIRMATION REQUIRED**\n\n"
+                        f"🐍 **RUN PYTHON CODE:**\n```python\n{code_preview}\n```\n\n"
+                        f"Ask the user to reply 'yes' or 'ha' to confirm, or 'no' to cancel. "
+                        f"DO NOT execute without explicit confirmation."
+                    )
+                elif tool_name == "submit_document":
+                    return (
+                        f"⏸️ **CONFIRMATION REQUIRED**\n\n"
+                        f"📤 **SUBMIT** `{doctype}`: **{doc_name}**\n\n"
+                        f"⚠️ Submitted documents cannot be easily modified!\n\n"
+                        f"Ask the user to reply 'yes' or 'ha' to confirm, or 'no' to cancel."
+                    )
+                else:
+                    # update with critical fields
+                    summary_parts = [f"📋 **{tool_name}** on `{doctype}`"]
+                    if doc_name:
+                        summary_parts[0] += f": **{doc_name}**"
+                    for k, v in list(data.items())[:5]:
+                        summary_parts.append(f"  - {k}: {str(v)[:50]}")
+                    return (
+                        f"⏸️ **CONFIRMATION REQUIRED**\n\n"
+                        f"{chr(10).join(summary_parts)}\n\n"
+                        f"Ask the user to reply 'yes' or 'ha' to confirm, or 'no' to cancel."
+                    )
             
             # Re-initialize Frappe context (ADK runs in thread pool)
             try:
