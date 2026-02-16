@@ -733,6 +733,67 @@ body.niv-chat-active .col-lg-12 {
     }
 }
 
+/* Mobile: Slide-up sheet style */
+@media (max-width: 768px) {
+    .niv-artifact-panel {
+        top: auto;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 70vh;
+        max-height: 70vh;
+        width: 100%;
+        max-width: 100%;
+        min-width: 100%;
+        border-left: none;
+        border-top: 1px solid var(--niv-border);
+        border-radius: 20px 20px 0 0;
+        box-shadow: 0 -4px 24px rgba(0,0,0,0.15);
+        animation: slideUpSheet 0.3s ease;
+    }
+    @keyframes slideUpSheet {
+        from { transform: translateY(100%); }
+        to { transform: translateY(0); }
+    }
+    .niv-artifact-panel.fullscreen {
+        height: 100vh;
+        max-height: 100vh;
+        border-radius: 0;
+    }
+    .niv-artifact-header {
+        padding: 12px 16px;
+        border-radius: 20px 20px 0 0;
+    }
+    /* Add drag handle for mobile */
+    .niv-artifact-header::before {
+        content: "";
+        display: block;
+        width: 40px;
+        height: 4px;
+        background: var(--niv-border);
+        border-radius: 2px;
+        margin: 0 auto 8px;
+    }
+    .niv-artifact-resize-handle {
+        display: none;
+    }
+    .niv-artifact-select {
+        max-width: 160px;
+        font-size: 11px;
+    }
+    .niv-artifact-title {
+        font-size: 13px;
+    }
+    /* Split view not practical on mobile */
+    .niv-artifact-panel.split-view .niv-artifact-content {
+        flex-direction: column;
+    }
+    .niv-artifact-panel.split-view .niv-artifact-tab-content[data-content="code"] {
+        border-left: none;
+        border-top: 1px solid var(--niv-border);
+    }
+}
+
 /* ── Chat Header — Minimal & Clean ── */
 .niv-chat-header {
     display: flex;

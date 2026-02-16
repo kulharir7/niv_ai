@@ -510,8 +510,9 @@ class NivChat {
             
             this.current_artifact_content = content;
             
-            // Update code view
+            // Update code view with syntax highlighting
             this.$artifactCode.text(content || "// No code yet");
+            this.highlight_artifact_code();
             
             // Update preview iframe
             if (content && (content.includes("<") || content.includes("{"))) {
@@ -563,6 +564,24 @@ class NivChat {
             navigator.clipboard.writeText(this.current_artifact_content).then(() => {
                 frappe.show_alert({ message: "Code copied!", indicator: "green" });
             });
+        }
+    }
+
+    highlight_artifact_code() {
+        // Apply syntax highlighting using highlight.js if available
+        if (typeof hljs !== "undefined" && this.$artifactCode && this.$artifactCode.length) {
+            const codeEl = this.$artifactCode.find("code")[0] || this.$artifactCode[0];
+            if (codeEl) {
+                // Detect language from content
+                const content = codeEl.textContent || "";
+                let lang = "html";
+                if (content.includes("def ") || content.includes("import ")) lang = "python";
+                else if (content.includes("function ") || content.includes("const ") || content.includes("let ")) lang = "javascript";
+                else if (content.includes("SELECT ") || content.includes("FROM ")) lang = "sql";
+                
+                codeEl.className = `language-${lang}`;
+                hljs.highlightElement(codeEl);
+            }
         }
     }
 
