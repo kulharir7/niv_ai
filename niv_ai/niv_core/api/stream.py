@@ -291,6 +291,47 @@ def stream_chat(**kwargs):
             from niv_ai.niv_core.langchain.agent import stream_agent
             from niv_ai.niv_core.langchain.tools import set_dev_mode as _set_dev_mode, set_active_dev_conversation
 
+            # ─── SIMPLE MODE (Direct LiteLLM + MCP — like Mistral) ───
+            use_simple = getattr(settings, "enable_simple_mode", 0)
+            if use_simple:
+                try:
+                    from niv_ai.niv_core.api.simple import stream_simple
+                    
+                    for event in stream_simple(
+                        message=message,
+                        conversation_id=conversation_id,
+                        provider_name=provider,
+                        model_name=model,
+                        user=user,
+                    ):
+                        event_type = event.get("type", "")
+                        if event_type == "token":
+                            content = event.get("content", "")
+                            if content:
+                                saw_token = True
+                                full_response += content
+                            yield _sse(event)
+                        elif event_type == "complete":
+                            pass  # Handled after loop
+                        elif event_type in ("tool_call", "tool_result", "thought", "error"):
+                            if event_type == "tool_call":
+                                saw_tool_activity = True
+                                tool_calls_data.append({"tool": event.get("tool", ""), "arguments": event.get("arguments", {})})
+                            elif event_type == "tool_result":
+                                tool_results_data.append({"tool": event.get("tool", ""), "result": str(event.get("result", ""))[:500]})
+                            yield _sse(event)
+                    
+                    # Simple mode done
+                    if full_response.strip():
+                        _ensure_db_connection()
+                        save_assistant_message(conversation_id, full_response, tool_calls_data)
+                        auto_title(conversation_id)
+                    yield _sse({"type": "done", "content": ""})
+                    return
+                except Exception as simple_err:
+                    frappe.log_error(f"Niv AI: Simple mode failed: {simple_err}", "Niv AI Stream")
+                    # Fall through to A2A/LangGraph
+
             # ─── A2A (google-adk) Branch ───
             use_a2a = getattr(settings, "enable_a2a", 0)
             adk_failed = False
