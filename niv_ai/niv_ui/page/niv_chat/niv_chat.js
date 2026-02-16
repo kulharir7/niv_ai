@@ -284,6 +284,9 @@ class NivChat {
         this.wrapper.find(".btn-artifact-download").on("click", () => this.download_artifact());
         this.$artifactSelect.on("change", (e) => this.select_artifact(e.target.value));
         this.wrapper.find(".niv-artifact-tab").on("click", (e) => this.switch_artifact_tab($(e.currentTarget).data("tab")));
+        
+        // Artifact panel resize handle
+        this.init_artifact_resize();
 
         this.wrapper.find(".btn-share-chat").on("click", () => this.share_conversation());
         this.wrapper.find(".btn-delete-chat").on("click", () => this.delete_conversation());
@@ -394,6 +397,40 @@ class NivChat {
         }
     }
 
+    init_artifact_resize() {
+        const $handle = this.wrapper.find(".niv-artifact-resize-handle");
+        const $panel = this.$artifactPanel;
+        if (!$handle.length || !$panel.length) return;
+        
+        let isDragging = false;
+        let startX = 0;
+        let startWidth = 0;
+        
+        $handle.on("mousedown", (e) => {
+            isDragging = true;
+            startX = e.clientX;
+            startWidth = $panel.width();
+            $handle.addClass("dragging");
+            $("body").css("cursor", "ew-resize").css("user-select", "none");
+            e.preventDefault();
+        });
+        
+        $(document).on("mousemove.artifactResize", (e) => {
+            if (!isDragging) return;
+            const diff = startX - e.clientX;
+            const newWidth = Math.min(Math.max(startWidth + diff, 320), window.innerWidth * 0.8);
+            $panel.css("width", newWidth + "px");
+        });
+        
+        $(document).on("mouseup.artifactResize", () => {
+            if (isDragging) {
+                isDragging = false;
+                $handle.removeClass("dragging");
+                $("body").css("cursor", "").css("user-select", "");
+            }
+        });
+    }
+
     async load_artifacts_list() {
         // Re-query element in case it wasn't ready at init
         if (!this.$artifactSelect || !this.$artifactSelect.length) {
@@ -431,13 +468,21 @@ class NivChat {
     }
 
     show_artifact_empty() {
-        const emptyHtml = `<!DOCTYPE html><html><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;color:#666;font-family:system-ui;background:#fafafa;">
-            <div style="font-size:48px;margin-bottom:16px;">✨</div>
-            <p style="margin:0;font-size:14px;">Type "app banao" in chat to create</p>
+        const emptyHtml = `<!DOCTYPE html><html><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;color:#888;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:linear-gradient(135deg,#fafafa 0%,#f0f0f0 100%);">
+            <div style="font-size:56px;margin-bottom:20px;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.1));">✨</div>
+            <p style="margin:0 0 8px;font-size:16px;font-weight:600;color:#333;">No Artifact Yet</p>
+            <p style="margin:0;font-size:13px;color:#888;max-width:240px;line-height:1.5;">Ask Niv to create an app, calculator, dashboard, or any interactive widget</p>
+            <div style="margin-top:24px;display:flex;gap:8px;flex-wrap:wrap;justify-content:center;max-width:280px;">
+                <span style="background:#f3f0ff;color:#7c3aed;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:500;">"EMI calculator banao"</span>
+                <span style="background:#ecfdf5;color:#059669;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:500;">"Create a todo app"</span>
+                <span style="background:#fef3c7;color:#d97706;padding:4px 10px;border-radius:12px;font-size:11px;font-weight:500;">"Sales dashboard"</span>
+            </div>
         </body></html>`;
         const blob = new Blob([emptyHtml], { type: "text/html;charset=utf-8" });
-        this.$artifactIframe.attr("src", URL.createObjectURL(blob));
-        this.$artifactCode.text("// No artifact selected");
+        if (this._currentBlobUrl) URL.revokeObjectURL(this._currentBlobUrl);
+        this._currentBlobUrl = URL.createObjectURL(blob);
+        this.$artifactIframe.attr("src", this._currentBlobUrl);
+        this.$artifactCode.text("// No artifact selected\n// Ask Niv to create one!");
         this.current_artifact_content = "";
     }
 
