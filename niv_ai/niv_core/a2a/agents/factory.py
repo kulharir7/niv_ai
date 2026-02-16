@@ -121,6 +121,7 @@ def store_tool_result_in_state(
 def init_agent_state(callback_context: CallbackContext) -> None:
     """
     Initialize state before agent runs.
+    Loads: System Knowledge Graph, NBFC Context, User Memory, Dev Reference
     """
     state = callback_context.state
     
@@ -130,7 +131,57 @@ def init_agent_state(callback_context: CallbackContext) -> None:
         if key not in state:
             state[key] = ""
     
-    # Load NBFC context
+    # ─── SYSTEM KNOWLEDGE GRAPH ───
+    # This gives agents awareness of what DocTypes exist in the system
+    if "system_doctypes" not in state:
+        try:
+            cache = frappe.cache().get_value("niv_system_knowledge_graph")
+            
+            # Auto-run system scan if not cached
+            if not cache:
+                try:
+                    from niv_ai.niv_core.knowledge.system_map import update_knowledge_graph
+                    graph = update_knowledge_graph()
+                    cache = json.dumps(graph)
+                except Exception:
+                    cache = None
+            
+            if cache:
+                graph = json.loads(cache) if isinstance(cache, str) else cache
+                # Create a compact summary for prompts
+                doctypes = list(graph.get("doctypes", {}).keys())
+                modules = graph.get("modules", {})
+                
+                summary_parts = []
+                summary_parts.append(f"Total DocTypes: {len(doctypes)}")
+                
+                # Group by module for readability
+                for module, dts in list(modules.items())[:10]:  # Top 10 modules
+                    if dts:
+                        summary_parts.append(f"  {module}: {', '.join(dts[:5])}" + ("..." if len(dts) > 5 else ""))
+                
+                state["system_doctypes"] = "\n".join(summary_parts)
+                state["system_doctype_list"] = doctypes[:100]  # Keep list for lookups
+            else:
+                # Fallback: fetch common DocTypes directly
+                try:
+                    common_dts = frappe.get_all("DocType", 
+                        filters={"istable": 0, "issingle": 0},
+                        fields=["name", "module"],
+                        limit=50
+                    )
+                    summary = f"Common DocTypes ({len(common_dts)}):\n"
+                    summary += ", ".join([d.name for d in common_dts[:20]])
+                    state["system_doctypes"] = summary
+                    state["system_doctype_list"] = [d.name for d in common_dts]
+                except Exception:
+                    state["system_doctypes"] = "System scan not available."
+                    state["system_doctype_list"] = []
+        except Exception as e:
+            state["system_doctypes"] = f"Could not load system knowledge: {e}"
+            state["system_doctype_list"] = []
+    
+    # ─── NBFC CONTEXT ───
     if "nbfc_context" not in state:
         try:
             cache = frappe.cache().get_value("niv_system_discovery_map")
@@ -142,7 +193,7 @@ def init_agent_state(callback_context: CallbackContext) -> None:
         except Exception:
             state["nbfc_context"] = {}
 
-    # Load User Persistent Memory
+    # ─── USER MEMORY ───
     if "user_memory" not in state or not state["user_memory"]:
         try:
             from niv_ai.niv_core.knowledge.memory_service import MemoryService
@@ -151,6 +202,14 @@ def init_agent_state(callback_context: CallbackContext) -> None:
             state["user_memory"] = mem or "No prior memory."
         except Exception:
             state["user_memory"] = "Could not load long-term memory."
+    
+    # ─── DEV QUICK REFERENCE (for coder agent) ───
+    if "dev_reference" not in state:
+        try:
+            from niv_ai.niv_core.knowledge.dev_quick_reference import DEV_QUICK_REFERENCE
+            state["dev_reference"] = DEV_QUICK_REFERENCE
+        except Exception:
+            state["dev_reference"] = ""
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -574,6 +633,8 @@ class NivAgentFactory:
             
             instruction=(
                 "You are an expert Frappe/ERPNext developer.\n\n"
+                "📚 SYSTEM KNOWLEDGE:\n"
+                "{system_doctypes}\n\n"
                 "🚨 REAL DATA ONLY:\n"
                 "1. Before creating ANYTHING → run 'get_doctype_info' to see what exists.\n"
                 "2. Before modifying → run 'get_document' to fetch current state.\n"
@@ -583,7 +644,9 @@ class NivAgentFactory:
                 "WORKFLOW:\n"
                 "- Create DocType? First: get_doctype_info → see structure.\n"
                 "- Add field? First: get_document → see existing fields.\n"
-                "- Modify? First: fetch current → then update."
+                "- Modify? First: fetch current → then update.\n\n"
+                "📖 FRAPPE DEVELOPMENT REFERENCE:\n"
+                "{dev_reference}"
             ),
             
             # STATE: Save output for orchestrator to read
@@ -623,16 +686,23 @@ class NivAgentFactory:
             
             instruction=(
                 "You are a Business Intelligence specialist.\n\n"
+                "📚 AVAILABLE DOCTYPES IN THIS SYSTEM:\n"
+                "{system_doctypes}\n\n"
                 "🚨 REAL DATA ONLY — ZERO MOCK DATA:\n"
                 "1. EVERY number you mention MUST come from a tool result.\n"
                 "2. If asked for counts/totals → run SQL query first.\n"
                 "3. If asked for reports → run report tool first.\n"
                 "4. NEVER say 'approximately' or 'around X' without real data.\n"
                 "5. If tool fails → say 'Query failed' — don't invent numbers.\n\n"
+                "TABLE NAMING CONVENTION:\n"
+                "- DocType 'Sales Order' → SQL table 'tabSales Order'\n"
+                "- DocType 'Customer' → SQL table 'tabCustomer'\n"
+                "- Always prefix table names with 'tab'\n\n"
                 "WORKFLOW:\n"
-                "- Unknown tables? Run: SELECT table_name FROM information_schema.tables\n"
-                "- Need count? Run: SELECT COUNT(*) FROM tabXXX\n"
-                "- Always show the query you ran and its result."
+                "- Unknown tables? Run: SELECT table_name FROM information_schema.tables WHERE table_name LIKE 'tab%'\n"
+                "- Need count? Run: SELECT COUNT(*) FROM `tabXXX`\n"
+                "- Always show the query you ran and its result.\n"
+                "- ALWAYS provide a clear answer to the user after getting data."
             ),
             
             output_key="analyst_result",
@@ -844,33 +914,35 @@ class NivAgentFactory:
             global_instruction=GLOBAL_INSTRUCTION,
             
             instruction=(
-                "You are Niv AI Orchestrator.\n\n"
-                "🚨 REAL DATA POLICY:\n"
-                "EVERY response with data MUST come from tool execution.\n"
-                "If you don't know → run a tool or transfer to specialist.\n"
-                "NEVER guess, assume, or provide example data.\n\n"
+                "You are Niv AI Orchestrator — the main coordinator.\n\n"
+                "📚 SYSTEM KNOWLEDGE:\n"
+                "{system_doctypes}\n\n"
                 "🧠 USER MEMORY:\n"
                 "{user_memory}\n\n"
+                "🚨 CRITICAL RULES:\n"
+                "1. EVERY response with data MUST come from tool execution.\n"
+                "2. NEVER guess, assume, or provide example data.\n"
+                "3. After getting specialist result → ALWAYS format and return it to user!\n\n"
                 "ROUTING RULES:\n"
-                "• Complex Projects/Module Creation → transfer to 'niv_planner'\n"
-                "• Coding/DocTypes/Scripts → transfer to 'frappe_coder'\n"
-                "• SQL/Reports/Analytics → transfer to 'data_analyst'\n"
-                "• Loans/EMI/NBFC → transfer to 'nbfc_specialist'\n"
-                "• System scan/discovery → transfer to 'system_discovery'\n"
-                "• QUALITY CHECK (mandatory for data/code) → transfer to 'niv_critique'\n\n"
-                "WORKFLOW:\n"
-                "1. Is it a complex multi-step request? Yes → transfer to 'niv_planner'.\n"
-                "2. If simple request → Run tool OR transfer to specialist.\n"
-                "3. Get tool result → BEFORE responding, transfer to 'niv_critique' to verify if data is REAL.\n"
-                "4. If plan exists → Execute current step and use 'update_task_plan'.\n"
-                "5. ALWAYS respond to the user in English first.\n\n"
-                "STATE ACCESS:\n"
-                "- {coder_result} — frappe_coder output\n"
-                "- {analyst_result} — data_analyst output\n"
-                "- {nbfc_result} — nbfc_specialist output\n"
-                "- {discovery_result} — system_discovery output\n"
-                "- {critique_result} — niv_critique verdict\n"
-                "- {planner_result} — niv_planner plan"
+                "• Data queries (count, list, show) → 'data_analyst'\n"
+                "• Coding/DocTypes/Scripts → 'frappe_coder'\n"
+                "• Loans/EMI/NBFC → 'nbfc_specialist'\n"
+                "• System scan → 'system_discovery'\n\n"
+                "⚡ WORKFLOW (IMPORTANT):\n"
+                "1. User asks question → Route to specialist\n"
+                "2. Specialist runs tools and returns result\n"
+                "3. YOU MUST read the specialist result and respond to user!\n"
+                "4. Format the answer clearly for the user.\n\n"
+                "SPECIALIST RESULTS (read these after delegation):\n"
+                "- analyst_result: {analyst_result}\n"
+                "- coder_result: {coder_result}\n"
+                "- nbfc_result: {nbfc_result}\n"
+                "- discovery_result: {discovery_result}\n\n"
+                "EXAMPLE:\n"
+                "User: 'How many customers?'\n"
+                "1. Transfer to data_analyst\n"
+                "2. data_analyst runs: SELECT COUNT(*) FROM tabCustomer → returns '9'\n"
+                "3. YOU read analyst_result='9' and respond: 'You have 9 customers in the system.'"
             ),
             
             output_key="orchestrator_result",
