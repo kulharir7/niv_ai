@@ -52,17 +52,58 @@ from niv_ai.niv_core.utils import get_niv_settings
 
 
 # ─────────────────────────────────────────────────────────────────
-# GLOBAL INSTRUCTION — Minimal, fast context
+# GLOBAL INSTRUCTION — Built dynamically with schema
 # ─────────────────────────────────────────────────────────────────
 
-GLOBAL_INSTRUCTION = f"""You are Niv AI for Frappe/ERPNext. Date: {date.today()}
+def _build_global_instruction() -> str:
+    """
+    Build global instruction with LIVE SCHEMA from cache.
+    Called when creating orchestrator, not at module load.
+    """
+    schema_text = ""
+    
+    try:
+        cached_graph = frappe.cache().get_value("niv_system_knowledge_graph")
+        if cached_graph:
+            graph_data = json.loads(cached_graph) if isinstance(cached_graph, str) else cached_graph
+            doctypes_info = graph_data.get("doctypes", {})
+            
+            # Priority DocTypes with fields
+            priority_doctypes = [
+                "Loan", "Repayment Schedule", "Customer", "Loan Application",
+                "Loan Disbursement", "Loan Repayment", "Sales Invoice", 
+                "Sales Order", "Purchase Order", "Item"
+            ]
+            
+            schema_lines = []
+            for dt_name in priority_doctypes:
+                if dt_name in doctypes_info:
+                    fields = doctypes_info[dt_name].get("fields", [])
+                    field_names = [
+                        f["fieldname"] for f in fields 
+                        if f.get("fieldtype") not in ["Section Break", "Column Break", "Tab Break", "HTML", "Button"]
+                    ][:10]
+                    if field_names:
+                        schema_lines.append(f"• {dt_name}: {', '.join(field_names)}")
+            
+            if schema_lines:
+                schema_text = "SYSTEM SCHEMA (use these exact field names):\n" + "\n".join(schema_lines)
+    except Exception as e:
+        frappe.log_error(f"_build_global_instruction schema fetch failed: {e}", "Niv AI")
+    
+    return f"""You are Niv AI for Frappe/ERPNext. Date: {date.today()}
+
+{schema_text}
+
+SQL TABLES: DocType "Loan" = table `tabLoan` (always prefix with "tab")
 
 CRITICAL RULES:
-1. CALL TOOLS FIRST - Never describe what you'll do. Just do it.
-2. NO CONFIRMATION PROMPTS - System handles confirmations. You just call tools.
-3. Use tools for ALL data. Never invent data.
-4. If tool returns "CONFIRMATION REQUIRED", relay that message to user and STOP.
-5. If tool fails, say so honestly."""
+1. USE SCHEMA ABOVE - Use exact field names shown. Don't guess.
+2. CALL TOOLS FIRST - Never describe what you'll do. Just do it.
+3. NO CONFIRMATION PROMPTS - System handles confirmations. You just call tools.
+4. Use tools for ALL data. Never invent data.
+5. If tool returns "CONFIRMATION REQUIRED", relay that message to user and STOP.
+6. If tool fails, say so honestly."""
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -121,8 +162,8 @@ def init_agent_state(callback_context: CallbackContext) -> None:
     """
     Initialize state before agent runs.
     
-    Loads system DocTypes from cache (fast) or triggers scan if not cached.
-    This gives agents context about what DocTypes exist without calling tools.
+    Loads system DocTypes WITH KEY FIELDS from cache.
+    This gives agents actual schema knowledge, not just DocType names.
     """
     state = callback_context.state
     
@@ -132,29 +173,60 @@ def init_agent_state(callback_context: CallbackContext) -> None:
         if key not in state:
             state[key] = ""
     
-    # Load system DocTypes from cache (or trigger lazy scan)
+    # Load system DocTypes WITH FIELDS from cache
     if "system_doctypes" not in state:
         try:
-            # Try to get from Redis cache first (fast path)
             cached_graph = frappe.cache().get_value("niv_system_knowledge_graph")
             if cached_graph:
                 graph_data = json.loads(cached_graph) if isinstance(cached_graph, str) else cached_graph
-                doctype_names = list(graph_data.get("doctypes", {}).keys())[:100]  # Limit to 100 for prompt size
-                state["system_doctypes"] = f"Available DocTypes: {', '.join(doctype_names)}"
+                doctypes_info = graph_data.get("doctypes", {})
+                
+                # Priority DocTypes — these get FULL field details
+                priority_doctypes = [
+                    "Loan", "Repayment Schedule", "Customer", "Loan Application",
+                    "Loan Disbursement", "Loan Repayment", "Sales Invoice", 
+                    "Sales Order", "Purchase Order", "Item", "Stock Entry"
+                ]
+                
+                schema_lines = ["SYSTEM SCHEMA (use exact field names):"]
+                
+                # Add priority DocTypes with their fields
+                for dt_name in priority_doctypes:
+                    if dt_name in doctypes_info:
+                        dt_info = doctypes_info[dt_name]
+                        fields = dt_info.get("fields", [])
+                        
+                        # Get important field names (skip layout fields)
+                        field_names = [
+                            f["fieldname"] for f in fields 
+                            if f.get("fieldtype") not in ["Section Break", "Column Break", "Tab Break", "HTML", "Button"]
+                        ][:12]  # Limit to 12 fields per DocType
+                        
+                        if field_names:
+                            schema_lines.append(f"• {dt_name}: {', '.join(field_names)}")
+                
+                # Add SQL hint
+                schema_lines.append("")
+                schema_lines.append("SQL TABLES: DocType 'Loan' → table `tabLoan` (always prefix 'tab')")
+                
+                # Add other DocTypes as just names (for awareness)
+                other_doctypes = [dt for dt in list(doctypes_info.keys())[:40] 
+                                 if dt not in priority_doctypes]
+                if other_doctypes:
+                    schema_lines.append(f"Other DocTypes: {', '.join(other_doctypes[:25])}...")
+                
+                state["system_doctypes"] = "\n".join(schema_lines)
             else:
-                # Cache miss — run scan in background, use placeholder for now
-                # This avoids blocking the agent start
-                state["system_doctypes"] = "Use get_system_knowledge_graph() tool to discover DocTypes."
-                # Trigger async cache refresh (non-blocking)
+                # Cache miss — trigger rebuild, use minimal placeholder
+                state["system_doctypes"] = "Schema loading... Use get_doctype_info(doctype) for field details."
                 try:
                     from niv_ai.niv_core.knowledge.system_map import update_knowledge_graph
-                    # Run scan and cache result (will be available for next request)
                     update_knowledge_graph()
                 except Exception:
-                    pass  # Don't fail agent init if scan fails
+                    pass
         except Exception as e:
-            frappe.log_error(f"init_agent_state failed to load DocTypes: {e}", "Niv AI A2A")
-            state["system_doctypes"] = "Use get_system_knowledge_graph() tool to discover DocTypes."
+            frappe.log_error(f"init_agent_state failed: {e}", "Niv AI A2A")
+            state["system_doctypes"] = "Use get_doctype_info(doctype) to discover fields."
     
     if "nbfc_context" not in state:
         state["nbfc_context"] = {}
@@ -908,8 +980,8 @@ class NivAgentFactory:
             
             description="Routes requests to specialists.",
             
-            # COMMON CONTEXT for all agents
-            global_instruction=GLOBAL_INSTRUCTION,
+            # COMMON CONTEXT for all agents — built dynamically with live schema
+            global_instruction=_build_global_instruction(),
             
             instruction=(
                 "Route user requests to specialists. Be FAST.\n\n"
