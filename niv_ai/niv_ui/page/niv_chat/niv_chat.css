@@ -568,27 +568,47 @@ body.niv-chat-active .col-lg-12 {
 
 .niv-artifact-tabs {
     display: flex;
-    gap: 0;
-    padding: 0 16px;
+    gap: 4px;
+    padding: 8px 16px;
     border-bottom: 1px solid var(--niv-border);
-    background: var(--niv-sidebar-bg);
+    background: var(--niv-bg);
 }
 
 .niv-artifact-tab {
-    padding: 12px 20px;
+    padding: 8px 16px;
     border: none;
     background: transparent;
     color: var(--niv-text-muted);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 500;
     cursor: pointer;
-    border-bottom: 2px solid transparent;
+    border-radius: 6px;
     transition: all 0.15s ease;
 }
-.niv-artifact-tab:hover { color: var(--niv-text); }
+.niv-artifact-tab:hover {
+    color: var(--niv-text);
+    background: var(--niv-hover);
+}
 .niv-artifact-tab.active {
     color: var(--niv-primary);
-    border-bottom-color: var(--niv-primary);
+    background: rgba(124, 58, 237, 0.1);
+}
+
+/* Split view mode */
+.niv-artifact-panel.split-view .niv-artifact-content {
+    display: flex;
+    flex-direction: row;
+}
+.niv-artifact-panel.split-view .niv-artifact-tab-content {
+    position: relative;
+    flex: 1;
+    display: block !important;
+}
+.niv-artifact-panel.split-view .niv-artifact-tab-content[data-content="code"] {
+    border-left: 1px solid var(--niv-border);
+}
+.niv-artifact-panel.split-view .niv-artifact-tabs {
+    display: none;
 }
 
 .niv-artifact-content {
