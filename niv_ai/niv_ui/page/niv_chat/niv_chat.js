@@ -236,7 +236,10 @@ class NivChat {
             const val = this.$input.val().trim();
             if (val) {
                 this.$inputPill.addClass("has-text");
-                localStorage.setItem("niv_draft", this.$input.val());
+                // Don't save slash commands as drafts (they're instant actions)
+                if (!val.startsWith("/")) {
+                    localStorage.setItem("niv_draft", this.$input.val());
+                }
             } else {
                 this.$inputPill.removeClass("has-text");
                 localStorage.removeItem("niv_draft");
@@ -245,10 +248,14 @@ class NivChat {
 
         // Restore draft message on page load
         const draft = localStorage.getItem("niv_draft");
-        if (draft) {
+        if (draft && !draft.trim().startsWith("/")) {
+            // Don't restore slash commands
             this.$input.val(draft);
             this.$inputPill.addClass("has-text");
             this.auto_resize_input();
+        } else if (draft && draft.trim().startsWith("/")) {
+            // Clear stale slash command drafts
+            localStorage.removeItem("niv_draft");
         }
 
         // Enter to send
@@ -730,6 +737,33 @@ ${htmlCode}
             finalHtml = htmlCode.replace("</head>", '<script src="https://cdn.jsdelivr.net/npm/frappe-charts@1.6.2/dist/frappe-charts.min.iife.js"></script></head>');
         }
         
+        // Add error handling script to catch runtime errors in artifact
+        const errorHandler = `<script>
+            window.onerror = function(msg, url, line, col, error) {
+                document.body.innerHTML = '<div style="color:#dc2626;padding:20px;font-family:monospace;">' +
+                    '<h3>⚠️ Artifact Error</h3>' +
+                    '<p><strong>Message:</strong> ' + msg + '</p>' +
+                    '<p><strong>Line:</strong> ' + line + '</p>' +
+                    '<p style="margin-top:10px;color:#666;">Check the code for syntax errors.</p>' +
+                    '</div>';
+                return true;
+            };
+            // Catch infinite loops with a timeout
+            var _nivLoopCheck = 0;
+            var _nivOriginalSetInterval = window.setInterval;
+            window.setInterval = function(fn, ms) {
+                if (ms < 10) ms = 10; // Prevent tight loops
+                return _nivOriginalSetInterval(fn, ms);
+            };
+        </script>`;
+        
+        // Inject error handler before </head>
+        if (finalHtml.includes("</head>")) {
+            finalHtml = finalHtml.replace("</head>", errorHandler + "</head>");
+        } else {
+            finalHtml = errorHandler + finalHtml;
+        }
+        
         // Use blob URL for reliable script execution
         const blob = new Blob([finalHtml], { type: "text/html;charset=utf-8" });
         const url = URL.createObjectURL(blob);
@@ -740,7 +774,28 @@ ${htmlCode}
         }
         this._currentBlobUrl = url;
         
+        // Add sandbox for security (allow scripts and forms, but isolate)
+        this.$artifactIframe.attr("sandbox", "allow-scripts allow-forms allow-same-origin");
+        
+        // Set up error handling for iframe load failures
+        this.$artifactIframe.off("error.artifact").on("error.artifact", () => {
+            console.error("[Niv] Artifact iframe failed to load");
+            this.show_artifact_error("Failed to load artifact preview");
+        });
+        
         this.$artifactIframe.attr("src", url);
+    }
+    
+    show_artifact_error(message) {
+        const errorHtml = `<!DOCTYPE html><html><body style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;margin:0;color:#dc2626;font-family:system-ui;background:#fef2f2;">
+            <div style="font-size:48px;margin-bottom:16px;">⚠️</div>
+            <p style="margin:0;font-size:14px;">${message}</p>
+            <p style="margin:8px 0 0;font-size:12px;color:#666;">Check the code tab for errors</p>
+        </body></html>`;
+        const blob = new Blob([errorHtml], { type: "text/html;charset=utf-8" });
+        if (this._currentBlobUrl) URL.revokeObjectURL(this._currentBlobUrl);
+        this._currentBlobUrl = URL.createObjectURL(blob);
+        this.$artifactIframe.attr("src", this._currentBlobUrl);
     }
 
     extract_code_from_response(content) {
@@ -1880,13 +1935,30 @@ ${htmlCode}
                                     continue;
                                 }
                                 
-                                // Find the matching running tool call by name, or first running
-                                var $running = $msgEl.find(`.tool-call-accordion.running[data-tool="${toolName}"]`).first();
-                                if (!$running.length) {
-                                    $running = $msgEl.find(".tool-call-accordion.running").first();
+                                // IMPROVED: Match tool results to calls using a queue
+                                // Priority: 1) Exact name match, 2) Oldest running tool (FIFO queue)
+                                var $running = null;
+                                
+                                // First try exact name match
+                                var $exactMatch = $msgEl.find(`.tool-call-accordion.running[data-tool="${toolName}"]`).first();
+                                if ($exactMatch.length) {
+                                    $running = $exactMatch;
+                                } else {
+                                    // Fallback: use FIFO order (oldest running tool)
+                                    // Tools are appended in order, so first .running in DOM is oldest
+                                    var $allRunning = $msgEl.find(".tool-call-accordion.running");
+                                    if ($allRunning.length === 1) {
+                                        // Only one running, must be this one
+                                        $running = $allRunning.first();
+                                    } else if ($allRunning.length > 1) {
+                                        // Multiple running - log warning but use first (oldest)
+                                        console.warn(`[Niv] Tool result for '${toolName}' but ${$allRunning.length} tools running. Using oldest.`);
+                                        $running = $allRunning.first();
+                                    }
+                                    // If no running tools, result is orphaned (tool_call event was skipped)
                                 }
                                 
-                                if ($running.length) {
+                                if ($running && $running.length) {
                                     $running.removeClass("running");
                                     $running.find(".tool-status-icon").removeClass("fa-spinner fa-spin").addClass("fa-check-circle");
                                     var resultStr = typeof data.result === "string" ? data.result : JSON.stringify(data.result || {}, null, 2);
@@ -3884,5 +3956,11 @@ ${htmlCode}
         if (this.typing_timer) clearInterval(this.typing_timer);
         window.speechSynthesis && window.speechSynthesis.cancel();
         this.close_voice_mode();
+        
+        // Cleanup blob URLs to prevent memory leak
+        if (this._currentBlobUrl) {
+            URL.revokeObjectURL(this._currentBlobUrl);
+            this._currentBlobUrl = null;
+        }
     }
 }
