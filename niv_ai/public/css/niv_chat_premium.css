@@ -249,45 +249,66 @@
 }
 
 /* ── TABLE STYLING FOR DARK MODE ── */
+.niv-chat-container table,
+.niv-chat-messages table,
 .msg-content table {
-    width: 100%;
-    border-collapse: collapse;
-    margin: 12px 0;
-    background: rgba(15, 23, 42, 0.6);
-    border-radius: 8px;
-    overflow: hidden;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 12px 0 !important;
+    background: rgba(15, 23, 42, 0.8) !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    border: 1px solid rgba(124, 58, 237, 0.3) !important;
 }
 
+.niv-chat-container table th,
+.niv-chat-messages table th,
 .msg-content table th {
-    background: rgba(124, 58, 237, 0.2);
+    background: rgba(124, 58, 237, 0.25) !important;
     color: #e2e8f0 !important;
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 11px;
-    letter-spacing: 0.05em;
-    padding: 12px 16px;
-    text-align: left;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    font-weight: 600 !important;
+    text-transform: uppercase !important;
+    font-size: 11px !important;
+    letter-spacing: 0.05em !important;
+    padding: 12px 16px !important;
+    text-align: left !important;
+    border-bottom: 1px solid rgba(124, 58, 237, 0.3) !important;
 }
 
+.niv-chat-container table td,
+.niv-chat-messages table td,
 .msg-content table td {
-    color: #e2e8f0 !important;
-    padding: 10px 16px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-    font-size: 14px;
+    color: #f1f5f9 !important;
+    padding: 12px 16px !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+    font-size: 14px !important;
+    background: transparent !important;
 }
 
+.niv-chat-container table tbody tr,
+.niv-chat-messages table tbody tr,
+.msg-content table tbody tr {
+    background: transparent !important;
+}
+
+.niv-chat-container table tr:last-child td,
+.niv-chat-messages table tr:last-child td,
 .msg-content table tr:last-child td {
-    border-bottom: none;
+    border-bottom: none !important;
 }
 
+.niv-chat-container table tr:hover td,
+.niv-chat-messages table tr:hover td,
 .msg-content table tr:hover td {
-    background: rgba(124, 58, 237, 0.1);
+    background: rgba(124, 58, 237, 0.15) !important;
 }
 
+.niv-chat-container table td em,
+.niv-chat-container table td i,
+.niv-chat-messages table td em,
+.niv-chat-messages table td i,
 .msg-content table td em,
 .msg-content table td i {
-    color: rgba(255, 255, 255, 0.5) !important;
-    font-style: italic;
+    color: rgba(255, 255, 255, 0.6) !important;
+    font-style: italic !important;
 }
