@@ -2268,16 +2268,25 @@ body.niv-dark-mode .niv-empty-state .empty-greeting {
 /* ══════════════════════════════════════════════════════════
    MARKDOWN CONTENT
    ══════════════════════════════════════════════════════════ */
+/* Table wrapper for horizontal scroll */
+.msg-content .table-wrapper {
+    overflow-x: auto;
+    margin: 16px 0;
+    border-radius: 12px;
+    border: 1px solid var(--niv-border);
+}
 .msg-content table {
     border-collapse: separate;
     border-spacing: 0;
     width: 100%;
-    margin: 16px 0;
+    max-width: 100%;
     font-size: 13.5px;
     overflow: hidden;
     border-radius: 12px;
-    border: 1px solid var(--niv-border);
+    border: none;
     background: rgba(0, 0, 0, 0.02);
+    margin: 0;
+    display: table;
 }
 .msg-content thead th {
     background: #f1f5f9;

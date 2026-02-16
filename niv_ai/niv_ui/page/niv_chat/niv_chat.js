@@ -1760,6 +1760,9 @@ ${htmlCode}
             try {
                 let html = marked.parse(processedText);
                 html = html.replace(/<a /g, '<a target="_blank" ');
+                // Wrap tables in scrollable container
+                html = html.replace(/<table>/g, '<div class="table-wrapper"><table>');
+                html = html.replace(/<\/table>/g, '</table></div>');
                 // Render inline images with lightbox
                 html = html.replace(/<img\s+([^>]*?)src="([^"]+)"([^>]*?)>/g,
                     '<img $1src="$2"$3 class="niv-inline-image" onclick="window.open(\'$2\', \'_blank\')" style="max-width:100%;border-radius:8px;cursor:pointer;margin:8px 0;" />');
