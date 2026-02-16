@@ -1,22 +1,45 @@
-openai
-tiktoken
+# Core LLM
+openai>=1.0.0
+litellm>=1.40.0
+tiktoken>=0.7.0
+
+# LangChain Stack
 langchain>=0.3.0
+langchain-core>=0.3.0
 langchain-openai>=0.3.0
-langgraph>=0.3.0
 langchain-community>=0.3.0
-faiss-cpu
-pytesseract
-pdfplumber
-python-docx
-Pillow
-pandas
-openpyxl
-razorpay
-google-adk==1.25.0
+langgraph>=0.3.0
+
+# Google ADK (Agent Development Kit)
+google-adk>=1.25.0
 google-genai>=1.63.0
+
+# MCP (Model Context Protocol)
 mcp>=1.26.0
-langchain-mcp-adapters
-edge-tts
-# piper-tts is optional — install manually for OFFLINE TTS fallback:
-#   pip install piper-tts
-# It may not work on all platforms (requires Python 3.9+ and specific OS support)
+langchain-mcp-adapters>=0.1.0
+
+# Vector Store
+faiss-cpu>=1.7.0
+
+# Document Processing
+pdfplumber>=0.10.0
+python-docx>=1.0.0
+pytesseract>=0.3.10
+Pillow>=10.0.0
+
+# Data Processing
+pandas>=2.0.0
+openpyxl>=3.1.0
+numpy>=1.24.0
+
+# Payments
+razorpay>=1.4.0
+
+# TTS
+edge-tts>=6.1.0
+
+# Utils
+pydantic>=2.0.0
+httpx>=0.27.0
+aiohttp>=3.9.0
+python-dotenv>=1.0.0

@@ -1,0 +1,107 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "niv_ai"
+version = "0.6.0a1"
+description = "Niv AI - Multi-Agent AI Assistant for ERPNext with A2A Protocol"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Ravindra Kulhari", email = "kulharir7@gmail.com"}
+]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Framework :: Frappe",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+keywords = ["frappe", "erpnext", "ai", "llm", "agents", "a2a", "mcp"]
+
+dependencies = [
+    # Core LLM
+    "openai>=1.0.0",
+    "litellm>=1.40.0",
+    "tiktoken>=0.7.0",
+    
+    # LangChain Stack
+    "langchain>=0.3.0",
+    "langchain-core>=0.3.0",
+    "langchain-openai>=0.3.0",
+    "langchain-community>=0.3.0",
+    "langgraph>=0.3.0",
+    
+    # Google ADK (Agent Development Kit)
+    "google-adk>=1.25.0",
+    "google-genai>=1.63.0",
+    
+    # MCP (Model Context Protocol)
+    "mcp>=1.26.0",
+    "langchain-mcp-adapters>=0.1.0",
+    
+    # Vector Store
+    "faiss-cpu>=1.7.0",
+    
+    # Document Processing
+    "pdfplumber>=0.10.0",
+    "python-docx>=1.0.0",
+    "pytesseract>=0.3.10",
+    "Pillow>=10.0.0",
+    
+    # Data Processing
+    "pandas>=2.0.0",
+    "openpyxl>=3.1.0",
+    "numpy>=1.24.0",
+    
+    # Payments
+    "razorpay>=1.4.0",
+    
+    # TTS
+    "edge-tts>=6.1.0",
+    
+    # Utils
+    "pydantic>=2.0.0",
+    "httpx>=0.27.0",
+    "aiohttp>=3.9.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+tts-offline = [
+    "piper-tts>=1.2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/kulharir7/niv_ai"
+Documentation = "https://github.com/kulharir7/niv_ai#readme"
+Repository = "https://github.com/kulharir7/niv_ai.git"
+Issues = "https://github.com/kulharir7/niv_ai/issues"
+
+[tool.setuptools]
+packages = ["niv_ai"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.txt", "*.html", "*.css", "*.js"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
