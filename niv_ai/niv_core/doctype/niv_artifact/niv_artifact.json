@@ -60,8 +60,9 @@
   },
   {
    "fieldname": "artifact_content",
-   "fieldtype": "Long Text",
-   "label": "Artifact Content (JSON)"
+   "fieldtype": "Code",
+   "label": "Artifact Content",
+   "options": "HTML"
   },
   {
    "fieldname": "preview_html",
