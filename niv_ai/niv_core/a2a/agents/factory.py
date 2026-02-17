@@ -901,7 +901,7 @@ class NivAgentFactory:
         """
         tool_names = [
             "run_nbfc_audit", "run_database_query", "list_documents", "get_doctype_info",
-            "get_document", "search_documents", "get_cibil_score", "check_credit_eligibility", "get_credit_history",
+            "get_document", "search_documents", "create_document", "update_document", "get_cibil_score", "check_credit_eligibility", "get_credit_history",
         ]
         
         return LlmAgent(
