@@ -924,7 +924,19 @@ class NivAgentFactory:
                 "1. Run tools IMMEDIATELY - never describe, just do.\n"
                 "2. Use ACTUAL field names from system discovery state.\n"
                 "3. If field doesn't exist, say so honestly.\n"
-                "4. For calculations (WRR/PAR/NPA), prefer nbfc_analytics over raw SQL."
+                "4. For calculations (WRR/PAR/NPA), prefer nbfc_analytics over raw SQL.\n\n"
+                "=== USE STATE KNOWLEDGE FIRST ===\n"
+                "Your state has 'system_knowledge' with all DocTypes and fields.\n"
+                "DO NOT call get_doctype_info or search_doctype for common queries.\n\n"
+                
+                "=== COMMON QUERIES → SINGLE TOOL CALL ===\n"
+                "- 'Top 10 loans' → list_documents(doctype='Loan', limit=10, order_by='disbursed_amount desc')\n"
+                "- 'Overdue loans' → run_database_query('SELECT name, applicant, disbursed_amount, dpd FROM tabLoan WHERE dpd > 0')\n"
+                "- 'Loan details' → get_document(doctype='Loan', name='LOAN-ID')\n"
+                "- 'Customer loans' → list_documents(doctype='Loan', filters={'applicant': 'CUSTOMER-ID'})\n"
+                "- 'Credit score' → nbfc_credit_scoring(loan_application_id='LA-ID')\n\n"
+                
+                "CRITICAL: ONE tool call per simple query. Don't explore - just execute!"
             ),
             
             output_key="nbfc_result",
