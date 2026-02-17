@@ -307,6 +307,29 @@ def _tts_openai(text, voice, model, response_format, config):
 
 # ─── Public APIs ─────────────────────────────────────────────────────────
 
+def _detect_language(text):
+    """Detect if text is Hindi or English"""
+    # Check for Devanagari script
+    has_devanagari = any(ord(c) >= 0x0900 and ord(c) <= 0x097F for c in text)
+    if has_devanagari:
+        return "hi"
+    
+    # Check for common Hindi words in Roman script
+    hindi_words = [
+        "kya", "hai", "haan", "nahi", "aap", "main", "kaise", "mera", "tera",
+        "kitna", "kitne", "kab", "kahan", "kaun", "kyun", "karo", "karna",
+        "dikhao", "batao", "bolo", "suno", "dekho", "jao", "aao", "lo", "do",
+        "accha", "theek", "bahut", "abhi", "yahan", "wahan", "isko", "usko",
+        "mujhe", "tumhe", "humko", "unko", "sabhi", "koi", "kuch", "sab"
+    ]
+    text_lower = text.lower()
+    hindi_count = sum(1 for w in hindi_words if w in text_lower.split())
+    if hindi_count >= 2:
+        return "hi"
+    
+    return "en"
+
+
 def _tts_edge(text, voice=None):
     """Edge TTS — Microsoft Azure neural voices, free, unlimited, human-like."""
     try:
@@ -315,12 +338,10 @@ def _tts_edge(text, voice=None):
     except ImportError:
         return None
 
-    # Default voices based on language detection
-    if not voice:
-        # Simple Hindi detection
-        has_hindi = any(ord(c) > 0x0900 and ord(c) < 0x097F for c in text)
-        has_hindi_words = any(w in text.lower() for w in ["kya", "hai", "haan", "nahi", "aap", "main", "kaise", "mera", "tera"])
-        if has_hindi or has_hindi_words:
+    # Handle "auto" or no voice - detect language
+    if not voice or voice == "auto":
+        lang = _detect_language(text)
+        if lang == "hi":
             voice = "hi-IN-SwaraNeural"  # Female Hindi
         else:
             voice = "en-US-JennyNeural"  # Female English — natural, warm
