@@ -82,10 +82,3 @@ scheduler_events = {
     ]
 }
 
-# MCP Tools for Frappe Assistant Core
-# These tools are registered with FAC and available to all AI agents
-assistant_tools = [
-    "niv_ai.niv_core.tools.cibil_tools.get_cibil_score_tool",
-    "niv_ai.niv_core.tools.cibil_tools.check_credit_eligibility_tool",
-    "niv_ai.niv_core.tools.cibil_tools.get_credit_history_tool",
-]
