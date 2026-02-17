@@ -433,11 +433,51 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
     return {"audio_url": None, "engine": "browser", "text": text}
 
 
+
+
+# ─── Faster-Whisper STT (Free, Local) ────────────────────────────────────
+
+_whisper_model = None
+
+def _get_whisper_model():
+    """Get or load Whisper model (lazy loading, cached)"""
+    global _whisper_model
+    if _whisper_model is None:
+        try:
+            from faster_whisper import WhisperModel
+            # Use 'base' model for speed, 'small' or 'medium' for accuracy
+            # CPU inference with int8 quantization for efficiency
+            _whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+            frappe.logger().info("Faster-Whisper model loaded: base")
+        except Exception as e:
+            frappe.logger().warning(f"Failed to load Whisper model: {e}")
+            return None
+    return _whisper_model
+
+
+def _stt_whisper(audio_path):
+    """Transcribe audio using Faster-Whisper (local, free, offline)"""
+    model = _get_whisper_model()
+    if not model:
+        return None
+    
+    try:
+        segments, info = model.transcribe(audio_path, beam_size=5)
+        text = " ".join([segment.text for segment in segments])
+        frappe.logger().info(f"Whisper STT: {info.language} ({info.language_probability:.0%}) - {len(text)} chars")
+        return {"text": text.strip(), "language": info.language, "engine": "whisper-local"}
+    except Exception as e:
+        frappe.logger().warning(f"Whisper STT failed: {e}")
+        return None
+
+
 @frappe.whitelist(allow_guest=False)
-def speech_to_text(audio_file):
+def speech_to_text(audio_file, engine=None):
     """
-    Transcribe audio using OpenAI-compatible or Mistral STT API.
-    audio_file: URL of uploaded file
+    Transcribe audio. Tries engines in order:
+    1. Faster-Whisper (free, local, offline)
+    2. Mistral STT / OpenAI Whisper API (if configured)
+    3. Returns error if none available
     """
     check_rate_limit()
     log_api_call("speech_to_text")
@@ -446,15 +486,25 @@ def speech_to_text(audio_file):
         frappe.throw("No audio file provided")
 
     config = _get_voice_config()
-    if not config.get("api_key"):
-        frappe.throw("No API key configured for STT. Use browser speech recognition instead.")
-
+    stt_engine = engine or config.get("stt_engine", "auto")
+    
+    # Resolve file path
     file_path = frappe.get_site_path("private" if "/private/" in audio_file else "public",
                                       "files", os.path.basename(audio_file))
     if not os.path.exists(file_path):
         file_path = frappe.get_site_path(audio_file.lstrip("/"))
     if not os.path.exists(file_path):
         frappe.throw(f"Audio file not found: {audio_file}")
+    
+    # Try Faster-Whisper first (free, local)
+    if stt_engine in ("auto", "whisper", "whisper-local"):
+        result = _stt_whisper(file_path)
+        if result:
+            return result
+    
+    # Fall back to API-based STT
+    if not config.get("api_key"):
+        frappe.throw("No STT available. Install faster-whisper or configure API key.")
 
     # Auto-detect STT model based on provider
     provider_type = config.get("provider_type", "openai")
