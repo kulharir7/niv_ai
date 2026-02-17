@@ -26,9 +26,11 @@ def clean_text_for_tts(text):
 
     t = text
 
-    # Remove thinking/reasoning blocks
+    # Remove thinking/reasoning blocks (all formats)
     t = re.sub(r'<think>[\s\S]*?</think>', '', t)
     t = re.sub(r'<reasoning>[\s\S]*?</reasoning>', '', t)
+    t = re.sub(r'\[\[THOUGHT\]\][\s\S]*?\[\[/THOUGHT\]\]', '', t)
+    t = re.sub(r'\[\[THINKING\]\][\s\S]*?\[\[/THINKING\]\]', '', t)
     t = re.sub(r'(?m)^Thought:.*$', '', t)
     t = re.sub(r'(?m)^Action:.*$', '', t)
     t = re.sub(r'(?m)^Action Input:.*$', '', t)

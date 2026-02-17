@@ -1627,7 +1627,10 @@ ${htmlCode}
         }
     }
 
-    append_message(role, content, meta = {}) {
+    append_message(role, content, meta = {
+        // Strip internal thinking from assistant messages
+        if (role === "assistant" && content) content = this.stripThinkingTags(content);
+}) {
         this.hide_empty_state();
         const isUser = role === "user";
         const avatar = isUser ? this.get_user_avatar() : '<div class="msg-avatar-icon">🛰️</div>';
@@ -2491,10 +2494,25 @@ ${htmlCode}
 
     // ─── TTS ────────────────────────────────────────────────────────
 
-    cleanTextForTTS(text) {
-        // Strip thinking/reasoning blocks first
+
+    /**
+     * Strip internal thinking tags from content before display
+     */
+    stripThinkingTags(text) {
+        if (!text) return text;
+        text = text.replace(/\[\[THOUGHT\]\][\s\S]*?\[\[\/THOUGHT\]\]/g, '');
+        text = text.replace(/\[\[THINKING\]\][\s\S]*?\[\[\/THINKING\]\]/g, '');
         text = text.replace(/<think>[\s\S]*?<\/think>/g, '');
         text = text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, '');
+        return text.trim();
+    }
+
+    cleanTextForTTS(text) {
+        // Strip thinking/reasoning blocks first (all formats)
+        text = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+        text = text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, '');
+        text = text.replace(/\[\[THOUGHT\]\][\s\S]*?\[\[\/THOUGHT\]\]/g, '');
+        text = text.replace(/\[\[THINKING\]\][\s\S]*?\[\[\/THINKING\]\]/g, '');
         text = text.replace(/^Thought:.*$/gm, '');
         text = text.replace(/^Action:.*$/gm, '');
         text = text.replace(/^Action Input:.*$/gm, '');

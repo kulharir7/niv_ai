@@ -171,6 +171,9 @@ def _strip_thinking(text):
     text = re.sub(r'<think>[\s\S]*?</think>', '', text)
     # Remove <reasoning>...</reasoning>
     text = re.sub(r'<reasoning>[\s\S]*?</reasoning>', '', text)
+    # Remove [[THOUGHT]]...[[/THOUGHT]] blocks (Mistral Large style)
+    text = re.sub(r'\[\[THOUGHT\]\][\s\S]*?\[\[/THOUGHT\]\]', '', text)
+    text = re.sub(r'\[\[THINKING\]\][\s\S]*?\[\[/THINKING\]\]', '', text)
     # Remove Thought: ... Action: patterns (ReAct leftovers)
     text = re.sub(r'(?m)^Thought:.*$', '', text)
     text = re.sub(r'(?m)^Action:.*$', '', text)
