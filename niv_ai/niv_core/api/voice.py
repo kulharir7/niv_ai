@@ -615,7 +615,7 @@ def voice_chat_base64(**kwargs):
                 "doctype": "Niv Conversation",
                 "user": frappe.session.user,
                 "title": "Voice Chat",
-                "channel": "voice",
+                "channel": "webchat",
             })
             conv.insert(ignore_permissions=True)
             frappe.db.commit()
