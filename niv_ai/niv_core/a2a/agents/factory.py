@@ -121,8 +121,8 @@ def init_agent_state(callback_context: CallbackContext) -> None:
     """
     Initialize state before agent runs.
     
-    Loads system DocTypes from cache (fast) or triggers scan if not cached.
-    This gives agents context about what DocTypes exist without calling tools.
+    Uses UNIFIED DISCOVERY for complete system knowledge.
+    Agents get REAL data, not placeholders.
     """
     state = callback_context.state
     
@@ -132,29 +132,47 @@ def init_agent_state(callback_context: CallbackContext) -> None:
         if key not in state:
             state[key] = ""
     
-    # Load system DocTypes from cache (or trigger lazy scan)
-    if "system_doctypes" not in state:
+    # Load FULL system knowledge from Unified Discovery
+    if "system_knowledge" not in state:
         try:
-            # Try to get from Redis cache first (fast path)
-            cached_graph = frappe.cache().get_value("niv_system_knowledge_graph")
-            if cached_graph:
-                graph_data = json.loads(cached_graph) if isinstance(cached_graph, str) else cached_graph
-                doctype_names = list(graph_data.get("doctypes", {}).keys())[:100]  # Limit to 100 for prompt size
-                state["system_doctypes"] = f"Available DocTypes: {', '.join(doctype_names)}"
+            from niv_ai.niv_core.knowledge.unified_discovery import (
+                get_discovery_for_agent,
+                run_discovery,
+                get_doctype_list
+            )
+            
+            # Get formatted context for agent (uses cache, runs scan if needed)
+            system_context = get_discovery_for_agent()
+            
+            if system_context and "SYSTEM KNOWLEDGE" in system_context:
+                state["system_knowledge"] = system_context
+                # Also set doctype list for quick reference
+                doctype_list = get_doctype_list(limit=100)
+                state["system_doctypes"] = f"Available DocTypes ({len(doctype_list)}): {', '.join(doctype_list[:50])}"
             else:
-                # Cache miss — run scan in background, use placeholder for now
-                # This avoids blocking the agent start
-                state["system_doctypes"] = "Use get_system_knowledge_graph() tool to discover DocTypes."
-                # Trigger async cache refresh (non-blocking)
-                try:
-                    from niv_ai.niv_core.knowledge.system_map import update_knowledge_graph
-                    # Run scan and cache result (will be available for next request)
-                    update_knowledge_graph()
-                except Exception:
-                    pass  # Don't fail agent init if scan fails
+                # Cache miss — run discovery NOW (blocking but ensures real data)
+                frappe.logger("niv_ai").info("Running unified discovery for agent...")
+                run_discovery(force=True)
+                system_context = get_discovery_for_agent()
+                state["system_knowledge"] = system_context or "Discovery in progress..."
+                state["system_doctypes"] = "Run get_system_knowledge_graph() for DocType list."
+                
         except Exception as e:
-            frappe.log_error(f"init_agent_state failed to load DocTypes: {e}", "Niv AI A2A")
-            state["system_doctypes"] = "Use get_system_knowledge_graph() tool to discover DocTypes."
+            frappe.log_error(f"init_agent_state unified discovery failed: {e}", "Niv AI A2A")
+            # Fallback to old method
+            try:
+                cached_graph = frappe.cache().get_value("niv_system_knowledge_graph")
+                if cached_graph:
+                    graph_data = json.loads(cached_graph) if isinstance(cached_graph, str) else cached_graph
+                    doctype_names = list(graph_data.get("doctypes", {}).keys())[:100]
+                    state["system_doctypes"] = f"Available DocTypes: {', '.join(doctype_names)}"
+                    state["system_knowledge"] = "Partial system knowledge loaded."
+                else:
+                    state["system_doctypes"] = "Use get_system_knowledge_graph() tool to discover DocTypes."
+                    state["system_knowledge"] = "Discovery not available."
+            except Exception:
+                state["system_doctypes"] = "Discovery failed."
+                state["system_knowledge"] = "Discovery failed."
     
     if "nbfc_context" not in state:
         state["nbfc_context"] = {}
@@ -164,7 +182,6 @@ def init_agent_state(callback_context: CallbackContext) -> None:
     
     if "dev_reference" not in state:
         state["dev_reference"] = ""
-
 
 # ─────────────────────────────────────────────────────────────────
 # GENERATE CONTENT CONFIG — Temperature control
@@ -234,8 +251,76 @@ class NivAgentFactory:
         # Add Visualizer Tool
         self.adk_tools["visualize_system_map"] = FunctionTool(func=self._make_visualize_graph_tool())
         
+        # Add Introspect System Tool (unified discovery)
+        self.adk_tools["introspect_system"] = FunctionTool(func=self._make_introspect_tool())
+        
         # Add Auditor Tool
         self.adk_tools["run_nbfc_audit"] = FunctionTool(func=self._make_auditor_tool())
+
+    def _make_introspect_tool(self):
+        """Tool for deep system introspection using unified discovery."""
+        def introspect_system(scope: str = "all") -> str:
+            """
+            Perform deep system introspection.
+            
+            Args:
+                scope: What to introspect - "all", "doctypes", "workflows", "customizations"
+            """
+            try:
+                from niv_ai.niv_core.knowledge.unified_discovery import run_discovery, get_cached_discovery
+                
+                # Get or run discovery
+                data = get_cached_discovery()
+                if not data:
+                    data = run_discovery(force=True)
+                
+                if scope == "doctypes":
+                    doctypes = data.get("doctypes", {})
+                    modules = data.get("modules", {})
+                    return json.dumps({
+                        "total_doctypes": len(doctypes),
+                        "total_modules": len(modules),
+                        "modules": {k: {"count": v["total"], "custom": v["custom_count"]} for k, v in modules.items()},
+                        "sample_doctypes": list(doctypes.keys())[:50]
+                    }, indent=2)
+                
+                elif scope == "workflows":
+                    workflows = data.get("workflows", [])
+                    return json.dumps({
+                        "total_workflows": len(workflows),
+                        "workflows": workflows
+                    }, indent=2)
+                
+                elif scope == "customizations":
+                    customs = data.get("customizations", {})
+                    return json.dumps({
+                        "custom_fields": customs.get("custom_field_count", 0),
+                        "client_scripts": len(customs.get("client_scripts", [])),
+                        "server_scripts": len(customs.get("server_scripts", [])),
+                        "print_formats": len(customs.get("print_formats", [])),
+                        "custom_reports": len(customs.get("custom_reports", []))
+                    }, indent=2)
+                
+                else:  # "all"
+                    return json.dumps({
+                        "timestamp": data.get("timestamp"),
+                        "domain": data.get("domain", {}),
+                        "apps": data.get("apps", []),
+                        "doctype_count": len(data.get("doctypes", {})),
+                        "module_count": len(data.get("modules", {})),
+                        "workflow_count": len(data.get("workflows", [])),
+                        "customizations": data.get("customizations", {}),
+                        "data_summary": data.get("data_summary", {}),
+                        "prompt_context": data.get("prompt_context", "")[:2000]  # Truncate for safety
+                    }, indent=2)
+                    
+            except Exception as e:
+                frappe.log_error(f"introspect_system error: {e}", "Niv AI")
+                return f"Error introspecting system: {e}"
+        
+        introspect_system.__name__ = "introspect_system"
+        introspect_system.__doc__ = "Deep system introspection: scans apps, DocTypes, workflows, customizations. Use scope='all' (default), 'doctypes', 'workflows', or 'customizations'."
+        return introspect_system
 
     def _make_auditor_tool(self):
         """Tool to run NBFC business audits."""
@@ -390,19 +475,39 @@ class NivAgentFactory:
         return save_to_user_memory
 
     def _make_knowledge_graph_tool(self):
-        """Native tool to fetch the pre-built knowledge graph."""
+        """Native tool to fetch system knowledge using UNIFIED DISCOVERY."""
         def get_system_knowledge_graph() -> str:
             try:
-                cache = frappe.cache().get_value("niv_system_knowledge_graph")
-                if not cache:
-                    from niv_ai.niv_core.knowledge.system_map import update_knowledge_graph
-                    cache = json.dumps(update_knowledge_graph())
-                return cache
+                from niv_ai.niv_core.knowledge.unified_discovery import (
+                    get_knowledge_graph,
+                    run_discovery
+                )
+                
+                # Get from unified discovery (cached or fresh scan)
+                graph = get_knowledge_graph()
+                
+                if not graph or not graph.get("doctypes"):
+                    # Force fresh scan
+                    run_discovery(force=True)
+                    graph = get_knowledge_graph()
+                
+                # Format for agent
+                result = {
+                    "doctype_count": len(graph.get("doctypes", {})),
+                    "relationship_count": len(graph.get("links", [])),
+                    "module_count": len(graph.get("modules", {})),
+                    "doctypes": graph.get("doctypes", {}),
+                    "modules": graph.get("modules", {}),
+                    "relationships": graph.get("links", [])[:100]  # Limit relationships
+                }
+                
+                return json.dumps(result, default=str)
             except Exception as e:
-                return f"Error fetching graph: {e}"
+                frappe.log_error(f"get_system_knowledge_graph error: {e}", "Niv AI")
+                return f"Error fetching system knowledge: {e}"
         
         get_system_knowledge_graph.__name__ = "get_system_knowledge_graph"
-        get_system_knowledge_graph.__doc__ = "Returns a JSON map of all DocTypes and their relationships (Links/Tables)."
+        get_system_knowledge_graph.__doc__ = "Scans the system and returns a complete map of DocTypes, their fields, relationships (Links/Tables), and modules. Uses real database queries, not mock data."
         return get_system_knowledge_graph
 
     def _init_model(self, provider_name: str, model_name: str) -> LiteLlm:
