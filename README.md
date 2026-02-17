@@ -163,6 +163,74 @@ See [CHANGELOG.md](CHANGELOG.md) for full history.
 
 ---
 
+
+---
+
+## 📱 Telegram Integration
+
+Connect Niv AI to Telegram for mobile access.
+
+### Step 1: Create Telegram Bot
+
+1. Open Telegram, search for **@BotFather**
+2. Send `/newbot`
+3. Choose a name (e.g., "My ERPNext Assistant")
+4. Choose a username (e.g., "my_erp_bot")
+5. Copy the **Bot Token** (looks like `123456789:ABCdefGHI...`)
+
+### Step 2: Configure in ERPNext
+
+1. Go to **Niv Settings**
+2. Enter your **Telegram Bot Token**
+3. Save
+
+### Step 3: Set Webhook
+
+Run this command (replace YOUR_DOMAIN and BOT_TOKEN):
+
+```bash
+curl -X POST "https://api.telegram.org/botBOT_TOKEN/setWebhook" \
+  -d "url=https://YOUR_DOMAIN/api/method/niv_ai.niv_core.api.telegram.webhook"
+```
+
+Or use the health check:
+```bash
+bench --site yoursite execute niv_ai.niv_health.check_telegram
+```
+
+### Step 4: Link Telegram User to ERPNext User
+
+1. Go to **Niv Telegram User** (create new)
+2. Fields:
+   - **Telegram User ID**: Your Telegram numeric ID (get from @userinfobot)
+   - **Telegram Chat ID**: Same as User ID for private chats
+   - **Frappe User**: Link to ERPNext user
+   - **Enabled**: ✅ Check
+
+### Step 5: Test
+
+1. Open your bot in Telegram
+2. Send `/start`
+3. Try: "Top 5 loans dikhao"
+
+### Telegram Commands
+
+| Command | Description |
+|---------|-------------|
+| `/start` | Welcome message |
+| `/help` | Help guide |
+| Any text | AI processes your query |
+
+### Features
+
+- ✅ Real-time tool call updates ("📊 Searching documents...")
+- ✅ Progressive text streaming
+- ✅ Thought filtering (shows only final answer)
+- ✅ Hindi/English support
+- ✅ Same memory as web chat
+
+---
+
 ## 🛠️ Development
 
 ### Running Locally
