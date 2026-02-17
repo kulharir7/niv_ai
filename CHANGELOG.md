@@ -1,5 +1,73 @@
 # Changelog
 
+## v0.6.1 (2026-02-17)
+### Fixed
+- **Simple Mode reverted** — caused errors, removed for stability
+- A2A brain-first calculation rule in prompts
+- LLM brain for calculations instead of tools
+- Table overflow with scrollable container
+- Removed disclaimer text from UI
+
+---
+
+## v0.6.0 (2026-02-16)
+### Added
+- **A2A Multi-Agent System** — Google ADK powered agent-to-agent orchestration
+  - Specialist agents for different domains
+  - Agent transfer badges in UI
+  - Thinking/critique signals filtering
+  - Robust streaming with deduplication
+- **Artifact Panel** — Code preview and visualization
+  - Split view with better tabs
+  - Syntax highlighting (Phase 3)
+  - Mobile responsive design
+  - Frappe CSS injection for preview
+  - "Apply to System" button
+- **Knowledge Graph Visualizer** — Full-screen premium visualization
+- **Multi-Conversation Concurrency** — Parallel streaming and background progress
+- **Dev Mode Confirmation** — Safety confirmation for all write tools
+- Premium Thought Block UI with subtle styling
+
+### Fixed
+- A2A confirmation flow with Redis flag
+- Force immediate tool calls (no AI confirmation)
+- Streaming duplicates and blob memory leak
+- Empty tool results handling
+- Billing cost calculation
+- MCPFunctionTool ADK argument filtering
+- Tool name extraction and frontend rendering
+
+---
+
+## v0.5.0 (2026-02-14)
+### Added
+- **Auto-Discovery Engine** — Scans ERPNext on install, builds knowledge
+- **Niv Health System** — Self-healing and auto-setup
+- Router + Dev-mode safety improvements
+- NBFC domain knowledge injection
+
+### Fixed
+- Frappe v14 SSE streaming context issues
+- Document cache AttributeError in SSE
+- Safe_eval fallback and automation hook recursion
+- Recursion limit tuning (prevent infinite tool loops)
+- Tool result truncation (save tokens for response)
+- RAG embeddings prefer Mistral provider
+
+---
+
+## v0.4.0 (2026-02-12)
+### Added
+- English as primary response language setting
+- Knowledge Graph rendering for Artifact Preview
+- Robust preview_html prioritization
+
+### Fixed
+- Various streaming and tool calling improvements
+- Better error handling in agent flows
+
+---
+
 ## v0.3.1 (2026-02-11)
 ### Added
 - **Per-User Tool Permissions** — automatic permission isolation for AI tool calls
@@ -50,18 +118,7 @@
 - Duplicate user messages: 30-second dedup check before saving
 - Nginx SSE endpoint name: `stream_message` → `stream_chat`
 
-### Testing Results (v0.3.0)
-- ✅ Login + Auth
-- ✅ Create/List/Rename/Delete Conversations
-- ✅ Non-streaming chat (send_message)
-- ✅ SSE streaming (stream_chat) — token-by-token + tool_call + tool_result events
-- ✅ MCP tool calling (list_documents, count, search — 23 tools via FAC)
-- ✅ MCP Server management (list, toggle)
-- ✅ Voice/TTS (Piper engine — returns wav URL)
-- ✅ Rate limiting (configurable per-hour/per-day)
-- ✅ Billing (Shared Pool mode — balance deduction working)
-- ✅ 17/17 module imports pass
-- ✅ 20 DocTypes, 153 files, 25 critical paths verified
+---
 
 ## v0.2.0 (2026-02-10)
 ### Added
@@ -69,6 +126,8 @@
 - Conversational voice mode
 - Frappe v14 compatibility fixes
 - 85 features catalogued
+
+---
 
 ## v0.1.1 (2026-02-10)
 ### Fixed
@@ -87,6 +146,8 @@
 - Table CSS: rounded corners, uppercase headers, hover effects, dark mode
 - Markdown: blockquote styling, HR lines, link colors, heading borders, better spacing
 - Output formatting: improved line-height, nested list support
+
+---
 
 ## v0.1.0 (2026-02-09)
 ### Initial Release
