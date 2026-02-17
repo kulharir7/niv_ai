@@ -656,11 +656,14 @@ def stream_tts(text, voice=None):
     if not text.strip():
         return {"audio_url": None}
 
-    # Resolve voice
+    # Resolve voice based on language parameter or text detection
+    stt_language = frappe.form_dict.get("language", "")
+    
     if not voice or voice == "auto":
-        lang = _detect_language(text)
-        if lang == "hi":
-            voice = "hi-IN-SwaraNeural"
+        # Use STT-detected language if available, otherwise detect from text
+        lang = stt_language or _detect_language(text)
+        if lang in ("hi", "hindi"):
+            voice = "hi-IN-SwaraNeural"  # Edge TTS for Hindi (Piper has no Hindi)
         else:
             voice = "en-US-JennyNeural"
 
@@ -668,8 +671,9 @@ def stream_tts(text, voice=None):
     settings = frappe.get_single("Niv Settings")
     tts_engine = getattr(settings, "tts_engine", "") or "auto"
 
-    # ── Try Piper first if configured ──
-    if tts_engine == "piper":
+    # ── Try Piper first if configured (English only - no Hindi model) ──
+    detected_lang = stt_language or _detect_language(text)
+    if tts_engine == "piper" and detected_lang not in ("hi", "hindi"):
         piper_voice = "en_US-lessac-medium"
         result = _tts_piper(text, piper_voice)
         if result:
