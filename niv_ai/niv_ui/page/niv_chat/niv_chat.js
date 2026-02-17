@@ -2558,7 +2558,7 @@ ${htmlCode}
         // Try Piper TTS API first
         frappe.call({
             method: "niv_ai.niv_core.api.voice.text_to_speech",
-            args: { text: clean },
+            args: { text: clean, voice: this.selectedTtsVoice || "auto" },
             async: true,
             callback: (r) => {
                 if (r.message && r.message.audio_url) {
@@ -2935,6 +2935,46 @@ ${htmlCode}
         this.voiceAudio = null;
         this.voicePlaybackSource = null;
         this.voiceContinuous = true;
+        
+        // Voice settings panel
+        this.$voiceSettingsBtn = this.$voiceOverlay.find(".voice-settings-btn");
+        this.$voiceSettingsPanel = this.$voiceOverlay.find(".voice-settings-panel");
+        this.$voiceSelectTts = this.$voiceSettingsPanel.find(".voice-select-tts");
+        this.$voiceContinuousToggle = this.$voiceSettingsPanel.find(".voice-continuous-toggle");
+        
+        // Load saved preferences
+        const savedVoice = localStorage.getItem("niv_tts_voice") || "auto";
+        this.$voiceSelectTts.val(savedVoice);
+        this.selectedTtsVoice = savedVoice;
+        
+        const savedContinuous = localStorage.getItem("niv_voice_continuous");
+        if (savedContinuous !== null) {
+            this.voiceContinuous = savedContinuous === "true";
+            this.$voiceContinuousToggle.prop("checked", this.voiceContinuous);
+        }
+        
+        // Settings button click
+        this.$voiceSettingsBtn.on("click", (e) => {
+            e.stopPropagation();
+            this.$voiceSettingsPanel.toggle();
+        });
+        
+        // Close settings
+        this.$voiceSettingsPanel.find(".voice-settings-close").on("click", () => {
+            this.$voiceSettingsPanel.hide();
+        });
+        
+        // Voice selection change
+        this.$voiceSelectTts.on("change", (e) => {
+            this.selectedTtsVoice = e.target.value;
+            localStorage.setItem("niv_tts_voice", this.selectedTtsVoice);
+        });
+        
+        // Continuous toggle change
+        this.$voiceContinuousToggle.on("change", (e) => {
+            this.voiceContinuous = e.target.checked;
+            localStorage.setItem("niv_voice_continuous", this.voiceContinuous);
+        });
         // Conversational mode: monitor mic during AI speech for auto-interrupt
         this.voiceMonitorStream = null;
         this.voiceMonitorAnalyser = null;
