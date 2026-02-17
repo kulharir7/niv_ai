@@ -3205,52 +3205,27 @@ ${htmlCode}
 
     voice_start_silence_detection() {
         this.voiceSilenceStart = null;
-        this.voiceSpeechStarted = false;  // Track if user has actually spoken
-        this.voiceSpeechStartTime = null;
-        
-        const silenceThreshold = 12;       // Energy level to consider silence
-        const speechThreshold = 18;        // Energy level to consider speech  
-        const silenceDuration = 1800;      // 1.8s silence after speech = stop
-        const minSpeechDuration = 300;     // Must speak at least 300ms
-        const maxRecordingTime = 30000;    // Max 30s recording
-        const recordingStartTime = Date.now();
+        const silenceThreshold = 10;
+        const silenceDuration = 1500; // 1.5 seconds for faster turn-taking
 
         this.voiceSilenceTimer = setInterval(() => {
             if (this.voiceState !== "listening" || !this.voiceAnalyser) return;
-            
-            // Safety: max recording time
-            if (Date.now() - recordingStartTime > maxRecordingTime) {
-                this.stop_voice_recording();
-                return;
-            }
-            
             const dataArray = new Uint8Array(this.voiceAnalyser.frequencyBinCount);
             this.voiceAnalyser.getByteFrequencyData(dataArray);
             const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
 
-            // Detect speech start
-            if (avg >= speechThreshold && !this.voiceSpeechStarted) {
-                this.voiceSpeechStarted = true;
-                this.voiceSpeechStartTime = Date.now();
-            }
-            
-            // Only check silence AFTER user has spoken for minSpeechDuration
-            if (this.voiceSpeechStarted && 
-                this.voiceSpeechStartTime && 
-                (Date.now() - this.voiceSpeechStartTime > minSpeechDuration)) {
-                
-                if (avg < silenceThreshold) {
-                    if (!this.voiceSilenceStart) this.voiceSilenceStart = Date.now();
-                    if (Date.now() - this.voiceSilenceStart > silenceDuration) {
-                        if (this.voiceAudioChunks.length > 0) {
-                            this.stop_voice_recording();
-                        }
+            if (avg < silenceThreshold) {
+                if (!this.voiceSilenceStart) this.voiceSilenceStart = Date.now();
+                if (Date.now() - this.voiceSilenceStart > silenceDuration) {
+                    // Only auto-stop if we have some audio data
+                    if (this.voiceAudioChunks.length > 0) {
+                        this.stop_voice_recording();
                     }
-                } else {
-                    this.voiceSilenceStart = null;
                 }
+            } else {
+                this.voiceSilenceStart = null;
             }
-        }, 150);
+        }, 200);
     }
 
     cancel_voice_animation() {
