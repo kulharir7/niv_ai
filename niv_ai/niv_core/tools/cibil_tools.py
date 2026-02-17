@@ -1,29 +1,49 @@
 """
-CIBIL/Credit Score Tools for Niv AI NBFC Agent.
+CIBIL/Credit Score Tools for FAC (frappe_assistant_core) pattern.
 
 Location: niv_ai/niv_core/tools/cibil_tools.py
+Register via hooks.py: assistant_tools
 """
 
 import json
 import frappe
-from typing import Optional
+from typing import Any, Dict
 
 
-def get_cibil_score(
-    applicant: str = None,
-    loan_application: str = None,
-) -> str:
-    """
-    Get CIBIL/Credit score for a customer or loan application.
+class GetCibilScoreTool:
+    """Get CIBIL/Credit score for a customer or loan application."""
     
-    Args:
-        applicant: Customer/Applicant name or ID
-        loan_application: Loan Application ID (e.g., ABPALI1025-0005099)
+    def __init__(self):
+        self.name = "get_cibil_score"
+        self.description = "Get CIBIL/Credit score for a customer or loan application. Returns score, risk category, and recommendation."
+        self.category = "NBFC"
+        self.source_app = "niv_ai"
+        self.requires_permission = "Loan Application"
+        self.inputSchema = {
+            "type": "object",
+            "properties": {
+                "applicant": {
+                    "type": "string",
+                    "description": "Customer/Applicant name to search"
+                },
+                "loan_application": {
+                    "type": "string",
+                    "description": "Loan Application ID (e.g., ABPALI1025-0005099)"
+                }
+            }
+        }
     
-    Returns:
-        JSON string with CIBIL score and risk details
-    """
-    try:
+    def get_metadata(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "inputSchema": self.inputSchema
+        }
+    
+    def execute(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        applicant = arguments.get("applicant")
+        loan_application = arguments.get("loan_application")
+        
         result = {
             "found": False,
             "source": None,
@@ -40,88 +60,108 @@ def get_cibil_score(
             filters["applicant_name"] = ["like", f"%{applicant}%"]
         
         if not filters:
-            return json.dumps({"error": "Please provide applicant name or loan_application ID"})
+            return {"error": "Please provide applicant name or loan_application ID"}
         
-        # Try Credit Score Assessment first
-        assessments = frappe.get_all(
-            "Credit Score Assessment",
-            filters=filters,
-            fields=[
-                "name", "loan_application", "applicant", "applicant_name",
-                "cibil_score", "cibil_rating", "overall_score", "risk_category",
-                "dti_score", "dti_rating", "collateral_score", "collateral_rating",
-                "income_stability_score", "kyc_score", "final_decision",
-                "assessment_date"
-            ],
-            order_by="creation desc",
-            limit=1
-        )
-        
-        if assessments:
-            a = assessments[0]
-            result["found"] = True
-            result["source"] = "Credit Score Assessment"
-            result["cibil_score"] = a.get("cibil_score")
-            result["overall_score"] = a.get("overall_score")
-            result["risk_category"] = a.get("risk_category")
-            result["details"] = {
-                "assessment_id": a.get("name"),
-                "applicant_name": a.get("applicant_name"),
-                "loan_application": a.get("loan_application"),
-                "cibil_rating": a.get("cibil_rating"),
-                "dti_score": a.get("dti_score"),
-                "collateral_score": a.get("collateral_score"),
-                "income_stability_score": a.get("income_stability_score"),
-                "kyc_score": a.get("kyc_score"),
-                "final_decision": a.get("final_decision"),
-            }
+        try:
+            # Try Credit Score Assessment first
+            assessments = frappe.get_all(
+                "Credit Score Assessment",
+                filters=filters,
+                fields=[
+                    "name", "loan_application", "applicant", "applicant_name",
+                    "cibil_score", "cibil_rating", "overall_score", "risk_category",
+                    "dti_score", "dti_rating", "collateral_score",
+                    "income_stability_score", "kyc_score", "final_decision",
+                ],
+                order_by="creation desc",
+                limit=1
+            )
             
-            # Add recommendation based on score
-            score = a.get("cibil_score") or a.get("overall_score")
-            if score:
-                if score >= 750:
-                    result["recommendation"] = "Excellent - Auto approve eligible, lowest interest rate"
-                elif score >= 700:
-                    result["recommendation"] = "Good - Standard approval with normal rate"
-                elif score >= 650:
-                    result["recommendation"] = "Fair - Manual review required, higher rate"
-                elif score >= 600:
-                    result["recommendation"] = "Poor - High risk, extra collateral needed"
-                else:
-                    result["recommendation"] = "Very Poor - Consider rejection"
-            
-            return json.dumps(result, indent=2, default=str)
+            if assessments:
+                a = assessments[0]
+                result["found"] = True
+                result["source"] = "Credit Score Assessment"
+                result["cibil_score"] = a.get("cibil_score")
+                result["overall_score"] = a.get("overall_score")
+                result["risk_category"] = a.get("risk_category")
+                result["details"] = {
+                    "assessment_id": a.get("name"),
+                    "applicant_name": a.get("applicant_name"),
+                    "loan_application": a.get("loan_application"),
+                    "cibil_rating": a.get("cibil_rating"),
+                    "dti_score": a.get("dti_score"),
+                    "final_decision": a.get("final_decision"),
+                }
+                
+                # Add recommendation
+                score = a.get("cibil_score") or a.get("overall_score")
+                if score:
+                    if score >= 750:
+                        result["recommendation"] = "Excellent - Auto approve, lowest rate"
+                    elif score >= 700:
+                        result["recommendation"] = "Good - Standard approval"
+                    elif score >= 650:
+                        result["recommendation"] = "Fair - Manual review, higher rate"
+                    elif score >= 600:
+                        result["recommendation"] = "Poor - High risk"
+                    else:
+                        result["recommendation"] = "Very Poor - Likely reject"
+            else:
+                result["message"] = f"No CIBIL score found for {applicant or loan_application}"
+                
+        except Exception as e:
+            frappe.log_error(f"get_cibil_score error: {e}", "Niv AI CIBIL")
+            result["error"] = str(e)
         
-        # No data found
-        result["message"] = f"No CIBIL/Credit score found for {applicant or loan_application}. Run Credit Score Assessment first."
-        return json.dumps(result, indent=2)
-        
-    except Exception as e:
-        frappe.log_error(f"get_cibil_score error: {e}", "Niv AI CIBIL")
-        return json.dumps({"error": str(e)})
+        return result
 
 
-def check_credit_eligibility(
-    cibil_score: int,
-    loan_amount: float,
-    monthly_income: float,
-    existing_emi: float = 0,
-) -> str:
-    """
-    Check loan eligibility based on CIBIL score and income.
-    Calculates FOIR and suggests interest rate.
+class CheckCreditEligibilityTool:
+    """Check loan eligibility based on CIBIL score and income."""
     
-    Args:
-        cibil_score: CIBIL score (300-900)
-        loan_amount: Requested loan amount
-        monthly_income: Monthly income of applicant
-        existing_emi: Current EMI obligations (default 0)
+    def __init__(self):
+        self.name = "check_credit_eligibility"
+        self.description = "Check loan eligibility based on CIBIL score, income, and existing EMIs. Calculates FOIR and suggests interest rate."
+        self.category = "NBFC"
+        self.source_app = "niv_ai"
+        self.requires_permission = "Loan Application"
+        self.inputSchema = {
+            "type": "object",
+            "properties": {
+                "cibil_score": {
+                    "type": "integer",
+                    "description": "CIBIL score (300-900)"
+                },
+                "loan_amount": {
+                    "type": "number",
+                    "description": "Requested loan amount"
+                },
+                "monthly_income": {
+                    "type": "number",
+                    "description": "Monthly income of applicant"
+                },
+                "existing_emi": {
+                    "type": "number",
+                    "description": "Current EMI obligations (default 0)"
+                }
+            },
+            "required": ["cibil_score", "loan_amount", "monthly_income"]
+        }
     
-    Returns:
-        JSON with eligibility decision, FOIR, and recommendations
-    """
-    try:
-        # EMI estimation (14% for 36 months)
+    def get_metadata(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "inputSchema": self.inputSchema
+        }
+    
+    def execute(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        cibil_score = arguments.get("cibil_score", 0)
+        loan_amount = arguments.get("loan_amount", 0)
+        monthly_income = arguments.get("monthly_income", 0)
+        existing_emi = arguments.get("existing_emi", 0)
+        
+        # EMI calculation (14% for 36 months)
         rate = 14 / 12 / 100
         tenure = 36
         if rate > 0:
@@ -137,14 +177,12 @@ def check_credit_eligibility(
         reasons = []
         recommendations = []
         
-        # CIBIL check
         if cibil_score < 600:
             eligible = False
             reasons.append(f"CIBIL score {cibil_score} below minimum (600)")
         elif cibil_score < 650:
             recommendations.append("Manual review due to moderate CIBIL")
         
-        # FOIR check (max 60%)
         if foir > 60:
             eligible = False
             reasons.append(f"FOIR {foir:.1f}% exceeds limit (60%)")
@@ -152,26 +190,22 @@ def check_credit_eligibility(
         
         # Interest rate based on CIBIL
         if cibil_score >= 750:
-            rate_range = "12-14%"
-            category = "Excellent"
+            rate_range, category = "12-14%", "Excellent"
         elif cibil_score >= 700:
-            rate_range = "14-16%"
-            category = "Good"
+            rate_range, category = "14-16%", "Good"
         elif cibil_score >= 650:
-            rate_range = "16-20%"
-            category = "Fair"
+            rate_range, category = "16-20%", "Fair"
         else:
-            rate_range = "20%+ or Reject"
-            category = "Poor"
+            rate_range, category = "20%+ or Reject", "Poor"
         
-        # Max eligible amount based on FOIR
+        # Max eligible amount
         max_emi_allowed = monthly_income * 0.6 - existing_emi
         if max_emi_allowed > 0 and rate > 0:
             max_loan = max_emi_allowed * (((1 + rate) ** tenure) - 1) / (rate * ((1 + rate) ** tenure))
         else:
             max_loan = 0
         
-        result = {
+        return {
             "eligible": eligible,
             "cibil_score": cibil_score,
             "cibil_category": category,
@@ -183,63 +217,86 @@ def check_credit_eligibility(
             "foir_limit": 60,
             "suggested_interest_rate": rate_range,
             "reasons": reasons if not eligible else [],
-            "recommendations": recommendations,
-            "calculation_basis": "14% interest, 36 months tenure"
+            "recommendations": recommendations
         }
-        
-        return json.dumps(result, indent=2)
-        
-    except Exception as e:
-        frappe.log_error(f"check_credit_eligibility error: {e}", "Niv AI CIBIL")
-        return json.dumps({"error": str(e)})
 
 
-def get_credit_history(loan_application: str) -> str:
-    """
-    Get complete credit assessment history for a loan application.
+class GetCreditHistoryTool:
+    """Get complete credit assessment history for a loan application."""
     
-    Args:
-        loan_application: Loan Application ID
+    def __init__(self):
+        self.name = "get_credit_history"
+        self.description = "Get complete credit assessment history for a loan application."
+        self.category = "NBFC"
+        self.source_app = "niv_ai"
+        self.requires_permission = "Loan Application"
+        self.inputSchema = {
+            "type": "object",
+            "properties": {
+                "loan_application": {
+                    "type": "string",
+                    "description": "Loan Application ID"
+                }
+            },
+            "required": ["loan_application"]
+        }
     
-    Returns:
-        JSON with all credit assessments and CIBIL records
-    """
-    try:
+    def get_metadata(self) -> Dict[str, Any]:
+        return {
+            "name": self.name,
+            "description": self.description,
+            "inputSchema": self.inputSchema
+        }
+    
+    def execute(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        loan_application = arguments.get("loan_application")
+        
         result = {
             "loan_application": loan_application,
             "assessments": [],
             "latest_decision": None,
         }
         
-        # Get all assessments
-        assessments = frappe.get_all(
-            "Credit Score Assessment",
-            filters={"loan_application": loan_application},
-            fields=["name", "overall_score", "risk_category", "cibil_score", 
-                    "final_decision", "assessment_date", "creation"],
-            order_by="creation desc"
-        )
+        try:
+            assessments = frappe.get_all(
+                "Credit Score Assessment",
+                filters={"loan_application": loan_application},
+                fields=["name", "overall_score", "risk_category", "cibil_score", 
+                        "final_decision", "assessment_date", "creation"],
+                order_by="creation desc"
+            )
+            
+            if assessments:
+                result["assessments"] = [
+                    {
+                        "id": a.name,
+                        "score": a.overall_score,
+                        "cibil": a.cibil_score,
+                        "risk": a.risk_category,
+                        "decision": a.final_decision,
+                        "date": str(a.assessment_date) if a.assessment_date else str(a.creation)
+                    }
+                    for a in assessments
+                ]
+                result["latest_decision"] = assessments[0].final_decision
+                result["latest_score"] = assessments[0].overall_score
+                result["total_assessments"] = len(assessments)
+            else:
+                result["message"] = "No credit assessments found"
+                
+        except Exception as e:
+            frappe.log_error(f"get_credit_history error: {e}", "Niv AI CIBIL")
+            result["error"] = str(e)
         
-        if assessments:
-            result["assessments"] = [
-                {
-                    "id": a.name,
-                    "score": a.overall_score,
-                    "cibil": a.cibil_score,
-                    "risk": a.risk_category,
-                    "decision": a.final_decision,
-                    "date": str(a.assessment_date) if a.assessment_date else str(a.creation)
-                }
-                for a in assessments
-            ]
-            result["latest_decision"] = assessments[0].final_decision
-            result["latest_score"] = assessments[0].overall_score
-            result["total_assessments"] = len(assessments)
-        else:
-            result["message"] = "No credit assessments found for this application"
-        
-        return json.dumps(result, indent=2, default=str)
-        
-    except Exception as e:
-        frappe.log_error(f"get_credit_history error: {e}", "Niv AI CIBIL")
-        return json.dumps({"error": str(e)})
+        return result
+
+
+# Tool instances for hook registration
+def get_cibil_score_tool():
+    return GetCibilScoreTool()
+
+def check_credit_eligibility_tool():
+    return CheckCreditEligibilityTool()
+
+def get_credit_history_tool():
+    return GetCreditHistoryTool()
