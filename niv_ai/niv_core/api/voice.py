@@ -499,7 +499,7 @@ def _detect_language(text):
 
 # ─── Edge TTS (with SSML support) ───────────────────────────────────────
 
-def _tts_edge(text, voice=None, use_ssml=True):
+def _tts_edge(text, voice=None, use_ssml=False):
     """Edge TTS — Microsoft Azure neural voices, free, unlimited, human-like.
     
     Phase 2: Now supports SSML with natural pauses, prosody, emphasis.
