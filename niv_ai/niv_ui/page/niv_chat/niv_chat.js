@@ -3602,6 +3602,13 @@ ${htmlCode}
 
     stop_voice_playback() {
         this.stop_voice_monitor();
+        
+        // Cancel all pending audio in queue
+        this.voiceAudioQueue = [];
+        this.voiceIsPlaying = false;
+        this.voiceStreamDone = true;
+        this.voiceSentenceBuffer = "";
+        
         if (this.voiceAudio) {
             this.voiceAudio.pause();
             this.voiceAudio.currentTime = 0;
@@ -3869,6 +3876,14 @@ ${htmlCode}
         const url = item;
         const audio = new Audio(url);
         this.voiceAudio = audio;
+        
+        // Prefetch: preload next audio while this one plays
+        if (this.voiceAudioQueue.length > 0) {
+            const nextUrl = this.voiceAudioQueue[0];
+            if (nextUrl && typeof nextUrl === "string") {
+                try { new Audio(nextUrl); } catch(e) {} // Preload into browser cache
+            }
+        }
 
         audio.onended = () => {
             // Cleanup the streamed TTS file
