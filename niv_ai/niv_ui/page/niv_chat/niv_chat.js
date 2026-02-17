@@ -1627,10 +1627,9 @@ ${htmlCode}
         }
     }
 
-    append_message(role, content, meta = {
+    append_message(role, content, meta = {}) {
         // Strip internal thinking from assistant messages
         if (role === "assistant" && content) content = this.stripThinkingTags(content);
-}) {
         this.hide_empty_state();
         const isUser = role === "user";
         const avatar = isUser ? this.get_user_avatar() : '<div class="msg-avatar-icon">🛰️</div>';
