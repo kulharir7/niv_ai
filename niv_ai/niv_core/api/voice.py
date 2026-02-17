@@ -664,51 +664,70 @@ def stream_tts(text, voice=None):
         else:
             voice = "en-US-JennyNeural"
 
-    # Use Edge TTS with SSML for the sentence
-    try:
-        import edge_tts
-        import asyncio
-    except ImportError:
-        return {"audio_url": None, "engine": "browser", "text": text}
+    # Check configured TTS engine
+    settings = frappe.get_single("Niv Settings")
+    tts_engine = getattr(settings, "tts_engine", "") or "auto"
 
-    try:
-        output_dir = frappe.get_site_path("public", "files")
-        filename = "tts_stream_{0}.mp3".format(uuid.uuid4().hex[:12])
-        output_path = os.path.join(output_dir, filename)
+    # ── Try Piper first if configured ──
+    if tts_engine == "piper":
+        piper_voice = "en_US-lessac-medium"
+        result = _tts_piper(text, piper_voice)
+        if result:
+            return result
 
-        # Build simple SSML for just this sentence
-        ssml = None
+    # ── Edge TTS (free, human-like) ──
+    if tts_engine in ("auto", "edge"):
         try:
-            ssml = _text_to_ssml(text, voice)
-        except Exception:
+            import edge_tts
+            import asyncio
+        except ImportError:
+            return {"audio_url": None, "engine": "browser", "text": text}
+
+        try:
+            output_dir = frappe.get_site_path("public", "files")
+            filename = "tts_stream_{0}.mp3".format(uuid.uuid4().hex[:12])
+            output_path = os.path.join(output_dir, filename)
+
+            # Build simple SSML for just this sentence
             ssml = None
+            try:
+                ssml = _text_to_ssml(text, voice)
+            except Exception:
+                ssml = None
 
-        async def _generate():
-            if ssml:
-                communicate = edge_tts.Communicate(ssml, voice)
-            else:
-                communicate = edge_tts.Communicate(text, voice)
-            await communicate.save(output_path)
+            async def _generate():
+                if ssml:
+                    communicate = edge_tts.Communicate(ssml, voice)
+                else:
+                    communicate = edge_tts.Communicate(text, voice)
+                await communicate.save(output_path)
 
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    pool.submit(asyncio.run, _generate()).result(timeout=15)
-            else:
-                loop.run_until_complete(_generate())
-        except RuntimeError:
-            asyncio.run(_generate())
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        pool.submit(asyncio.run, _generate()).result(timeout=15)
+                else:
+                    loop.run_until_complete(_generate())
+            except RuntimeError:
+                asyncio.run(_generate())
 
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-            return {
-                "audio_url": "/files/{0}".format(filename),
-                "engine": "edge",
-                "voice": voice,
-            }
-    except Exception as e:
-        frappe.logger().warning("stream_tts failed: {0}".format(str(e)))
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                return {
+                    "audio_url": "/files/{0}".format(filename),
+                    "engine": "edge",
+                    "voice": voice,
+                }
+        except Exception as e:
+            frappe.logger().warning("stream_tts Edge failed: {0}".format(str(e)))
+
+    # ── Piper fallback (if not tried yet) ──
+    if tts_engine not in ("piper",):
+        piper_voice = "en_US-lessac-medium"
+        result = _tts_piper(text, piper_voice)
+        if result:
+            return result
 
     # Fallback
     return {"audio_url": None, "engine": "browser", "text": text}
