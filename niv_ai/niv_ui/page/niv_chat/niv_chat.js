@@ -3294,6 +3294,9 @@ ${htmlCode}
             
             const serverTranscript = (sttResult.message && sttResult.message.text) ? sttResult.message.text.trim() : "";
             
+            // Store detected language for TTS voice matching
+            this.voiceDetectedLanguage = (sttResult.message && sttResult.message.language) || "";
+            
             // Use server transcript if available, fall back to browser
             const transcript = serverTranscript || (this.voiceBrowserTranscript || "").trim();
             
@@ -3656,8 +3659,8 @@ ${htmlCode}
             }
         }
 
-        // Append user message to chat
-        this.append_message("user", transcript);
+        // Append user message to chat with voice indicator
+        this.append_message("user", "🎙️ " + transcript);
         this.scroll_to_bottom();
 
         // Use SSE streaming
@@ -3811,7 +3814,7 @@ ${htmlCode}
         try {
             const r = await frappe.call({
                 method: "niv_ai.niv_core.api.voice.stream_tts",
-                args: { text: sentence },
+                args: { text: sentence, language: this.voiceDetectedLanguage || "" },
             });
             if (r.message && r.message.audio_url) {
                 this.voiceAudioQueue.push(r.message.audio_url);
