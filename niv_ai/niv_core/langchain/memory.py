@@ -228,8 +228,8 @@ def get_system_prompt(conversation_id: str = None) -> str:
 
     # Append auto-discovery context if available
     try:
-        from niv_ai.niv_core.discovery import get_discovery_context
-        discovery_ctx = get_discovery_context()
+        from niv_ai.niv_core.knowledge.unified_discovery import get_discovery_for_agent
+        discovery_ctx = get_discovery_for_agent()
     except Exception:
         discovery_ctx = ""
 
