@@ -10,6 +10,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from .llm import get_llm
 from .tools import get_langchain_tools
 from .memory import get_chat_history, get_system_prompt
+from niv_ai.niv_core.knowledge.memory_service import extract_memories
 from .agent_router import classify_query, get_agent_tools, get_agent_prompt_suffix
 from .callbacks import NivStreamingCallback, NivBillingCallback, NivLoggingCallback
 
@@ -203,7 +204,15 @@ def run_agent(
             if hasattr(msg, "type") and msg.type == "ai" and msg.content:
                 return msg.content
 
-        return cbs["stream"].get_full_response() or "I could not generate a response."
+        response = cbs["stream"].get_full_response() or "I could not generate a response."
+        
+        # Auto-extract memories from conversation
+        try:
+            extract_memories(user, message, response)
+        except Exception:
+            pass  # Non-critical
+        
+        return response
 
     except Exception as e:
         frappe.log_error(f"Agent error: {e}", "Niv AI Agent")
