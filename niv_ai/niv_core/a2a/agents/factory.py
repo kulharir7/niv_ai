@@ -922,8 +922,9 @@ class NivAgentFactory:
             ),
             
             output_key="nbfc_result",
-            disallow_transfer_to_parent=True,
+            disallow_transfer_to_parent=False,  # Allow escalation if needed
             disallow_transfer_to_peers=True,
+            before_agent_callback=init_agent_state,  # Get system discovery data
             generate_content_config=FACTUAL_CONFIG,
             after_tool_callback=store_tool_result_in_state,
             tools=self._get_tools(tool_names),
