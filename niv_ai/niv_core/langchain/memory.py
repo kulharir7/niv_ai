@@ -5,6 +5,7 @@ Token-aware truncation to prevent context window overflow.
 import json
 import frappe
 from niv_ai.niv_core.utils import get_niv_settings
+from niv_ai.niv_core.knowledge.memory_service import get_memories
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 
 
@@ -267,9 +268,22 @@ def get_system_prompt(conversation_id: str = None) -> str:
     except Exception:
         pass
 
+    # Add user long-term memory
+    user_memory = ""
+    try:
+        import frappe
+        if frappe.session and frappe.session.user:
+            user_memory = get_memories(frappe.session.user)
+            if user_memory and "No prior" not in user_memory:
+                user_memory = "\n\n" + user_memory
+            else:
+                user_memory = ""
+    except Exception:
+        user_memory = ""
+
     if discovery_ctx:
-        return default_prompt + "\n\n" + discovery_ctx
-    return default_prompt
+        return default_prompt + "\n\n" + discovery_ctx + user_memory
+    return default_prompt + user_memory
 
 
 def get_dev_system_prompt() -> str:

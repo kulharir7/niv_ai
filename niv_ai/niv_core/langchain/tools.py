@@ -621,6 +621,44 @@ _lc_tools_cache = {"tools": [], "expires": 0}
 _LC_CACHE_TTL = 300  # 5 min, matches mcp_client
 
 
+
+# ─── Memory Tool (Built-in, not MCP) ─────────────────────────────────
+
+def _create_memory_tool():
+    """Create a LangChain tool for saving user memories."""
+    from langchain_core.tools import StructuredTool
+    from pydantic import BaseModel, Field
+    
+    class RememberInput(BaseModel):
+        key: str = Field(description="What to remember (e.g., 'language', 'favorite_report')")
+        value: str = Field(description="The actual value to remember")
+        category: str = Field(default="Preference", description="Category: Preference, Habit, Fact, or Context")
+    
+    def remember_preference(key: str, value: str, category: str = "Preference") -> str:
+        """Save user preference/memory for future conversations."""
+        import frappe
+        from niv_ai.niv_core.knowledge.memory_service import remember
+        
+        try:
+            user = frappe.session.user
+            remember(user, key, value, category)
+            return f"✓ Remembered: {key} = {value} (Category: {category})"
+        except Exception as e:
+            return f"Failed to save memory: {str(e)}"
+    
+    return StructuredTool.from_function(
+        func=remember_preference,
+        name="remember_user_preference",
+        description="""Save user preference/memory for future conversations.
+Use when user says: "yaad rakh", "remember this", "meri preference save karo"
+EXAMPLES:
+- {"key": "language", "value": "Hindi", "category": "Preference"}
+- {"key": "favorite_report", "value": "NPA Report", "category": "Preference"}""",
+        args_schema=RememberInput,
+        return_direct=False,
+    )
+
+
 def get_langchain_tools() -> list:
     """Get all MCP tools as LangChain StructuredTool objects. Cached."""
     import time
@@ -661,6 +699,13 @@ def get_langchain_tools() -> list:
     _lc_tools_cache["tools"] = lc_tools
     _lc_tools_cache["expires"] = time.time() + _LC_CACHE_TTL
 
+    # Add built-in memory tool
+    try:
+        memory_tool = _create_memory_tool()
+        lc_tools.append(memory_tool)
+    except Exception as e:
+        frappe.logger().warning(f"Niv AI: Failed to create memory tool: {e}")
+    
     return lc_tools
 
 
