@@ -1,130 +1,216 @@
-<div align="center">
+# Niv AI - Intelligent Assistant for ERPNext
 
-<img src="docs/logo.svg" width="120" alt="Niv AI Logo"/>
+> 🤖 Smart AI assistant with auto-discovery, advanced memory, and efficient tool calling
 
-# Niv AI (v0.6.1-alpha)
-
-### The First Cognitive OS for ERPNext
-
-*Next-generation multi-agent AI system with A2A protocol, built natively for Frappe/ERPNext.*
-
-[![Version](https://img.shields.io/badge/version-0.6.1--alpha-purple?style=for-the-badge)](CHANGELOG.md)
-[![A2A](https://img.shields.io/badge/A2A-Protocol-FFD700?style=for-the-badge)](https://a2a-protocol.org)
-[![MCP](https://img.shields.io/badge/MCP-Standard-FF6B6B?style=for-the-badge)](https://modelcontextprotocol.io)
-[![Frappe](https://img.shields.io/badge/Frappe-v14%20|%20v15-0089FF?style=for-the-badge)](https://frappeframework.com)
-
-<br/>
-
-**Orchestrated Intelligence** · **Visual Data Analytics** · **Zero-Configuration Onboarding** · **Pure Frappe**
-
-<br/>
-
-[🚀 Getting Started](#-getting-started) · [🤖 Multi-Agent System](#-the-multi-agent-factory) · [📊 Artifacts & Charts](#-artifacts--visual-analytics) · [🏗️ Architecture](#-technical-architecture)
+[![Version](https://img.shields.io/badge/version-0.7.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
+[![ERPNext](https://img.shields.io/badge/ERPNext-v15-green.svg)](https://erpnext.com)
+[![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
 ---
 
-</div>
+## ✨ Features
 
-## 🌟 Why Niv AI v0.6.x?
+### 🧠 Smart Tool Calling
+- **Agent Routing** - Queries automatically routed to specialized agents (NBFC, Accounts, HR)
+- **Reduced Tool Confusion** - 34 tools → 16-20 per agent
+- **Few-shot Examples** - Tool descriptions include exact JSON examples
+- **1-2 tool calls** instead of 7+ for simple queries
 
-Traditional AI chatbots for ERPNext often hallucinate or fail at complex tasks because one single prompt has too many tools and too much context. **Niv AI v0.6.1** introduces a decentralized "Virtual Office" approach.
+### 🔍 System Auto-Discovery
+- Automatically scans your ERPNext system
+- Discovers DocTypes, fields, workflows, modules
+- Agent knows your system without manual configuration
+- Zero tool calls for system info queries
 
-- **No more Mock Data**: Strictly enforced real-data fetching via specialized agents.
-- **Zero Hallucination**: Agents only see tools relevant to their specific role.
-- **Visual Intelligence**: Beautiful interactive charts using `frappe-charts` integrated into a side-panel.
-- **Self-Learning**: A background discovery engine that maps your system logic automatically.
+### 💾 Advanced Memory System
+- **Auto-extraction** - Learns preferences from conversations
+- **Correction tracking** - Remembers user corrections (don't repeat mistakes!)
+- **Entity tracking** - Frequently accessed records remembered
+- **Cross-conversation** - Memory persists between sessions
 
----
-
-## 🔥 Key Features
-
-### 1. 🤖 The Multi-Agent Factory (A2A Protocol)
-Built on `google-adk`, Niv AI delegates tasks between specialized agents:
-- **Orchestrator**: The "Brain" that understands intent and routes tasks.
-- **Frappe Coder**: Expert in DocTypes, Server Scripts, and UI logic.
-- **Data Scientist**: Specializes in SQL queries, data aggregation, and report generation.
-- **NBFC Specialist**: Pre-configured for NBFC/Lending logic (LOS, LMS, Co-Lending).
-
-### 2. 📊 Artifacts & Visual Analytics
-Visualizing ERP data has never been easier.
-- **Interactive Charts**: Powered by `frappe-charts`. Just ask for a "Disbursement Trend".
-- **Live Preview Panel**: A side-panel that renders HTML/JS code or charts instantly (Claude-style).
-- **Auto-Panel Detection**: Panel opens automatically when visual data is detected.
-
-### 3. 🧠 Smart Discovery Engine
-- **Auto-Onboarding**: Scans your instance for Custom DocTypes, active Workflows, and NBFC context.
-- **Cognitive Map**: Builds a persistent mental map of your site so you don't have to explain your process.
-- **Self-Correction**: Logs tool calling mistakes and updates RAG to avoid them in future turns.
-
-### 4. 🎤 Premium Voice Mode
-- **Pipecat-inspired UI**: Sleek, glassmorphism interface with real-time waveform.
-- **Continuous Conversation**: Interrupt the AI, and it listens immediately.
-- **Dual Engine**: Browser STT -> Mistral Voxtral -> Piper TTS (Local) / Edge TTS.
+### 🛠️ MCP Tools Integration
+- Uses `frappe_assistant_core` for MCP tools
+- Create, update, delete documents
+- Run reports, SQL queries
+- NBFC-specific tools (credit scoring, compliance)
 
 ---
 
-## 🚀 Getting Started
+## 📦 Installation
 
-### 📦 Installation
+### Prerequisites
+- ERPNext v15+
+- `frappe_assistant_core` app installed
+- Python 3.10+
+
+### Step 1: Install frappe_assistant_core (MCP Tools)
 
 ```bash
-# 1. Fetch the app
+bench get-app https://github.com/AdarshPS1/frappe_assistant_core.git
+bench --site yoursite install-app frappe_assistant_core
+```
+
+### Step 2: Install Niv AI
+
+```bash
+# Latest version (recommended)
 bench get-app https://github.com/kulharir7/niv_ai.git
-
-# 2. Install on your site
-bench --site [your-site] install-app niv_ai
-
-# 3. Install AI Dependencies (Critical for v0.6.x)
-./env/bin/pip install google-adk[extensions] google-genai==1.3.0
-
-# 4. Migrate & Clear Cache
-bench --site [your-site] migrate
-bench --site [your-site] clear-cache
-bench restart
+bench --site yoursite install-app niv_ai
+bench --site yoursite migrate
 ```
 
-### 🐳 Docker Deployment
-If you are running ERPNext in Docker, ensure you install the dependencies in **all** containers:
+### Step 3: Configure AI Provider
+
+1. Go to **Niv Settings** in ERPNext
+2. Add your AI provider:
+   - **Provider**: ollama-cloud / mistral / openai
+   - **API Key**: Your API key
+   - **Model**: mistral-large-latest (recommended)
+
+### Step 4: Access Niv Chat
+
+Navigate to: `https://yoursite/app/niv-chat`
+
+---
+
+## 🔧 Configuration
+
+### Niv Settings
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| `default_provider` | AI provider to use | ollama-cloud |
+| `default_model` | LLM model | mistral-large-3 |
+| `enable_agent_routing` | Route queries to specialized agents | ✅ Enabled |
+| `enable_knowledge_base` | Enable RAG/embeddings | Optional |
+
+### Supported AI Providers
+
+| Provider | Models | Notes |
+|----------|--------|-------|
+| Ollama Cloud | mistral-large-3, gpt-oss | Recommended |
+| Mistral | mistral-large-latest | Best for tool calling |
+| OpenAI | gpt-4, gpt-4-turbo | Good but expensive |
+| Anthropic | claude-3 | Good reasoning |
+
+---
+
+## 📁 Project Structure
+
+```
+niv_ai/
+├── niv_core/
+│   ├── langchain/           # LangChain agent
+│   │   ├── agent.py         # Main agent logic
+│   │   ├── agent_router.py  # Query routing
+│   │   ├── tools.py         # MCP tool wrappers
+│   │   └── memory.py        # Context building
+│   │
+│   ├── knowledge/           # Knowledge systems
+│   │   ├── memory_service.py      # Advanced memory
+│   │   └── unified_discovery.py   # System auto-scan
+│   │
+│   ├── api/                 # API endpoints
+│   │   └── stream.py        # Chat streaming API
+│   │
+│   └── doctype/             # Frappe DocTypes
+│       ├── niv_settings/
+│       ├── niv_conversation/
+│       ├── niv_message/
+│       └── niv_ai_memory/
+│
+├── public/                  # Frontend (Niv Chat UI)
+└── hooks.py                 # Frappe hooks
+```
+
+---
+
+## 🚀 Usage
+
+### Basic Chat
+```
+User: "Top 5 loans dikhao"
+Niv:  [1 tool call] → Shows loan table with amounts
+```
+
+### System Queries (Zero Tool Calls!)
+```
+User: "Kitne workflows active hain?"
+Niv:  "31 workflows active hain: Branch New, Payment Entry, Loan Application..."
+```
+
+### Memory
+```
+User: "Meri language Hindi yaad rakh"
+Niv:  ✓ Remembered: language = Hindi
+
+[Next conversation]
+Niv:  [Replies in Hindi automatically]
+```
+
+---
+
+## 📊 Version History
+
+| Version | Date | Highlights |
+|---------|------|------------|
+| v0.7.0 | 2026-02-17 | Smart tool calling, Advanced memory, System discovery |
+| v0.6.1 | 2026-02-17 | LangChain agent, A2A deprecated |
+| v0.6.0 | 2026-02-16 | Multi-agent (A2A), Visual charts |
+| v0.5.0 | 2026-02-15 | MCP tools integration |
+
+See [CHANGELOG.md](CHANGELOG.md) for full history.
+
+---
+
+## 🛠️ Development
+
+### Running Locally
+
 ```bash
-docker exec -u 0 [backend-container] pip install google-adk[extensions]
-# Repeat for all workers
+# Clone
+git clone https://github.com/kulharir7/niv_ai.git
+cd niv_ai
+
+# Install in bench
+bench get-app /path/to/niv_ai
+bench --site yoursite install-app niv_ai
 ```
-*Note: Use the included `scripts/deploy_production.sh` for a one-click server update.*
+
+### Version Branches
+
+| Branch | Description |
+|--------|-------------|
+| `main` | Latest stable (v0.7.0) |
+| `v0.6.x` | Previous stable |
 
 ---
 
-## 🏗️ Technical Architecture
+## 🤝 Contributing
 
-Niv AI is a **"Cognitive OS"** layer sitting on top of Frappe:
-
-1.  **Transport Layer**: SSE (Server-Sent Events) for real-time token streaming.
-2.  **Orchestration Layer**: `google-adk` (Agent Development Kit) managing the A2A (Agent-to-Agent) handovers.
-3.  **Tooling Layer**: MCP (Model Context Protocol). 100% of Niv tools are decoupled from the core engine.
-4.  **Presentation Layer**: Modern React-inspired UI with custom Markdown rendering for "Thinking" blocks.
-
----
-
-## 🛠️ Configuration
-
-1.  **AI Provider**: Setup your provider (Mistral/Ollama Cloud/OpenAI) in **Niv AI Provider**.
-2.  **Default Settings**: Select your default provider in **Niv Settings**.
-3.  **Enable A2A**: In Niv Settings -> Capabilities, toggle **"Enable A2A (ADK)"** for the multi-agent experience.
+1. Fork the repository
+2. Create feature branch (`git checkout -b feature/amazing`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing`)
+5. Open Pull Request
 
 ---
 
-## 🗺️ Roadmap to v1.0
+## 📄 License
 
-- [x] v0.6.1: Multi-Agent Orchestration (A2A)
-- [ ] v0.7.0: Autonomous Triggers (Event-driven AI actions)
-- [ ] v0.8.0: Multi-Language Prompts (Hindi/Regional)
-- [ ] v1.0.0: Stable Enterprise Release
+MIT License - see [LICENSE](LICENSE) file.
 
 ---
 
-<div align="center">
+## 🙏 Credits
 
-**Built with ❤️ for the Frappe community by [Ravi Kulhari](https://github.com/kulharir7)**
+- **Frappe Framework** - [frappe.io](https://frappe.io)
+- **ERPNext** - [erpnext.com](https://erpnext.com)
+- **LangChain** - [langchain.com](https://langchain.com)
+- **frappe_assistant_core** - MCP tools provider
 
-[⭐ Star on GitHub](https://github.com/kulharir7/niv_ai) · [💬 Report a Bug](https://github.com/kulharir7/niv_ai/issues)
+---
 
-</div>
+<p align="center">
+  Made with ❤️ for ERPNext
+</p>
