@@ -8,6 +8,15 @@ from frappe import _
 from niv_ai.niv_core.api._helpers import validate_conversation, save_user_message, save_assistant_message, auto_title
 
 
+def _check_rate_limit():
+    """Rate limit check - uses settings if configured"""
+    try:
+        from niv_ai.niv_core.utils.rate_limiter import check_rate_limit
+        check_rate_limit()
+    except ImportError:
+        pass  # Rate limiter not available, skip
+
+
 def _sse(data):
     """Format SSE event"""
     return f"data: {json.dumps(data)}\n\n"
