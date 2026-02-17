@@ -26,6 +26,14 @@ def clean_text_for_tts(text):
 
     t = text
 
+    # Remove thinking/reasoning blocks
+    t = re.sub(r'<think>[\s\S]*?</think>', '', t)
+    t = re.sub(r'<reasoning>[\s\S]*?</reasoning>', '', t)
+    t = re.sub(r'(?m)^Thought:.*$', '', t)
+    t = re.sub(r'(?m)^Action:.*$', '', t)
+    t = re.sub(r'(?m)^Action Input:.*$', '', t)
+    t = re.sub(r'(?m)^Observation:.*$', '', t)
+
     # Remove code blocks entirely (``` ... ```) — replace with "code block"
     t = re.sub(r'```[\s\S]*?```', ' code block ', t)
 
