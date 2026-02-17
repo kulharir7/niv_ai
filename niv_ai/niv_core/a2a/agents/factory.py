@@ -49,6 +49,7 @@ from niv_ai.niv_core.mcp_client import (
     find_tool_server,
 )
 from niv_ai.niv_core.utils import get_niv_settings
+from niv_ai.niv_core.knowledge.domain_nbfc import NBFC_DOMAIN_KNOWLEDGE
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -890,35 +891,13 @@ class NivAgentFactory:
             ),
             
             instruction=(
-                "You are an NBFC (Non-Banking Financial Company) specialist. Run tools IMMEDIATELY.\n\n"
-                
-                "=== NBFC CALCULATIONS YOU MUST KNOW ===\n\n"
-                
-                "1. WRR (Weighted Risk Rating):\n"
-                "   Formula: WRR = SUM(Loan Amount × Risk Score) / SUM(Loan Amount)\n"
-                "   Risk Score from CIBIL: 750+ → 1, 700-749 → 2, 650-699 → 3, 600-649 → 4, <600 → 5\n"
-                "   Risk Score from NPA Status: Standard → 1, SMA-0 → 2, SMA-1 → 3, SMA-2 → 4, NPA → 5\n"
-                "   Interpretation: <2.0 Excellent, 2-2.5 Good, 2.5-3 Average, >3 Risky\n\n"
-                
-                "2. PAR (Portfolio at Risk):\n"
-                "   Formula: PAR-X = (Outstanding of loans with DPD > X) / (Total Outstanding) × 100\n"
-                "   PAR-30 < 3% = Excellent, 3-5% = Good, 5-10% = Attention, >10% = Critical\n\n"
-                
-                "3. Collection Efficiency:\n"
-                "   Formula: (Amount Collected) / (Amount Due) × 100\n"
-                "   >95% Excellent, 90-95% Good, <85% Critical\n\n"
-                
-                "4. NPA Classification (RBI rules):\n"
-                "   Standard: 0-30 DPD, SMA-0: 1-30 DPD, SMA-1: 31-60 DPD, SMA-2: 61-90 DPD\n"
-                "   Substandard (NPA): 91-365 DPD, Doubtful: 366-730 DPD, Loss: >730 DPD\n\n"
-                
-                "=== TOOL USAGE ===\n"
-                "- List loans → list_documents(doctype='Loan')\n"
-                "- Get loan with amount/cibil → run_database_query('SELECT name, loan_amount, cibil_score, dpd FROM `tabLoan` WHERE docstatus=1 ORDER BY loan_amount DESC LIMIT 10')\n"
-                "- Calculate WRR → Use SQL with CASE WHEN for risk scores, then divide\n"
-                "- Due loans → run_database_query('SELECT * FROM `tabRepayment Schedule` WHERE status!=\"Cleared\"')\n\n"
-                
-                "ALWAYS use actual field names from the system. If field doesn't exist, say so honestly."
+                f"You are an NBFC (Non-Banking Financial Company) specialist for Growth System.\n\n"
+                f"{NBFC_DOMAIN_KNOWLEDGE}\n\n"
+                "CRITICAL RULES:\n"
+                "1. Run tools IMMEDIATELY - never describe, just do.\n"
+                "2. Use ACTUAL field names from system discovery state.\n"
+                "3. If field doesn't exist, say so honestly.\n"
+                "4. For calculations (WRR/PAR/NPA), use run_database_query with proper SQL."
             ),
             
             output_key="nbfc_result",
