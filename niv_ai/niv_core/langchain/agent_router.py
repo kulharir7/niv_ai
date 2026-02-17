@@ -86,6 +86,137 @@ POWER_TOOLS = {
 }
 
 
+# ─── Few-Shot Examples for Tool Calling ─────────────────────────────────────
+
+NBFC_TOOL_EXAMPLES = """
+## TOOL CALLING EXAMPLES (Follow these patterns exactly):
+
+### Query: "top 5 loans" / "loan list dikhao" / "show loans"
+```
+list_documents({
+  "doctype": "Loan",
+  "fields": ["name", "applicant_name", "loan_amount", "status", "disbursement_date"],
+  "limit": 5,
+  "order_by": "loan_amount desc"
+})
+```
+
+### Query: "overdue loans" / "NPA loans" / "defaulted loans"
+```
+list_documents({
+  "doctype": "Loan",
+  "fields": ["name", "applicant_name", "loan_amount", "status", "days_past_due"],
+  "filters": {"status": ["in", ["Overdue", "NPA", "Written Off"]]},
+  "limit": 20
+})
+```
+
+### Query: "loan details for LOAN-001" / "show loan ABC"
+```
+get_document({
+  "doctype": "Loan",
+  "name": "LOAN-001"
+})
+```
+
+### Query: "total disbursed amount" / "loan portfolio value"
+```
+run_database_query({
+  "query": "SELECT SUM(loan_amount) as total, COUNT(*) as count FROM `tabLoan` WHERE status='Disbursed'"
+})
+```
+
+### Query: "EMI schedule for loan X"
+```
+list_documents({
+  "doctype": "Repayment Schedule",
+  "filters": {"parent": "LOAN-X"},
+  "fields": ["idx", "payment_date", "principal_amount", "interest_amount", "total_payment", "balance_loan_amount"],
+  "order_by": "idx asc"
+})
+```
+
+### Query: "customers with loans" / "borrowers list"
+```
+list_documents({
+  "doctype": "Customer",
+  "fields": ["name", "customer_name", "mobile_no"],
+  "filters": {"customer_group": "Borrower"},
+  "limit": 20
+})
+```
+
+## RULES:
+1. ONE tool call is enough for simple queries - don't call multiple tools unnecessarily
+2. Always include relevant fields in the fields array
+3. Use filters to narrow results instead of fetching everything
+4. Use order_by for "top X" queries
+5. Use limit to control result size
+"""
+
+ACCOUNTS_TOOL_EXAMPLES = """
+## TOOL CALLING EXAMPLES:
+
+### Query: "top 5 invoices" / "recent sales"
+```
+list_documents({
+  "doctype": "Sales Invoice",
+  "fields": ["name", "customer", "grand_total", "status", "posting_date"],
+  "limit": 5,
+  "order_by": "posting_date desc"
+})
+```
+
+### Query: "unpaid invoices" / "outstanding receivables"
+```
+list_documents({
+  "doctype": "Sales Invoice",
+  "fields": ["name", "customer", "grand_total", "outstanding_amount"],
+  "filters": {"outstanding_amount": [">", 0], "docstatus": 1},
+  "limit": 20
+})
+```
+
+### Query: "account balance" / "ledger for account X"
+```
+run_database_query({
+  "query": "SELECT SUM(debit)-SUM(credit) as balance FROM `tabGL Entry` WHERE account='Cash - ABC'"
+})
+```
+
+## RULES:
+1. ONE tool call for simple queries
+2. Include only necessary fields
+3. Use filters effectively
+"""
+
+GENERAL_TOOL_EXAMPLES = """
+## TOOL CALLING EXAMPLES:
+
+### Query: "list of [DocType]" / "show [records]"
+```
+list_documents({
+  "doctype": "[DocType Name]",
+  "fields": ["name", "...relevant fields..."],
+  "limit": 10
+})
+```
+
+### Query: "details of [record]"
+```
+get_document({
+  "doctype": "[DocType]",
+  "name": "[Record Name]"
+})
+```
+
+## RULES:
+1. ONE tool call is usually enough
+2. Don't call get_doctype_info unless you truly don't know the fields
+3. Use filters to narrow results
+"""
+
+
 # ─── Agent Registry ────────────────────────────────────────────────────────
 
 AGENT_REGISTRY = {
@@ -103,15 +234,19 @@ AGENT_REGISTRY = {
             "pre-emi", "moratorium", "foreclosure", "topup"
         ],
         "tools": CORE_TOOLS | REPORT_TOOLS | NBFC_TOOLS | {"run_python_code", "submit_document", "run_workflow"},
-        "prompt_suffix": """\n\nYou are specialized in NBFC and lending operations. You understand:
+        "prompt_suffix": """
+
+You are specialized in NBFC and lending operations. You understand:
 - Loan Application lifecycle (Lead → Application → Sanction → Disbursement)
 - NPA Classification (SMA-0, SMA-1, SMA-2, Sub-standard, Doubtful, Loss)
 - Collection and Recovery processes
 - Co-lending and Balance Transfer
 - Regulatory compliance (RBI guidelines)
 
+""" + NBFC_TOOL_EXAMPLES + """
+
 For calculations, use the NBFC-specific tools (nbfc_credit_scoring, etc.) when available.
-Always show financial data in proper tables with formatted numbers.""",
+Always show financial data in proper tables with formatted numbers (₹ symbol, commas).""",
     },
 
     "accounts": {
@@ -126,14 +261,18 @@ Always show financial data in proper tables with formatted numbers.""",
             "voucher", "fiscal year", "cost center", "budget"
         ],
         "tools": CORE_TOOLS | REPORT_TOOLS | WRITE_TOOLS | {"run_python_code", "analyze_business_data"},
-        "prompt_suffix": """\n\nYou are specialized in accounting and finance. You understand:
+        "prompt_suffix": """
+
+You are specialized in accounting and finance. You understand:
 - Chart of Accounts and General Ledger
 - Journal Entries and Payment Entries
 - Sales and Purchase Invoices
 - GST/TDS compliance
 - Financial statements (P&L, Balance Sheet, Cash Flow)
 
-Always format amounts with currency symbols and proper number formatting.""",
+""" + ACCOUNTS_TOOL_EXAMPLES + """
+
+Always format amounts with ₹ symbol and proper number formatting (e.g., ₹1,23,456.00).""",
     },
 
     "hr": {
@@ -147,7 +286,9 @@ Always format amounts with currency symbols and proper number formatting.""",
             "gratuity", "ctc", "designation", "department", "holiday"
         ],
         "tools": CORE_TOOLS | REPORT_TOOLS | {"run_python_code"},
-        "prompt_suffix": """\n\nYou are specialized in HR and payroll. You understand:
+        "prompt_suffix": """
+
+You are specialized in HR and payroll. You understand:
 - Employee lifecycle (Recruitment → Onboarding → Active → Exit)
 - Leave management and attendance tracking
 - Payroll processing and salary slips
@@ -161,7 +302,9 @@ Be mindful of data privacy — only share information the user has permission to
         "description": "Handles full-stack Frappe development tasks with complete tool access",
         "keywords": ["dev", "developer", "doctype", "custom field", "workflow", "script", "report", "api", "hook", "debug"],
         "tools": None,  # Full tool access in dev mode
-        "prompt_suffix": """\n\nDeveloper mode is active. You may perform multi-step implementation with full tools.
+        "prompt_suffix": """
+
+Developer mode is active. You may perform multi-step implementation with full tools.
 Before making broad changes, explain scope and impact. Prefer safe, reversible updates.""",
     },
 
@@ -171,9 +314,14 @@ Before making broad changes, explain scope and impact. Prefer safe, reversible u
         "keywords": [],  # Empty keywords — this is the fallback
         # LIMITED tool set for general queries - prevents overwhelming the LLM
         "tools": CORE_TOOLS | READ_TOOLS | REPORT_TOOLS | {"run_python_code", "create_document", "update_document"},
-        "prompt_suffix": """\n\nYou are a helpful assistant for ERPNext/Frappe. 
+        "prompt_suffix": """
+
+You are a helpful assistant for this ERP system.
 Focus on answering the user's question directly and efficiently.
-Use the minimum number of tool calls needed to get the answer.""",
+
+""" + GENERAL_TOOL_EXAMPLES + """
+
+Use the MINIMUM number of tool calls needed to get the answer.""",
     },
 
     "reporting": {
@@ -184,7 +332,9 @@ Use the minimum number of tool calls needed to get the answer.""",
             "summary", "aggregate", "export", "excel", "pdf", "trend"
         ],
         "tools": CORE_TOOLS | REPORT_TOOLS | DASHBOARD_TOOLS | UTILITY_TOOLS | {"run_python_code"},
-        "prompt_suffix": """\n\nYou are specialized in reports and data visualization.
+        "prompt_suffix": """
+
+You are specialized in reports and data visualization.
 Use generate_report for standard Frappe reports.
 Use run_python_code for custom analysis and calculations.
 Use excel_generator or pdf_generator for exports.""",
