@@ -3237,29 +3237,63 @@ ${htmlCode}
     }
 
     async process_voice_recording() {
-        if (this.voiceAudioChunks.length === 0 && !this.voiceBrowserTranscript) {
+        if (this.voiceAudioChunks.length === 0) {
             this.set_voice_state("idle");
             return;
         }
 
         this.set_voice_state("processing");
 
-        // Phase 2: If we have browser transcript, use streaming TTS for faster response
-        if (this.voiceBrowserTranscript && this.voiceBrowserTranscript.trim()) {
-            const transcript = this.voiceBrowserTranscript.trim();
-            this.voiceBrowserTranscript = "";
+        // Phase 3: Send audio to server for Faster-Whisper STT (accurate, multilingual)
+        try {
+            const blob = new Blob(this.voiceAudioChunks, { type: this.voiceAudioChunks[0]?.type || "audio/webm" });
+            const reader = new FileReader();
+            const base64Data = await new Promise((resolve, reject) => {
+                reader.onloadend = () => resolve(reader.result.split(",")[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
             
-            // Still try to get server STT for accuracy, but don't wait if we have browser transcript
-            if (this.voiceAudioChunks.length > 0) {
-                // Fire-and-forget: send audio for server STT (for logging/accuracy)
-                try {
-                    const blob = new Blob(this.voiceAudioChunks, { type: this.voiceAudioChunks[0]?.type || "audio/webm" });
-                    // We already have browser transcript, just proceed with streaming
-                } catch (e) {}
+            // Show browser transcript as interim while server processes
+            if (this.voiceBrowserTranscript && this.voiceBrowserTranscript.trim()) {
+                this.$voiceTranscript.html(
+                    '<span style="opacity:0.6">' + this.voiceBrowserTranscript + '</span> <span style="font-size:0.8em">⏳</span>'
+                );
             }
             
-            // Use streaming voice mode for much faster first-audio
+            // Call server STT (Faster-Whisper)
+            const sttResult = await frappe.call({
+                method: "niv_ai.niv_core.api.voice.stt_from_base64",
+                args: { audio_base64: base64Data },
+            });
+            
+            const serverTranscript = (sttResult.message && sttResult.message.text) ? sttResult.message.text.trim() : "";
+            
+            // Use server transcript if available, fall back to browser
+            const transcript = serverTranscript || (this.voiceBrowserTranscript || "").trim();
+            
+            if (!transcript) {
+                this.set_voice_state("error", "Couldn't understand. Try again.");
+                return;
+            }
+            
+            // Show final transcript
+            this.$voiceTranscript.text(transcript);
+            
+            // Use streaming voice mode
             this.voice_send_streaming(transcript);
+            return;
+            
+        } catch (sttErr) {
+            console.warn("Server STT failed:", sttErr);
+            // Fall back to browser transcript
+            const fallback = (this.voiceBrowserTranscript || "").trim();
+            if (fallback) {
+                this.$voiceTranscript.text(fallback);
+                this.voice_send_streaming(fallback);
+                return;
+            }
+            this.set_voice_state("error", "STT failed. Try again.");
             return;
         }
 
