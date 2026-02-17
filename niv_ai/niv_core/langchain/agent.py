@@ -161,6 +161,25 @@ def _cleanup_user_api_key():
         pass
 
 
+
+def _strip_thinking(text):
+    """Remove <think>...</think> and similar reasoning tags from response"""
+    import re
+    if not text:
+        return text
+    # Remove <think>...</think> blocks (Mistral/DeepSeek style)
+    text = re.sub(r'<think>[\s\S]*?</think>', '', text)
+    # Remove <reasoning>...</reasoning>
+    text = re.sub(r'<reasoning>[\s\S]*?</reasoning>', '', text)
+    # Remove Thought: ... Action: patterns (ReAct leftovers)
+    text = re.sub(r'(?m)^Thought:.*$', '', text)
+    text = re.sub(r'(?m)^Action:.*$', '', text)
+    text = re.sub(r'(?m)^Action Input:.*$', '', text)
+    text = re.sub(r'(?m)^Observation:.*$', '', text)
+    # Clean up extra whitespace
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip()
+
 def run_agent(
     message: str,
     conversation_id: str = None,
@@ -202,9 +221,9 @@ def run_agent(
         # Extract final AI response
         for msg in reversed(result.get("messages", [])):
             if hasattr(msg, "type") and msg.type == "ai" and msg.content:
-                return msg.content
+                return _strip_thinking(msg.content)
 
-        response = cbs["stream"].get_full_response() or "I could not generate a response."
+        response = _strip_thinking(cbs["stream"].get_full_response() or "I could not generate a response.")
         
         # Auto-extract memories from conversation
         try:

@@ -2492,6 +2492,13 @@ ${htmlCode}
     // ─── TTS ────────────────────────────────────────────────────────
 
     cleanTextForTTS(text) {
+        // Strip thinking/reasoning blocks first
+        text = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+        text = text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, '');
+        text = text.replace(/^Thought:.*$/gm, '');
+        text = text.replace(/^Action:.*$/gm, '');
+        text = text.replace(/^Action Input:.*$/gm, '');
+        text = text.replace(/^Observation:.*$/gm, '');
         if (!text) return "";
         let t = text;
 
