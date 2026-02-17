@@ -50,6 +50,7 @@ from niv_ai.niv_core.mcp_client import (
 )
 from niv_ai.niv_core.utils import get_niv_settings
 from niv_ai.niv_core.knowledge.domain_nbfc import NBFC_DOMAIN_KNOWLEDGE
+from niv_ai.niv_core.tools.cibil_tools import get_cibil_score, check_credit_eligibility, get_credit_history
 
 
 # ─────────────────────────────────────────────────────────────────
@@ -872,13 +873,35 @@ class NivAgentFactory:
             tools=self._get_tools(tool_names),
         )
 
+    
+    def _make_cibil_score_tool(self):
+        """Tool to get CIBIL/Credit score for an applicant."""
+        from niv_ai.niv_core.tools.cibil_tools import get_cibil_score
+        get_cibil_score.__name__ = "get_cibil_score"
+        get_cibil_score.__doc__ = "Get CIBIL/Credit score for a customer or loan application. Pass applicant name or loan_application ID."
+        return get_cibil_score
+
+    def _make_eligibility_tool(self):
+        """Tool to check loan eligibility based on CIBIL and income."""
+        from niv_ai.niv_core.tools.cibil_tools import check_credit_eligibility
+        check_credit_eligibility.__name__ = "check_credit_eligibility"
+        check_credit_eligibility.__doc__ = "Check loan eligibility: pass cibil_score (300-900), loan_amount, monthly_income, and optionally existing_emi."
+        return check_credit_eligibility
+
+    def _make_credit_history_tool(self):
+        """Tool to get credit assessment history."""
+        from niv_ai.niv_core.tools.cibil_tools import get_credit_history
+        get_credit_history.__name__ = "get_credit_history"
+        get_credit_history.__doc__ = "Get complete credit assessment history for a loan application."
+        return get_credit_history
+
     def create_nbfc_agent(self) -> LlmAgent:
         """
         NBFC/Lending Operations Specialist for Growth System.
         """
         tool_names = [
             "run_nbfc_audit", "run_database_query", "list_documents", "get_doctype_info",
-            "get_document", "search_documents",
+            "get_document", "search_documents", "get_cibil_score", "check_credit_eligibility", "get_credit_history",
         ]
         
         return LlmAgent(
