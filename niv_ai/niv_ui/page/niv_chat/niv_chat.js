@@ -2250,7 +2250,7 @@ ${htmlCode}
                                 }
                             }
                         } else if (data.type === "agent_transfer") {
-                            // Agent display
+                            // A2A: Show which agent is handling the request
                             if (is_active) {
                                 if (!$msgEl) {
                                     this.hide_typing();
@@ -2282,7 +2282,7 @@ ${htmlCode}
                                 this.scroll_to_bottom_if_near();
                             }
                         } else if (data.type === "state_change") {
-                            // State updates
+                            // A2A: State updates (optional display)
                             // Currently just track, don't render
                             if (data.key && data.key.endsWith("_result")) {
                                 // Agent finished, could show indicator
@@ -3522,15 +3522,13 @@ ${htmlCode}
 
         this.wrapper.find(".niv-dev-mode-section").show();
         this.$devModeToggle = this.wrapper.find(".btn-dev-mode-toggle");
+        // A2A removed: this.$a2aToggle = this.wrapper.find(".btn-a2a-toggle");
+        
         this.dev_mode = localStorage.getItem("niv-dev-mode") === "true";
         this.$devModeToggle.prop("checked", this.dev_mode);
 
-        // Load A2A state from DB
-        frappe.db.get_value("Niv Settings", "Niv Settings", "enable_a2a").then((r) => {
-            if (r && r.message) {
-                this.$a2aToggle.prop("checked", !!r.message.enable_a2a);
-            }
-        });
+        // A2A toggle removed - start
+        // A2A toggle removed - end
 
         this.$devModeToggle.on("change", () => {
             this.dev_mode = this.$devModeToggle.is(":checked");
@@ -3543,8 +3541,8 @@ ${htmlCode}
             }
         });
 
-        // A2A toggle removed
-        });
+        // A2A change handler removed - start
+        // A2A change handler removed - end
 
         this.update_dev_mode_indicator();
     }
