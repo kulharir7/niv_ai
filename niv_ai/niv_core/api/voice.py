@@ -821,6 +821,83 @@ def speech_to_text(audio_file, engine=None):
     return {"text": result.get("text", "")}
 
 
+
+
+@frappe.whitelist(allow_guest=False)
+def stt_from_base64(**kwargs):
+    """Server-side STT from base64 audio. Returns transcript text.
+    
+    Phase 3: Primary STT endpoint - replaces browser Web Speech API.
+    Uses Faster-Whisper locally (free, accurate, multilingual).
+    """
+    import base64
+    
+    check_rate_limit()
+    
+    audio_base64 = frappe.form_dict.get("audio_base64", "")
+    if not audio_base64:
+        return {"text": "", "error": "No audio data"}
+    
+    try:
+        audio_bytes = base64.b64decode(audio_base64)
+        
+        # Save to temp file for Whisper
+        tmp = tempfile.NamedTemporaryFile(suffix=".webm", delete=False)
+        tmp.write(audio_bytes)
+        tmp.close()
+        
+        # Try Faster-Whisper first
+        result = _stt_whisper(tmp.name)
+        
+        if result and result.get("text"):
+            try:
+                os.unlink(tmp.name)
+            except Exception:
+                pass
+            return {
+                "text": result["text"],
+                "language": result.get("language", ""),
+                "engine": "whisper-local",
+            }
+        
+        # Fallback to API STT
+        config = _get_voice_config()
+        if config.get("api_key"):
+            provider_type = config.get("provider_type", "openai")
+            stt_model = "mistral-stt-latest" if provider_type == "mistral" else "whisper-1"
+            
+            with open(tmp.name, "rb") as f:
+                resp = requests.post(
+                    f"{config['base_url']}/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {config['api_key']}"},
+                    files={"file": ("audio.webm", f, "audio/webm")},
+                    data={"model": stt_model},
+                    timeout=30,
+                )
+            
+            if resp.status_code == 200:
+                api_result = resp.json()
+                try:
+                    os.unlink(tmp.name)
+                except Exception:
+                    pass
+                return {
+                    "text": api_result.get("text", ""),
+                    "engine": "api",
+                }
+        
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+        
+        return {"text": "", "error": "STT failed - no engine available"}
+        
+    except Exception as e:
+        frappe.logger().warning(f"stt_from_base64 error: {e}")
+        return {"text": "", "error": str(e)}
+
+
 @frappe.whitelist(allow_guest=False)
 def voice_chat(conversation_id, audio_file, voice=None):
     """Combined voice chat: STT → Chat → TTS in one call."""
