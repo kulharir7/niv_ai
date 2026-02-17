@@ -1,3 +1,48 @@
+## [0.7.0] - 2026-02-17
+
+### 🚀 Major Release: Smart Tool Calling + Advanced Memory
+
+#### Tool Calling Improvements
+- **Model upgraded**: `gpt-oss:120b` → `mistral-large-3:675b` for better tool calling
+- **Agent routing**: Queries automatically routed to specialized agents (NBFC, Accounts, HR)
+- **Tool reduction**: 34 tools → 16-20 per agent (less confusion for LLM)
+- **Few-shot examples**: Tool descriptions include exact JSON examples
+- **Enhanced descriptions**: Short MCP tool descriptions replaced with detailed ones
+
+#### System Discovery (Auto-Scan)
+- **Unified discovery**: Single source of truth for system knowledge
+- **Auto-scan**: Automatically discovers DocTypes, fields, workflows on any ERPNext
+- **585 DocTypes, 31 workflows** discovered and injected into agent context
+- **Zero tool calls** for system info queries - agent already knows!
+
+#### Advanced Memory System
+- **6 memory categories**: Preference, Correction, Entity, Fact, Summary, Habit
+- **Auto-extraction**: Automatically detects language, format preferences from conversations
+- **Correction tracking**: User corrections saved with HIGH importance (don't repeat mistakes!)
+- **Entity tracking**: Frequently accessed records remembered
+- **Memory decay**: Old unused memories automatically cleaned up
+- **Semantic search**: Query-based memory retrieval
+- **remember_user_preference tool**: Agent can explicitly save memories
+
+#### Architecture
+- **A2A deprecated**: Multi-agent system moved to `_a2a_deprecated/`
+- **LangChain agent**: Single agent with LangGraph ReAct pattern
+- **MCP tools**: All tools loaded from `frappe_assistant_core`
+
+### Files Changed
+- `niv_core/knowledge/memory_service.py` - Advanced Memory System (350+ lines)
+- `niv_core/knowledge/unified_discovery.py` - System auto-scan
+- `niv_core/langchain/agent_router.py` - Query routing + tool filtering
+- `niv_core/langchain/tools.py` - Enhanced descriptions + memory tool
+- `niv_core/langchain/memory.py` - Memory context injection
+- `niv_core/langchain/agent.py` - Auto-extraction hook
+
+### Performance
+- Tool calls reduced from 7+ to 1-2 for simple queries
+- System queries answered without any tool calls
+- Memory persists across conversations
+
+
 # Changelog
 
 ## v0.6.1 (2026-02-17)
