@@ -316,12 +316,13 @@ class LLMProvider:
 
 def get_llm_provider(tools: List[MCPTool] = None, system_prompt: str = "") -> LLMProvider:
     """Factory function to get configured LLM provider"""
-    settings = frappe.get_single("Niv AI Settings")
+    from niv_ai.niv_core.utils import get_niv_settings
+    settings = get_niv_settings()
     
-    provider = (settings.get("llm_provider") or "ollama").lower()
-    model = settings.get("llm_model") or "mistral"
-    api_key = settings.get("llm_api_key") or ""
-    base_url = settings.get("llm_base_url") or ""
+    provider = (settings.get("default_provider") or "ollama").lower()
+    model = settings.get("default_model") or "mistral"
+    api_key = settings.get("api_key") or ""
+    base_url = settings.get("base_url") or ""
     
     return LLMProvider(
         provider=provider,

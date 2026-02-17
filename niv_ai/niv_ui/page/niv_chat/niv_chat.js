@@ -2250,7 +2250,7 @@ ${htmlCode}
                                 }
                             }
                         } else if (data.type === "agent_transfer") {
-                            // A2A: Show which agent is handling the request
+                            // Agent display
                             if (is_active) {
                                 if (!$msgEl) {
                                     this.hide_typing();
@@ -2282,7 +2282,7 @@ ${htmlCode}
                                 this.scroll_to_bottom_if_near();
                             }
                         } else if (data.type === "state_change") {
-                            // A2A: State updates (optional display)
+                            // State updates
                             // Currently just track, don't render
                             if (data.key && data.key.endsWith("_result")) {
                                 // Agent finished, could show indicator
@@ -3522,8 +3522,6 @@ ${htmlCode}
 
         this.wrapper.find(".niv-dev-mode-section").show();
         this.$devModeToggle = this.wrapper.find(".btn-dev-mode-toggle");
-        this.$a2aToggle = this.wrapper.find(".btn-a2a-toggle");
-        
         this.dev_mode = localStorage.getItem("niv-dev-mode") === "true";
         this.$devModeToggle.prop("checked", this.dev_mode);
 
@@ -3545,11 +3543,7 @@ ${htmlCode}
             }
         });
 
-        this.$a2aToggle.on("change", () => {
-            const val = this.$a2aToggle.is(":checked") ? 1 : 0;
-            frappe.db.set_value("Niv Settings", "Niv Settings", "enable_a2a", val).then(() => {
-                frappe.show_alert({ message: val ? "A2A Protocol Enabled" : "A2A Protocol Disabled", indicator: val ? "green" : "orange" });
-            });
+        // A2A toggle removed
         });
 
         this.update_dev_mode_indicator();
