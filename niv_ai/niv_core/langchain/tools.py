@@ -23,6 +23,46 @@ from niv_ai.niv_core.mcp_client import (
 )
 
 
+
+# ─── Enhanced Tool Descriptions ────────────────────────────────────
+# Short MCP descriptions replaced with detailed ones + examples
+
+ENHANCED_DESCRIPTIONS = {
+    "list_documents": """List/search documents from any DocType.
+PARAMS: doctype (required), fields (list), filters (dict), limit (int), order_by (str)
+EXAMPLES:
+- Top 5 loans: {"doctype": "Loan", "fields": ["name", "applicant_name", "loan_amount"], "limit": 5, "order_by": "loan_amount desc"}
+- Overdue: {"doctype": "Loan", "filters": {"status": "Overdue"}}""",
+
+    "get_document": """Get single document details.
+PARAMS: doctype, name (both required)
+EXAMPLE: {"doctype": "Loan", "name": "LOAN-001"}""",
+
+    "run_database_query": """SQL SELECT for aggregations/joins.
+PARAMS: query (SELECT only)
+EXAMPLES:
+- Count: "SELECT COUNT(*) FROM `tabLoan`"
+- Sum: "SELECT SUM(loan_amount) FROM `tabLoan` WHERE status='Disbursed'"
+- Group: "SELECT status, COUNT(*) FROM `tabLoan` GROUP BY status" """,
+
+    "search_documents": """Global search. Use list_documents when DocType is known.""",
+
+    "get_doctype_info": """Get field schema. Use only if fields unknown - system knowledge has common DocTypes.""",
+
+    "create_document": """Create new document.
+PARAMS: doctype, data (dict with field values)
+EXAMPLE: {"doctype": "Customer", "data": {"customer_name": "ABC", "customer_type": "Individual"}}""",
+
+    "update_document": """Update existing document.
+PARAMS: doctype, name, data (fields to update)
+EXAMPLE: {"doctype": "Loan", "name": "LOAN-001", "data": {"status": "Closed"}}""",
+}
+
+def _enhance_description(name: str, desc: str) -> str:
+    """Replace short descriptions with enhanced ones."""
+    return ENHANCED_DESCRIPTIONS.get(name, desc)
+
+
 # JSON Schema type → Python type mapping
 _TYPE_MAP = {
     "string": str,
@@ -602,6 +642,7 @@ def get_langchain_tools() -> list:
             continue
 
         description = func_def.get("description", "")[:4096]
+        description = _enhance_description(name, description)  # Use enhanced if available
         parameters = func_def.get("parameters", {})
 
         args_schema = _build_pydantic_model(name, parameters)
