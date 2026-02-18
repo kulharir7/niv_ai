@@ -39,8 +39,8 @@ def clean_text_for_tts(text):
     # Remove code blocks entirely (``` ... ```) — replace with "code block"
     t = re.sub(r'```[\s\S]*?```', ' code block ', t)
 
-    # Remove inline code
-    t = re.sub(r'`[^`]+`', '', t)
+    # Inline code: keep the text inside backticks
+    t = re.sub(r'`([^`]+)`', r'\1', t)
 
     # Detect error stack traces
     t = re.sub(
@@ -62,9 +62,17 @@ def clean_text_for_tts(text):
     # Remove markdown images ![alt](url)
     t = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'\1', t)
 
-    # Remove markdown tables
-    t = re.sub(r'(?m)^\|.*\|$', '', t)
-    t = re.sub(r'(?m)^[\s|:-]+$', '', t)
+    # Convert markdown tables to spoken format
+    # Remove separator rows (|---|---|)
+    t = re.sub(r'(?m)^\|[-:\s|]+\|$', '', t)
+    # Convert table rows: | col1 | col2 | → col1, col2.
+    def _table_row_to_speech(m):
+        cells = [c.strip() for c in m.group(0).strip('|').split('|') if c.strip()]
+        # Skip if all cells are just dashes (separator)
+        if all(re.match(r'^[-:]+$', c) for c in cells):
+            return ''
+        return ', '.join(cells) + '.'
+    t = re.sub(r'(?m)^\|.+\|$', _table_row_to_speech, t)
 
     # Headings: # Title → Title.
     t = re.sub(r'(?m)^#{1,6}\s+(.*)', r'\1.', t)
