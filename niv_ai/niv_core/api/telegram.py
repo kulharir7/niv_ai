@@ -79,9 +79,18 @@ def webhook(**kwargs):
                 _send_telegram(chat_id, "❌ No linked account. Please ask your admin to link your Telegram ID.")
                 return {"ok": True}
             conversation_id = _get_or_create_conversation(frappe_user, chat_id)
-            frappe.set_user(frappe_user)
-            _handle_voice_message(chat_id, voice, conversation_id, frappe_user, message)
             frappe.db.commit()
+            # Run voice processing in background
+            frappe.enqueue(
+                _process_voice_background,
+                queue="default",
+                timeout=300,
+                chat_id=chat_id,
+                voice=voice,
+                conversation_id=conversation_id,
+                frappe_user=frappe_user,
+                message=message,
+            )
             return {"ok": True}
 
         # Photo with caption
@@ -110,16 +119,19 @@ def webhook(**kwargs):
             return {"ok": True}
 
         conversation_id = _get_or_create_conversation(frappe_user, chat_id)
-        frappe.set_user(frappe_user)
-
-        # Check streaming preference
-        live_stream = getattr(settings, "telegram_live_stream", 1)
-        if live_stream:
-            _handle_stream(chat_id, text, conversation_id, frappe_user)
-        else:
-            _handle_batch(chat_id, text, conversation_id, frappe_user)
-
         frappe.db.commit()
+
+        # Run agent in background to avoid Telegram webhook timeout (60s)
+        frappe.enqueue(
+            _process_message_background,
+            queue="default",
+            timeout=300,
+            chat_id=chat_id,
+            text=text,
+            conversation_id=conversation_id,
+            frappe_user=frappe_user,
+            live_stream=getattr(settings, "telegram_live_stream", 1),
+        )
         return {"ok": True}
 
     except Exception:
@@ -456,7 +468,42 @@ def _cmd_status(chat_id, telegram_user_id):
 
 
 # ═══════════════════════════════════════════════════════════════════════
-# SECTION 3: STREAMING RESPONSE HANDLER
+# SECTION 3: BACKGROUND MESSAGE PROCESSOR
+# ═══════════════════════════════════════════════════════════════════════
+
+def _process_voice_background(chat_id, voice, conversation_id, frappe_user, message):
+    """Process voice message in background job."""
+    try:
+        frappe.set_user(frappe_user)
+        _handle_voice_message(chat_id, voice, conversation_id, frappe_user, message)
+        frappe.db.commit()
+    except Exception as e:
+        frappe.log_error("Telegram Voice Background Error", frappe.get_traceback())
+        try:
+            _send_telegram(chat_id, f"❌ Voice processing failed: {str(e)[:200]}")
+        except Exception:
+            pass
+
+
+def _process_message_background(chat_id, text, conversation_id, frappe_user, live_stream=1):
+    """Process message in background job — avoids Telegram webhook 60s timeout."""
+    try:
+        frappe.set_user(frappe_user)
+        if live_stream:
+            _handle_stream(chat_id, text, conversation_id, frappe_user)
+        else:
+            _handle_batch(chat_id, text, conversation_id, frappe_user)
+        frappe.db.commit()
+    except Exception as e:
+        frappe.log_error("Telegram Background Error", frappe.get_traceback())
+        try:
+            _send_telegram(chat_id, f"❌ Something went wrong: {str(e)[:200]}")
+        except Exception:
+            pass
+
+
+# ═══════════════════════════════════════════════════════════════════════
+# SECTION 3b: STREAMING RESPONSE HANDLER
 # ═══════════════════════════════════════════════════════════════════════
 
 def _handle_stream(chat_id, text, conversation_id, frappe_user):
@@ -1363,11 +1410,13 @@ def _ensure_db():
 
 
 def _get_settings():
-    """Get Niv Settings (cached)."""
-    try:
-        return frappe.get_doc("Niv Settings", "Niv Settings")
-    except Exception:
-        return frappe._dict()
+    """Get Niv Settings (cached per request via frappe.local)."""
+    if not hasattr(frappe.local, '_niv_tg_settings'):
+        try:
+            frappe.local._niv_tg_settings = frappe.get_doc("Niv Settings", "Niv Settings")
+        except Exception:
+            frappe.local._niv_tg_settings = frappe._dict()
+    return frappe.local._niv_tg_settings
 
 
 def _get_bot_token():
@@ -1429,7 +1478,7 @@ def _send_telegram_with_buttons(chat_id, text, buttons, parse_mode="Markdown"):
 
 
 def _edit_telegram(chat_id, message_id, text, parse_mode="Markdown"):
-    """Edit existing message."""
+    """Edit existing message. Returns True on success or if message unchanged."""
     token = _get_bot_token()
     if not token or not message_id:
         return False
@@ -1439,9 +1488,14 @@ def _edit_telegram(chat_id, message_id, text, parse_mode="Markdown"):
 
     try:
         r = requests.post(url, json=payload, timeout=10)
-        if not r.ok and parse_mode:
-            payload.pop("parse_mode")
-            r = requests.post(url, json=payload, timeout=10)
+        if not r.ok:
+            error_desc = r.json().get("description", "") if r.text else ""
+            # "message is not modified" is not a real error — just same content
+            if "message is not modified" in error_desc:
+                return True
+            if parse_mode:
+                payload.pop("parse_mode")
+                r = requests.post(url, json=payload, timeout=10)
         return r.ok
     except Exception:
         return False
