@@ -97,7 +97,8 @@ def save_user_message(conversation_id: str, message: str, dedup: bool = False):
 
 
 def save_assistant_message(conversation_id: str, content: str, tool_calls: list = None,
-                          input_tokens: int = 0, output_tokens: int = 0, total_tokens: int = 0):
+                          input_tokens: int = 0, output_tokens: int = 0, total_tokens: int = 0,
+                          model: str = None):
     """Save assistant response to Niv Message with token usage."""
     try:
         msg_data = {
@@ -109,6 +110,8 @@ def save_assistant_message(conversation_id: str, content: str, tool_calls: list 
             "output_tokens": output_tokens or 0,
             "total_tokens": total_tokens or 0,
         }
+        if model:
+            msg_data["model"] = model
         if tool_calls:
             msg_data["tool_calls_json"] = json.dumps(tool_calls, default=str)
 
