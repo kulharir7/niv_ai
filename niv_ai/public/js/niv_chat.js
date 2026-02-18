@@ -2063,9 +2063,22 @@ ${htmlCode}
         } catch(e) {}
         const route = frappe.get_route();
         const ctx = { route };
-        if (route && route[0] === "Form" && route.length >= 3) {
-            ctx.doctype = route[1];
-            ctx.docname = route[2];
+        if (route && route.length > 0) {
+            const view = route[0];
+            if (view === "Form" && route.length >= 3) {
+                ctx.doctype = route[1];
+                ctx.docname = route[2];
+            } else if (view === "List" && route.length >= 2) {
+                ctx.list_doctype = route[1];
+            } else if (view === "query-report" && route.length >= 2) {
+                ctx.query_report = route[1];
+            } else if (view === "Report" && route.length >= 2) {
+                ctx.report_name = route[1];
+            } else if (view === "Dashboard" && route.length >= 2) {
+                ctx.dashboard = route[1];
+            } else if (view === "Workspaces" || view === "app") {
+                ctx.workspace = route.slice(1).join("/") || "Home";
+            }
         }
         return ctx;
     }

@@ -356,3 +356,46 @@ def get_dev_system_prompt() -> str:
         "2. Document name/link\n"
         "3. Any next steps (bench migrate, clear cache, etc.)\n"
     ) + quick_ref
+
+
+def format_page_context(ctx: dict) -> str:
+    """Format page context dict into a concise system prompt section.
+
+    The user's browser sends context about which page they're currently viewing.
+    This helps the LLM understand what the user is looking at and give relevant answers.
+    """
+    if not ctx or not isinstance(ctx, dict):
+        return ""
+
+    route = ctx.get("route") or []
+    doctype = ctx.get("doctype", "")
+    docname = ctx.get("docname", "")
+    list_doctype = ctx.get("list_doctype", "")
+    report_name = ctx.get("report_name", "")
+    dashboard = ctx.get("dashboard", "")
+    workspace = ctx.get("workspace", "")
+    query_report = ctx.get("query_report", "")
+
+    parts = []
+
+    if doctype and docname:
+        parts.append(f"The user is currently viewing: {doctype} '{docname}'")
+        parts.append(f"Use get_document tool with doctype='{doctype}' and name='{docname}' if they ask about 'this' record.")
+    elif list_doctype:
+        parts.append(f"The user is viewing the list of: {list_doctype}")
+        parts.append(f"If they say 'these' or 'this list', they mean {list_doctype} records.")
+    elif query_report:
+        parts.append(f"The user is viewing report: {query_report}")
+    elif report_name:
+        parts.append(f"The user is viewing report: {report_name}")
+    elif dashboard:
+        parts.append(f"The user is on the dashboard: {dashboard}")
+    elif workspace:
+        parts.append(f"The user is on workspace: {workspace}")
+    elif route and len(route) > 0:
+        parts.append(f"User's current page: {'/'.join(str(r) for r in route)}")
+
+    if not parts:
+        return ""
+
+    return "PAGE CONTEXT:\n" + "\n".join(parts)
