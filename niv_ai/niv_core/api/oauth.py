@@ -133,7 +133,7 @@ def exchange_code(provider_name: str, auth_code: str):
             frappe.throw(_("Invalid response from Claude. Missing tokens."))
         
         # Calculate expiry (now + expires_in - 5min buffer)
-        expires_at = int(time.time() * 1000) + (expires_in * 1000) - EXPIRY_BUFFER_MS
+        expires_at = str(int(time.time() * 1000) + (expires_in * 1000) - EXPIRY_BUFFER_MS)
         
         # Save to provider
         provider.api_key = access_token
@@ -173,7 +173,7 @@ def refresh_if_needed(provider_name: str) -> str:
         # No refresh token — just use api_key as-is (manual setup-token paste)
         return provider.get_password("api_key")
     
-    token_expires = provider.token_expires or 0
+    token_expires = int(provider.token_expires or 0)
     now_ms = int(time.time() * 1000)
     
     # Token still valid
@@ -211,7 +211,7 @@ def refresh_if_needed(provider_name: str) -> str:
             return provider.get_password("api_key")
         
         # Update provider with new tokens
-        expires_at = int(time.time() * 1000) + (expires_in * 1000) - EXPIRY_BUFFER_MS
+        expires_at = str(int(time.time() * 1000) + (expires_in * 1000) - EXPIRY_BUFFER_MS)
         provider.api_key = new_access
         if new_refresh:
             provider.refresh_token = new_refresh
