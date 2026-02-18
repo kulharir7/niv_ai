@@ -318,6 +318,17 @@ def _get_voice_config():
     elif base_url and "anthropic" in base_url.lower():
         provider_type = "anthropic"
 
+    # ElevenLabs config
+    elevenlabs_api_key = None
+    elevenlabs_voice_en = ""
+    elevenlabs_voice_hi = ""
+    try:
+        elevenlabs_api_key = settings.get_password("elevenlabs_api_key") if getattr(settings, "elevenlabs_api_key", None) else None
+        elevenlabs_voice_en = getattr(settings, "elevenlabs_voice_en", "") or ""
+        elevenlabs_voice_hi = getattr(settings, "elevenlabs_voice_hi", "") or ""
+    except Exception:
+        pass
+
     return {
         "api_key": api_key,
         "base_url": base_url.rstrip("/") if base_url else "",
@@ -329,6 +340,9 @@ def _get_voice_config():
         "tts_language": tts_language,
         "tts_voice": tts_voice,
         "enable_voice": enable_voice,
+        "elevenlabs_api_key": elevenlabs_api_key,
+        "elevenlabs_voice_en": elevenlabs_voice_en,
+        "elevenlabs_voice_hi": elevenlabs_voice_hi,
     }
 
 
@@ -447,6 +461,74 @@ def _tts_piper(text, voice_name=None):
     except Exception as e:
         frappe.logger().warning(f"Piper TTS failed: {e}")
         return None
+
+
+# ─── ElevenLabs TTS ──────────────────────────────────────────────────────
+
+def _tts_elevenlabs(text, voice_id=None, config=None):
+    """Generate speech using ElevenLabs API (human-like, multilingual, Hindi+English).
+    
+    Requires elevenlabs_api_key in Niv Settings.
+    Default voice: Rachel (21m00Tcm4TlvDq8ikWAM) — natural female English.
+    For Hindi: use a multilingual voice or Hindi-specific voice.
+    """
+    if not config:
+        config = _get_voice_config()
+    
+    api_key = config.get("elevenlabs_api_key")
+    if not api_key:
+        return None
+    
+    # Default voices
+    if not voice_id:
+        lang = _detect_language(text)
+        if lang == "hi":
+            voice_id = config.get("elevenlabs_voice_hi") or "21m00Tcm4TlvDq8ikWAM"
+        else:
+            voice_id = config.get("elevenlabs_voice_en") or "21m00Tcm4TlvDq8ikWAM"
+    
+    try:
+        resp = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+            headers={
+                "xi-api-key": api_key,
+                "Content-Type": "application/json",
+                "Accept": "audio/mpeg",
+            },
+            json={
+                "text": text,
+                "model_id": "eleven_multilingual_v2",
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.75,
+                    "style": 0.0,
+                    "use_speaker_boost": True,
+                },
+            },
+            timeout=30,
+        )
+        
+        if resp.status_code != 200:
+            frappe.logger().warning(f"ElevenLabs TTS failed ({resp.status_code}): {resp.text[:200]}")
+            return None
+        
+        output_dir = frappe.get_site_path("public", "files")
+        filename = "tts_11labs_{0}.mp3".format(uuid.uuid4().hex[:12])
+        output_path = os.path.join(output_dir, filename)
+        
+        with open(output_path, "wb") as f:
+            f.write(resp.content)
+        
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            return {
+                "audio_url": "/files/{0}".format(filename),
+                "engine": "elevenlabs",
+                "voice": voice_id,
+            }
+    except Exception as e:
+        frappe.logger().warning(f"ElevenLabs TTS error: {e}")
+    
+    return None
 
 
 # ─── OpenAI TTS ──────────────────────────────────────────────────────────
@@ -621,7 +703,13 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
 
     config = _get_voice_config()
 
-    # ── Try Edge TTS first (free, human-like, best quality) ──
+    # ── Try ElevenLabs first (most human-like, multilingual, Hindi+English) ──
+    if engine in (None, "auto", "elevenlabs") and config.get("elevenlabs_api_key"):
+        result = _tts_elevenlabs(text, config=config)
+        if result:
+            return result
+
+    # ── Try Edge TTS (free, human-like) ──
     if engine in (None, "auto", "edge"):
         edge_voice = voice if (voice and "Neural" in str(voice)) else None
         result = _tts_edge(text, edge_voice)
@@ -684,6 +772,13 @@ def stream_tts(text, voice=None):
     # Check configured TTS engine
     settings = frappe.get_single("Niv Settings")
     tts_engine = getattr(settings, "tts_engine", "") or "auto"
+    config = _get_voice_config()
+
+    # ── Try ElevenLabs first (most human-like) ──
+    if tts_engine in ("auto", "elevenlabs") and config.get("elevenlabs_api_key"):
+        result = _tts_elevenlabs(text, config=config)
+        if result:
+            return result
 
     # ── Try Piper first if configured (English only - no Hindi model) ──
     detected_lang = stt_language or _detect_language(text)
@@ -1075,6 +1170,7 @@ def get_tts_status():
     config = _get_voice_config()
     openai_available = bool(config.get("api_key")) and config.get("provider_type") != "mistral"
     return {
+        "elevenlabs": bool(config.get("elevenlabs_api_key")),
         "piper": _is_piper_available(),
         "openai": openai_available,
         "edge": True,

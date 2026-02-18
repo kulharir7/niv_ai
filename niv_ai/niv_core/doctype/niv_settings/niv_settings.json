@@ -60,6 +60,11 @@
     "column_break_voice_api",
     "default_voice",
     "tts_model",
+    "elevenlabs_section",
+    "elevenlabs_api_key",
+    "column_break_elevenlabs",
+    "elevenlabs_voice_en",
+    "elevenlabs_voice_hi",
     "image_section",
     "enable_image_generation",
     "image_api_key",
@@ -399,6 +404,34 @@
       "label": "TTS Model",
       "options": "tts-1\ntts-1-hd",
       "default": "tts-1"
+    },
+    {
+      "fieldname": "elevenlabs_section",
+      "fieldtype": "Section Break",
+      "label": "ElevenLabs TTS (Human-like Voice)",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "elevenlabs_api_key",
+      "fieldtype": "Password",
+      "label": "ElevenLabs API Key",
+      "description": "Get from elevenlabs.io → Profile → API Keys. When set, ElevenLabs becomes primary TTS."
+    },
+    {
+      "fieldname": "column_break_elevenlabs",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "elevenlabs_voice_en",
+      "fieldtype": "Data",
+      "label": "ElevenLabs Voice ID (English)",
+      "description": "Voice ID for English. Default: Rachel (21m00Tcm4TlvDq8ikWAM)"
+    },
+    {
+      "fieldname": "elevenlabs_voice_hi",
+      "fieldtype": "Data",
+      "label": "ElevenLabs Voice ID (Hindi)",
+      "description": "Voice ID for Hindi. Use multilingual voices. Default: same as English."
     },
     {
       "fieldname": "image_section",
