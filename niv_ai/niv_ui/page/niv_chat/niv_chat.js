@@ -509,6 +509,11 @@ class NivChat {
             // Unescape HTML entities that might have been double-escaped
             content = content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
             
+            // If content is just placeholder, don't overwrite current preview
+            if (content.includes("<!-- Generating...") && this.current_artifact_content && this.current_artifact_content.length > 50) {
+                return;
+            }
+            
             this.current_artifact_content = content;
             
             // Update code view with syntax highlighting
@@ -516,7 +521,7 @@ class NivChat {
             this.highlight_artifact_code();
             
             // Update preview iframe
-            if (content && (content.includes("<") || content.includes("{"))) {
+            if (content && content.length > 30 && (content.includes("<") || content.includes("{"))) {
                 this.show_live_preview(content);
             } else {
                 // Show "No preview" message - use show_live_preview to handle blob cleanup
@@ -794,10 +799,16 @@ class NivChat {
     is_html_response(content) {
         // Detect if AI response contains renderable HTML
         if (!content) return false;
-        return content.includes("<!DOCTYPE") || 
-               content.includes("<html") || 
-               (content.includes("<head") && content.includes("<body")) ||
-               (content.includes("<style>") && content.includes("<script>"));
+        // Markdown code block
+        if (content.includes("```html")) return true;
+        // Direct or partially-rendered HTML tags
+        if (content.includes("<!DOCTYPE") || content.includes("<html")) return true;
+        if (content.includes("<head") && content.includes("<body")) return true;
+        if (content.includes("<style>") || content.includes("<style ")) return true;
+        // Escaped HTML entities (from DB)
+        if (content.includes("&lt;html") || content.includes("&lt;!DOCTYPE")) return true;
+        if (content.includes("&lt;style&gt;") || content.includes("&lt;style ")) return true;
+        return false;
     }
 
     extract_artifact_title(text) {
@@ -1713,9 +1724,37 @@ ${htmlCode}
             });
         }
 
-        // Auto-open artifacts if HTML detected
+        // Auto-open artifacts and render preview if HTML detected
         if (!isUser && this.is_html_response(content)) {
-            this.toggle_artifacts_panel(true);
+            // Open panel WITHOUT loading artifacts from DB (avoids overwriting preview with stale placeholder)
+            if (!this.artifacts_open) {
+                this.artifacts_open = true;
+                this.wrapper.find(".niv-main").addClass("niv-artifacts-open");
+                this.$artifactPanel.show();
+                this.wrapper.find(".btn-artifacts-toggle").addClass("active");
+            }
+            // Unescape HTML entities if content came from DB
+            let rawContent = content;
+            if (content.includes("&lt;")) {
+                rawContent = content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+            }
+            // Try to extract code from markdown blocks first
+            let htmlToRender = this.extract_code_from_response(rawContent);
+            // If no code blocks found but content has HTML tags, use it directly
+            if (!htmlToRender && (rawContent.includes("<style") || rawContent.includes("<html") || rawContent.includes("<!DOCTYPE"))) {
+                htmlToRender = rawContent;
+            }
+            if (htmlToRender) {
+                this.show_live_preview(htmlToRender);
+                this.current_artifact_content = htmlToRender;
+                if (this.$artifactCode) {
+                    this.$artifactCode.text(htmlToRender);
+                }
+                // Also update artifact in DB if it still has placeholder content
+                if (this.active_artifact_id) {
+                    this.update_artifact_with_code(this.active_artifact_id, htmlToRender);
+                }
+            }
         }
 
         return $msg;
