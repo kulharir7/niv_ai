@@ -70,7 +70,9 @@
     "enable_image_generation",
     "image_api_key",
     "column_break_image",
-    "image_api_url"
+    "image_api_url",
+    "advanced_section",
+    "advanced_help"
   ],
   "fields": [
     {
@@ -470,6 +472,19 @@
       "default": "https://api.openai.com/v1",
       "description": "Base URL for image generation API (OpenAI-compatible)",
       "depends_on": "enable_image_generation"
+    },
+    {
+      "fieldname": "advanced_section",
+      "fieldtype": "Section Break",
+      "label": "Advanced",
+      "collapsible": 1,
+      "collapsible_depends_on": "eval:false"
+    },
+    {
+      "fieldname": "advanced_help",
+      "fieldtype": "HTML",
+      "label": "Advanced Help",
+      "options": "<div style='padding:10px;background:var(--bg-light-gray, #f8f9fa);border-radius:8px;font-size:13px;line-height:1.6'><b>🔧 Model Routing</b><br>Set <b>Fast Model</b> in AI Configuration to auto-route simple queries (greetings, thanks) to a lightweight model for instant responses.<br><br><b>🔑 Setup Token (Claude)</b><br>Instead of an API key, you can use a Claude subscription token. In your Niv AI Provider, set Auth Type to <b>Setup Token</b> and paste the token from <code>claude setup-token</code>. No API billing — uses your Claude subscription.</div>"
     }
   ],
   "issingle": 1,
