@@ -218,6 +218,7 @@ def stream_agent(
     model: str = None,
     user: str = None,
     dev_mode: bool = False,
+    page_context: dict = None,
 ):
     """Stream agent — yields SSE event dicts."""
     user = user or frappe.session.user
@@ -235,6 +236,13 @@ def stream_agent(
     if dev_mode:
         from .memory import get_dev_system_prompt
         system_prompt = get_dev_system_prompt()
+
+    # Inject page context into system prompt
+    if page_context:
+        from .memory import format_page_context
+        ctx_text = format_page_context(page_context)
+        if ctx_text:
+            system_prompt += "\n\n" + ctx_text
 
     messages = _build_messages(message, conversation_id, system_prompt)
 
