@@ -259,7 +259,7 @@ def stream_agent(
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
             # Timeout guard
             elapsed = (frappe.utils.now_datetime() - start_ts).total_seconds()
-            if elapsed > (180 if dev_mode else 90):
+            if elapsed > (180 if dev_mode else 120):
                 yield {"type": "error", "content": "Request took too long."}
                 break
 

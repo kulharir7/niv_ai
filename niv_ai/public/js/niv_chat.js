@@ -2342,6 +2342,20 @@ ${htmlCode}
                             this.render_conversation_list();
                             if (is_active) {
                                 this.hide_typing();
+                                // Try to render partial artifact even on error (e.g. timeout)
+                                if (fullContent && this.is_html_response(fullContent)) {
+                                    const extractedCode = this.extract_code_from_response(fullContent);
+                                    const htmlToRender = extractedCode || fullContent;
+                                    if (this._pendingArtifactId) {
+                                        this.update_artifact_with_code(this._pendingArtifactId, htmlToRender);
+                                    } else {
+                                        this.auto_create_artifact_from_response(htmlToRender);
+                                    }
+                                }
+                                this._pendingArtifactId = null;
+                                this.is_streaming = false;
+                                this.$sendBtn.show();
+                                this.$stopBtn.hide();
                                 this.append_message("assistant", `❌ Error: ${data.content || data.message || "Unknown error"}`, { is_error: 1 });
                             }
                             resolve();
