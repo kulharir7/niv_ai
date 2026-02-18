@@ -1784,6 +1784,9 @@ ${htmlCode}
                 <button class="niv-export-btn niv-export-csv" title="Download as CSV">
                     <i class="fa fa-file-text-o"></i> CSV
                 </button>
+                <button class="niv-export-btn niv-export-pdf" title="Download as PDF">
+                    <i class="fa fa-file-pdf-o"></i> PDF
+                </button>
             </div>
         `);
 
@@ -1791,6 +1794,7 @@ ${htmlCode}
 
         $bar.find(".niv-export-excel").on("click", () => this._do_export(jsonData, "excel"));
         $bar.find(".niv-export-csv").on("click", () => this._do_export(jsonData, "csv"));
+        $bar.find(".niv-export-pdf").on("click", () => this._do_export(jsonData, "pdf"));
 
         $msg.find(".msg-content").after($bar);
     }
