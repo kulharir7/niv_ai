@@ -27,8 +27,7 @@ def get_user_api_key(user: str = None) -> str:
         return None
 
     try:
-        # BUG-018: use for_update to prevent race condition in concurrent requests
-        user_doc = frappe.get_doc("User", user, for_update=True)
+        user_doc = frappe.get_doc("User", user)
         
         # Auto-generate API key if missing
         if not user_doc.api_key:

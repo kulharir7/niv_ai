@@ -196,7 +196,7 @@ class AdvancedMemoryService:
                 data = json.loads(existing[0].memory_value)
                 data["access_count"] = data.get("access_count", 0) + 1
                 data["last_access"] = datetime.now().isoformat()
-            except:
+            except Exception:
                 data = {"access_count": 1, "last_access": datetime.now().isoformat()}
             
             doc = frappe.get_doc("Niv AI Memory", existing[0].name)
@@ -288,7 +288,7 @@ class AdvancedMemoryService:
                     try:
                         data = json.loads(m["memory_value"])
                         output += f"- {data.get('doctype')}: {data.get('docname')} ({data.get('access_count')}x)\n"
-                    except:
+                    except Exception:
                         pass
         
         output += "\n=== END MEMORY ===\n"
