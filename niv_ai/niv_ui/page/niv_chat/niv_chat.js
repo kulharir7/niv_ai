@@ -1747,8 +1747,11 @@ ${htmlCode}
     render_markdown(text) {
         if (!text) return "";
         
+        // Fix broken markdown tables from LLM (missing newlines between rows)
+        // LLM sometimes omits \n between table rows: "| col1 || col2" → "| col1 |\n| col2"
+        let processedText = text.replace(/\|\|/g, '|\n|');
+        
         // Handle [[THOUGHT]] blocks before markdown parsing
-        let processedText = text;
         
         // Match both closed [[THOUGHT]]content[[/THOUGHT]] and open [[THOUGHT]]content
         const thoughtRegex = /\[\[THOUGHT\]\]([\s\S]*?)(?:\[\[\/THOUGHT\]\]|$)/gi;
