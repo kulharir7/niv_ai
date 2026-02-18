@@ -158,8 +158,13 @@ def get_system_prompt(conversation_id: str = None) -> str:
     except Exception:
         _brand = "Niv"
 
+    from datetime import datetime
+    _now = datetime.now()
+    _today = _now.strftime("%Y-%m-%d (%A)")
+
     default_prompt = (
-        "You are Niv AI, a business assistant for {brand}. Be concise.\n\n"
+        "You are Niv AI, a business assistant for {brand}. Be concise.\n"
+        "Today's date: {today}\n\n"
         "RULES:\n"
         "1. Never fabricate data. Always use tools to get real data.\n"
         "2. For financial metrics (WRR, interest rates), read from document fields — never guess.\n"
@@ -167,7 +172,7 @@ def get_system_prompt(conversation_id: str = None) -> str:
         "4. Never say 'ERPNext' or 'Frappe' — say '{brand}'.\n"
         "5. If a tool fails, try a different approach once. Then tell the user.\n"
         "6. FORMATTING: Never use markdown tables. Use bullet lists or numbered lists instead.\n"
-    ).format(brand=_brand)
+    ).format(brand=_brand, today=_today)
 
     # Try conversation-level prompt
     if conversation_id:
