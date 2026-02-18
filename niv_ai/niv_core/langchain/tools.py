@@ -692,6 +692,15 @@ def _make_mcp_executor(tool_name: str, input_schema: dict = None):
         if cached is not None:
             return cached
 
+        # Ensure DB connection is alive before tool call (prevents InterfaceError(0, ''))
+        try:
+            frappe.db.sql("SELECT 1")
+        except Exception:
+            try:
+                frappe.connect()
+            except Exception:
+                pass
+
         server_name = find_tool_server(tool_name)
         if not server_name:
             return json.dumps({"error": f"No MCP server found for tool: {tool_name}"})

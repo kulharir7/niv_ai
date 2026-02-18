@@ -22,6 +22,20 @@ def _sse(data):
     return f"data: {json.dumps(data)}\n\n"
 
 
+def _ensure_db(site_name=None):
+    """Ensure DB connection is alive, reconnect if dead.
+    Fixes pymysql.err.InterfaceError: (0, '') from stale connections."""
+    try:
+        frappe.db.sql("SELECT 1")
+    except Exception:
+        try:
+            if site_name:
+                frappe.init(site=site_name)
+            frappe.connect()
+        except Exception:
+            pass
+
+
 @frappe.whitelist(methods=["GET", "POST"])
 def stream_chat(**kwargs):
     """Stream chat via LangChain Agent (SSE)"""
@@ -122,23 +136,16 @@ def stream_chat(**kwargs):
             yield _sse({"type": "error", "content": error_msg})
 
         finally:
-            # Save response
+            # Save response - ensure DB connection is alive
             if full_response.strip():
-                try:
-                    frappe.db.sql("SELECT 1")
-                except Exception:
-                    frappe.init(site=_site_name)
-                    frappe.connect()
+                _ensure_db(_site_name)
                 save_assistant_message(conversation_id, full_response, tool_calls_data)
                 auto_title(conversation_id, message)
 
             yield _sse({"type": "done", "content": ""})
 
-            # Cleanup DB connection to prevent leaks
-            try:
-                frappe.destroy()
-            except Exception:
-                pass
+            # Don't call frappe.destroy() here — it kills the DB connection
+            # for subsequent requests. Let Frappe's request lifecycle handle cleanup.
 
     from werkzeug.wrappers import Response
     return Response(
