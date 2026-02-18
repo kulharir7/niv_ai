@@ -1866,9 +1866,34 @@ ${htmlCode}
     render_markdown(text) {
         if (!text) return "";
         
-        // Fix broken markdown tables from LLM (missing newlines between rows)
-        // LLM sometimes omits \n between table rows: "| col1 || col2" → "| col1 |\n| col2"
+        // Fix broken markdown tables from LLM
+        // 1. Missing newlines between rows: "| col1 || col2" → "| col1 |\n| col2"
         let processedText = text.replace(/\|\|/g, '|\n|');
+        
+        // 2. Missing header separator row — detect table rows and add |---| if missing
+        // Split into lines, find sequences of pipe-rows, insert separator after first row if missing
+        const lines = processedText.split('\n');
+        const fixed = [];
+        for (let i = 0; i < lines.length; i++) {
+            fixed.push(lines[i]);
+            // If this line looks like a table row and next line is also a table row (not a separator)
+            if (/^\s*\|.*\|/.test(lines[i]) && i + 1 < lines.length && 
+                /^\s*\|.*\|/.test(lines[i + 1]) && !/^\s*\|[\s\-:]+\|/.test(lines[i + 1])) {
+                // Check if there's no separator anywhere before the next non-table line
+                let hasSep = false;
+                for (let j = i + 1; j < lines.length && /^\s*\|/.test(lines[j]); j++) {
+                    if (/^\s*\|[\s\-:]+\|/.test(lines[j])) { hasSep = true; break; }
+                }
+                if (!hasSep) {
+                    // Count columns from this row and insert separator
+                    const cols = lines[i].split('|').length - 2;
+                    if (cols > 0) {
+                        fixed.push('|' + ' --- |'.repeat(cols));
+                    }
+                }
+            }
+        }
+        processedText = fixed.join('\n');
         
         // Handle [[THOUGHT]] blocks before markdown parsing
         
