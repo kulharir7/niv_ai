@@ -74,6 +74,7 @@
     "telegram_section",
     "telegram_bot_token",
     "telegram_webhook_url",
+    "telegram_bot_username",
     "column_break_telegram",
     "telegram_secret_token",
     "telegram_live_stream",
@@ -496,6 +497,12 @@
       "fieldtype": "Data",
       "label": "Webhook URL",
       "description": "e.g. https://yoursite.com/api/method/niv_ai.niv_core.api.telegram.webhook"
+    },
+    {
+      "fieldname": "telegram_bot_username",
+      "fieldtype": "Data",
+      "label": "Bot Username",
+      "description": "Without @. e.g. NivAIBot. Needed for group chat @mention detection."
     },
     {
       "fieldname": "column_break_telegram",
