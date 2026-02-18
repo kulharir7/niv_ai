@@ -1719,9 +1719,18 @@ ${htmlCode}
             });
         }
 
-        // Auto-open artifacts if HTML detected
+        // Auto-open artifacts and render preview if HTML detected
         if (!isUser && this.is_html_response(content)) {
             this.toggle_artifacts_panel(true);
+            // Extract and render HTML in preview iframe
+            const extractedHtml = this.extract_code_from_response(content);
+            if (extractedHtml) {
+                this.show_live_preview(extractedHtml);
+                this.current_artifact_content = extractedHtml;
+                if (this.$artifactCode) {
+                    this.$artifactCode.text(extractedHtml);
+                }
+            }
         }
 
         return $msg;
