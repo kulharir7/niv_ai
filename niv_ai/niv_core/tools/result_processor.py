@@ -70,17 +70,40 @@ def post_process_result(tool_name: str, result_text: str) -> str:
 def _summarize_json_result(tool_name: str, data) -> str:
     """Summarize a JSON tool result intelligently."""
     
+    # Case 0: FAC "truncated_response" wrapper — unwrap and re-parse
+    if isinstance(data, dict) and "truncated_response" in data:
+        inner = data["truncated_response"]
+        if isinstance(inner, str):
+            try:
+                data = json.loads(inner)
+            except (json.JSONDecodeError, TypeError):
+                return _truncate_text(inner)
+    
+    # Case 0.5: get_document single-doc result — slim it down
+    if isinstance(data, dict) and "result" in data and isinstance(data["result"], dict):
+        result_val = data["result"]
+        if "data" in result_val and isinstance(result_val["data"], dict):
+            # Single document — remove child tables, keep key fields
+            return _summarize_single_document(tool_name, result_val["data"])
+        if "data" in result_val and isinstance(result_val["data"], list):
+            return _summarize_list_result(tool_name, result_val)
+        if isinstance(result_val, list):
+            return _summarize_list_result(tool_name, {"data": result_val})
+        # result is a single doc dict (no "data" wrapper)
+        if "doctype" in result_val and "name" in result_val:
+            return _summarize_single_document(tool_name, result_val)
+    
     # Case 1: Dict with "data" list (list_documents pattern)
     if isinstance(data, dict) and "data" in data and isinstance(data["data"], list):
         return _summarize_list_result(tool_name, data)
     
-    # Case 2: Dict with "result" that contains data
-    if isinstance(data, dict) and "result" in data:
-        result_val = data["result"]
-        if isinstance(result_val, dict) and "data" in result_val and isinstance(result_val["data"], list):
-            return _summarize_list_result(tool_name, result_val)
-        if isinstance(result_val, list):
-            return _summarize_list_result(tool_name, {"data": result_val})
+    # Case 1.5: Dict with "data" as single document
+    if isinstance(data, dict) and "data" in data and isinstance(data["data"], dict):
+        return _summarize_single_document(tool_name, data["data"])
+    
+    # Case 2: Single document at top level (has doctype+name)
+    if isinstance(data, dict) and "doctype" in data and "name" in data:
+        return _summarize_single_document(tool_name, data)
     
     # Case 3: Plain list
     if isinstance(data, list):
@@ -93,6 +116,69 @@ def _summarize_json_result(tool_name: str, data) -> str:
     # Fallback: convert back to JSON string and truncate
     text = json.dumps(data, default=str, ensure_ascii=False)
     return _truncate_text(text)
+
+
+def _summarize_single_document(tool_name: str, doc: dict) -> str:
+    """Summarize a single document by removing child tables and null fields.
+    
+    get_document returns 200+ fields with child tables (repayment_schedule, etc.)
+    which can be 30KB+. We keep only non-null scalar fields and summarize child tables.
+    """
+    slim = {}
+    child_tables = {}
+    
+    for key, value in doc.items():
+        # Skip internal/meta fields
+        if key in ("owner", "modified_by", "creation", "modified", "idx", "docstatus",
+                    "amended_from", "_comments", "_assign", "_liked_by", "_user_tags"):
+            continue
+        
+        # Skip null/empty values
+        if value is None or value == "" or value == 0.0 or value == 0:
+            # Keep status and a few important fields even if falsy
+            if key not in ("status", "workflow_state", "is_npa", "doctype", "name"):
+                continue
+        
+        # Child tables → summarize as count + first 3 records (key fields only)
+        if isinstance(value, list) and value and isinstance(value[0], dict):
+            if len(value) > 0:
+                # Extract just key fields from child rows
+                summary_fields = ["idx", "name", "payment_date", "amount", "total_payment", 
+                                 "principal_amount", "interest_amount", "balance_loan_amount",
+                                 "status", "cheque_no", "loan_security_name", "pay_type",
+                                 "beneficiary_name", "item", "qty", "net_amount"]
+                slim_rows = []
+                for row in value[:3]:
+                    slim_row = {}
+                    for sf in summary_fields:
+                        if sf in row and row[sf] is not None and row[sf] != "" and row[sf] != 0:
+                            slim_row[sf] = row[sf]
+                    if slim_row:
+                        slim_rows.append(slim_row)
+                child_tables[key] = {
+                    "total_rows": len(value),
+                    "first_3": slim_rows
+                }
+            continue
+        
+        slim[key] = value
+    
+    if child_tables:
+        slim["_child_tables"] = child_tables
+    
+    result = json.dumps(slim, default=str, ensure_ascii=False)
+    
+    # If still too big, further trim
+    if len(result) > MAX_RESULT_CHARS:
+        # Remove child tables entirely
+        slim.pop("_child_tables", None)
+        slim["_note"] = "Child tables omitted for brevity. Use list_documents to query child records separately."
+        result = json.dumps(slim, default=str, ensure_ascii=False)
+    
+    if len(result) > MAX_RESULT_CHARS:
+        return _truncate_text(result)
+    
+    return result
 
 
 def _summarize_list_result(tool_name: str, data: dict) -> str:
