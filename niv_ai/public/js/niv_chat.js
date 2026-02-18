@@ -2319,6 +2319,7 @@ ${htmlCode}
                                 this.$stopBtn.hide();
 
                                 // Artifact: update preview if HTML detected in response
+                                console.log("[Niv Debug] done handler, fullContent len:", fullContent?.length, "isHtml:", fullContent ? this.is_html_response(fullContent) : false, "pendingArtifact:", this._pendingArtifactId, "first100:", fullContent?.substring(0, 100));
                                 if (fullContent && this.is_html_response(fullContent)) {
                                     const extractedCode = this.extract_code_from_response(fullContent);
                                     const htmlToRender = extractedCode || fullContent;
