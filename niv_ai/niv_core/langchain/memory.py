@@ -10,20 +10,11 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, Tool
 
 
 TOOL_USAGE_GUIDELINES = """
-TOOL SELECTION:
-- Single doc by name → get_document
-- List with filters → list_documents  
-- COUNT/SUM/AVG/JOIN → run_database_query
-- Don't know DocType name → search_doctype
-- Don't know fields → get_doctype_info
-- Reports → report_requirements FIRST, then generate_report
-
-EFFICIENCY:
-- Max 4 tool calls per question.
-- "How many X" → SELECT COUNT(*), not list_documents.
-- "Total/sum" → SELECT SUM(), not list_documents.
-- Known DocTypes (Customer, Loan, Item, Sales Invoice) → skip get_doctype_info.
+EFFICIENCY RULES:
+- 1-2 tool calls per question. Keep it minimal.
+- "How many/total/sum" → run_database_query (SELECT COUNT/SUM), NOT list_documents.
 - Never call same tool with same args twice.
+- Never call get_doctype_info for known DocTypes (see reference below).
 """
 
 # Rough token estimate: 1 token ≈ 4 chars (conservative)
