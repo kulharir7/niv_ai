@@ -793,25 +793,16 @@ class NivChat {
 
     is_html_response(content) {
         // Detect if AI response contains renderable HTML
-        // Checks raw HTML, escaped HTML entities, and markdown code blocks
         if (!content) return false;
-        // Direct HTML in response
-        if (content.includes("<!DOCTYPE") || 
-            content.includes("<html") || 
-            (content.includes("<head") && content.includes("<body")) ||
-            (content.includes("<style>") && content.includes("<script>"))) {
-            return true;
-        }
-        // HTML inside markdown code block: ```html
-        if (content.includes("```html")) {
-            return true;
-        }
-        // Escaped HTML entities (from DB storage)
-        if (content.includes("&lt;html") || content.includes("&lt;!DOCTYPE") ||
-            (content.includes("&lt;style&gt;") && content.includes("&lt;script&gt;")) ||
-            (content.includes("&lt;head") && content.includes("&lt;body"))) {
-            return true;
-        }
+        // Markdown code block
+        if (content.includes("```html")) return true;
+        // Direct or partially-rendered HTML tags
+        if (content.includes("<!DOCTYPE") || content.includes("<html")) return true;
+        if (content.includes("<head") && content.includes("<body")) return true;
+        if (content.includes("<style>") || content.includes("<style ")) return true;
+        // Escaped HTML entities (from DB)
+        if (content.includes("&lt;html") || content.includes("&lt;!DOCTYPE")) return true;
+        if (content.includes("&lt;style&gt;") || content.includes("&lt;style ")) return true;
         return false;
     }
 
@@ -1730,16 +1721,20 @@ ${htmlCode}
             this.toggle_artifacts_panel(true);
             // Unescape HTML entities if content came from DB
             let rawContent = content;
-            if (content.includes("&lt;") && !content.includes("```html")) {
+            if (content.includes("&lt;")) {
                 rawContent = content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
             }
-            // Extract and render HTML in preview iframe
-            const extractedHtml = this.extract_code_from_response(rawContent);
-            if (extractedHtml) {
-                this.show_live_preview(extractedHtml);
-                this.current_artifact_content = extractedHtml;
+            // Try to extract code from markdown blocks first
+            let htmlToRender = this.extract_code_from_response(rawContent);
+            // If no code blocks found but content has HTML tags, use it directly
+            if (!htmlToRender && (rawContent.includes("<style") || rawContent.includes("<html") || rawContent.includes("<!DOCTYPE"))) {
+                htmlToRender = rawContent;
+            }
+            if (htmlToRender) {
+                this.show_live_preview(htmlToRender);
+                this.current_artifact_content = htmlToRender;
                 if (this.$artifactCode) {
-                    this.$artifactCode.text(extractedHtml);
+                    this.$artifactCode.text(htmlToRender);
                 }
             }
         }
