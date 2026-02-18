@@ -24,17 +24,24 @@ NBFC_EXAMPLES = """
 ### "show all loans" / "loan list"
 list_documents(doctype="Loan", fields=["name","applicant_name","loan_amount","status","posting_date"], limit=20, order_by="posting_date desc")
 
-### "overdue loans" / "NPA loans"
-list_documents(doctype="Loan", filters={"status": ["in", ["Overdue","NPA"]]}, fields=["name","applicant_name","loan_amount","status"], limit=20)
-
-### "loan details LOAN-001"
+### "loan details LOAN-001" / "share details about a loan"
 get_document(doctype="Loan", name="LOAN-001")
+
+### "outstanding amount for loan X"
+→ get_document(doctype="Loan", name="X") → read loan_amount, total_principal_paid, disbursed_amount fields
+→ Outstanding = loan_amount - total_principal_paid
+
+### "branch wise weighted IRR" / "branch wise interest rate"
+run_database_query(query="SELECT cost_center as branch, ROUND(SUM(loan_amount * irr)/SUM(loan_amount), 2) as weighted_irr, COUNT(*) as loan_count, SUM(loan_amount) as total_amount FROM `tabLoan` WHERE docstatus=1 AND status IN ('Disbursed','Partially Disbursed') GROUP BY cost_center ORDER BY total_amount DESC")
 
 ### "total disbursed amount" / "loan portfolio"
 run_database_query(query="SELECT SUM(loan_amount) as total, COUNT(*) as count FROM `tabLoan` WHERE status='Disbursed'")
 
 ### "loan count by status"
 run_database_query(query="SELECT status, COUNT(*) as count, SUM(loan_amount) as total FROM `tabLoan` GROUP BY status")
+
+### "WRR for loan X" / "interest rate of loan"
+→ get_document(doctype="Loan", name="X") → read `irr` field (this IS the WRR/weighted risk rate)
 """
 
 GENERAL_EXAMPLES = """
@@ -58,8 +65,9 @@ COMMON_DOCTYPES = """
 ## KEY DOCTYPES (no need to call get_doctype_info for these):
 
 ### Loan (`tabLoan`)
-Fields: name, applicant, applicant_name, loan_amount, loan_type, status, posting_date, rate_of_interest, loan_duration, product, applicant_mobile_number
+Fields: name, applicant, applicant_name, loan_amount, loan_type, status, posting_date, rate_of_interest, irr (=WRR), flat_interest_rate, loan_duration, product, applicant_mobile_number, cost_center (=branch), disbursed_amount, total_principal_paid, total_amount_paid, total_interest_payable, monthly_repayment_amount, repayment_periods, remaining_emi_tenure, total_delay, peak_delay, is_npa, branch_code
 Status: Sanctioned, Partially Disbursed, Disbursed, Loan Closure Requested, Closed, Cancel
+Outstanding = loan_amount - total_principal_paid
 
 ### Loan Application (`tabLoan Application`)  
 Fields: name, applicant, first_name, last_name, workflow_state, status, company
