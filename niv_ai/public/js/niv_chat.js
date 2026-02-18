@@ -802,8 +802,8 @@ class NivChat {
             (content.includes("<style>") && content.includes("<script>"))) {
             return true;
         }
-        // HTML inside markdown code block: ```html ... ```
-        if (/```html\s*[\s\S]*?```/i.test(content)) {
+        // HTML inside markdown code block: ```html
+        if (content.includes("```html")) {
             return true;
         }
         return false;
