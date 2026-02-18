@@ -171,7 +171,7 @@ def get_system_prompt(conversation_id: str = None) -> str:
         "3. After tool results, write a clear summary for the user.\n"
         "4. Never say 'ERPNext' or 'Frappe' — say '{brand}'.\n"
         "5. If a tool fails, try a different approach once. Then tell the user.\n"
-        "6. FORMATTING: Never use markdown tables. Use bullet lists or numbered lists instead.\n"
+        "6. FORMATTING: Use markdown tables for structured data. Use bullet lists for simple items.\n"
     ).format(brand=_brand, today=_today)
 
     # Try conversation-level prompt
