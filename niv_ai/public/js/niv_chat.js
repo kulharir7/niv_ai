@@ -2323,16 +2323,18 @@ ${htmlCode}
                                     const extractedCode = this.extract_code_from_response(fullContent);
                                     const htmlToRender = extractedCode || fullContent;
                                     if (this._pendingArtifactId) {
-                                        // Update the pre-created artifact with actual content
-                                        this.update_artifact_with_code(this._pendingArtifactId, htmlToRender);
+                                        // Update the pre-created artifact with actual content, then refresh
+                                        await this.update_artifact_with_code(this._pendingArtifactId, htmlToRender);
                                     } else {
                                         // No pending artifact — auto-create from response
-                                        this.auto_create_artifact_from_response(htmlToRender);
+                                        await this.auto_create_artifact_from_response(htmlToRender);
                                     }
+                                    this._pendingArtifactId = null;
+                                    this.load_messages(conv_id);
+                                } else {
+                                    this._pendingArtifactId = null;
+                                    this.load_messages(conv_id); // Refresh to get final saved state
                                 }
-                                this._pendingArtifactId = null;
-
-                                this.load_messages(conv_id); // Refresh to get final saved state
                             }
                             resolve();
                         } else if (data.type === "error") {
