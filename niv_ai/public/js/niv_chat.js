@@ -509,6 +509,11 @@ class NivChat {
             // Unescape HTML entities that might have been double-escaped
             content = content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
             
+            // If content is just placeholder, don't overwrite current preview
+            if (content.includes("<!-- Generating...") && this.current_artifact_content && this.current_artifact_content.length > 50) {
+                return;
+            }
+            
             this.current_artifact_content = content;
             
             // Update code view with syntax highlighting
@@ -516,7 +521,7 @@ class NivChat {
             this.highlight_artifact_code();
             
             // Update preview iframe
-            if (content && (content.includes("<") || content.includes("{"))) {
+            if (content && content.length > 30 && (content.includes("<") || content.includes("{"))) {
                 this.show_live_preview(content);
             } else {
                 // Show "No preview" message - use show_live_preview to handle blob cleanup
@@ -1735,6 +1740,10 @@ ${htmlCode}
                 this.current_artifact_content = htmlToRender;
                 if (this.$artifactCode) {
                     this.$artifactCode.text(htmlToRender);
+                }
+                // Also update artifact in DB if it still has placeholder content
+                if (this.active_artifact_id) {
+                    this.update_artifact_with_code(this.active_artifact_id, htmlToRender);
                 }
             }
         }
