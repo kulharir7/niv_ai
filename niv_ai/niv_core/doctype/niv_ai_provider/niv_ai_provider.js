@@ -1,27 +1,30 @@
 frappe.ui.form.on("Niv AI Provider", {
     refresh(frm) {
-        // Show "Login with Claude" button for Setup Token auth
+        // Show OAuth login button based on auth type
         if (frm.doc.auth_type === "Setup Token") {
             frm.add_custom_button(__("Login with Claude"), function () {
                 niv_oauth_login(frm);
             }, __("OAuth"));
+        } else if (frm.doc.auth_type === "ChatGPT Login") {
+            frm.add_custom_button(__("Login with ChatGPT"), function () {
+                niv_oauth_login(frm);
+            }, __("OAuth"));
+        }
 
-            // Update status display
-            if (frm.doc.oauth_status) {
-                frm.dashboard.set_headline(frm.doc.oauth_status);
-            }
+        // Update status display
+        if (frm.doc.oauth_status && frm.doc.auth_type !== "API Key") {
+            frm.dashboard.set_headline(frm.doc.oauth_status);
         }
     },
 
     auth_type(frm) {
-        // Auto-set fields when switching to Setup Token
+        // Auto-set fields based on auth type
         if (frm.doc.auth_type === "Setup Token") {
-            if (!frm.doc.base_url || frm.doc.base_url === "https://api.mistral.ai/v1") {
-                frm.set_value("base_url", "https://api.anthropic.com/v1");
-            }
-            if (!frm.doc.provider_type || frm.doc.provider_type === "openai_compatible") {
-                frm.set_value("provider_type", "anthropic");
-            }
+            frm.set_value("base_url", "https://api.anthropic.com/v1");
+            frm.set_value("provider_type", "anthropic");
+        } else if (frm.doc.auth_type === "ChatGPT Login") {
+            frm.set_value("base_url", "https://api.openai.com/v1");
+            frm.set_value("provider_type", "openai_compatible");
         }
     }
 });
@@ -44,6 +47,12 @@ function niv_oauth_login(frm) {
             // Open Claude login in new tab
             window.open(r.message.url, "_blank");
 
+            const isChatGPT = frm.doc.auth_type === "ChatGPT Login";
+            const providerLabel = isChatGPT ? "ChatGPT" : "Claude";
+            const codeHint = isChatGPT 
+                ? "Paste the full redirect URL or authorization code" 
+                : "Code format: <code>abc123#state456</code>";
+
             // Show dialog to paste the code
             const d = new frappe.ui.Dialog({
                 title: __("Paste Authorization Code"),
@@ -52,12 +61,12 @@ function niv_oauth_login(frm) {
                         fieldtype: "HTML",
                         options: `
                             <div style="margin-bottom: 15px; line-height: 1.6">
-                                <p><b>Step 1:</b> A new tab opened with Claude login page.</p>
-                                <p><b>Step 2:</b> Log in with your Claude account.</p>
+                                <p><b>Step 1:</b> A new tab opened with ${providerLabel} login page.</p>
+                                <p><b>Step 2:</b> Log in with your ${providerLabel} account.</p>
                                 <p><b>Step 3:</b> After login, you'll see an authorization code.</p>
                                 <p><b>Step 4:</b> Copy the code and paste it below.</p>
                                 <p style="color: var(--text-muted); font-size: 12px">
-                                    Code format: <code>abc123#state456</code>
+                                    ${codeHint}
                                 </p>
                             </div>
                         `

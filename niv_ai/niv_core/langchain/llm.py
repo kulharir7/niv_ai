@@ -54,7 +54,7 @@ def get_llm(provider_name=None, model=None, streaming=True, callbacks=None):
     provider = frappe.get_doc("Niv AI Provider", provider_name)
     # Get API key — auto-refresh OAuth tokens if expired
     auth_type = getattr(provider, "auth_type", "API Key") or "API Key"
-    if auth_type == "Setup Token" and getattr(provider, "refresh_token", None):
+    if auth_type in ("Setup Token", "ChatGPT Login") and getattr(provider, "refresh_token", None):
         from niv_ai.niv_core.api.oauth import refresh_if_needed
         api_key = refresh_if_needed(provider_name)
     else:
@@ -67,9 +67,11 @@ def get_llm(provider_name=None, model=None, streaming=True, callbacks=None):
 
     auth_type = getattr(provider, "auth_type", "API Key") or "API Key"
 
-    # Setup Token → force anthropic provider type
+    # OAuth auth types → force correct provider type
     if auth_type == "Setup Token":
         provider_type = "anthropic"
+    elif auth_type == "ChatGPT Login":
+        provider_type = "openai"
     else:
         provider_type = _detect_provider_type(provider.base_url, provider_name)
 
