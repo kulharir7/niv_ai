@@ -334,3 +334,11 @@ def stream_agent(
                 pass
         cbs["billing"].finalize(stream_cb=cbs["stream"])
         cbs["logging"].finalize()
+        
+        # Yield token usage for stream.py to save with the message
+        yield {
+            "type": "_token_usage",
+            "input_tokens": cbs["billing"].total_prompt_tokens,
+            "output_tokens": cbs["billing"].total_completion_tokens,
+            "total_tokens": cbs["billing"].total_tokens,
+        }

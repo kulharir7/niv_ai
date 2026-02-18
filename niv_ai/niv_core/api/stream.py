@@ -86,6 +86,7 @@ def stream_chat(**kwargs):
     def generate():
         full_response = ""
         tool_calls_data = []
+        token_data = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
         
         try:
             frappe.init(site=_site_name)
@@ -121,6 +122,14 @@ def stream_chat(**kwargs):
                     # Pass through thought events for UI
                     yield _sse(event)
                 
+                elif event_type == "_token_usage":
+                    # Internal event from agent — capture but don't send to client
+                    token_data = {
+                        "input_tokens": event.get("input_tokens", 0),
+                        "output_tokens": event.get("output_tokens", 0),
+                        "total_tokens": event.get("total_tokens", 0),
+                    }
+                
                 elif event_type == "error":
                     yield _sse(event)
                     full_response = event.get("content", "Error occurred")
@@ -139,10 +148,20 @@ def stream_chat(**kwargs):
             # Save response - ensure DB connection is alive
             if full_response.strip():
                 _ensure_db(_site_name)
-                save_assistant_message(conversation_id, full_response, tool_calls_data)
+                save_assistant_message(
+                    conversation_id, full_response, tool_calls_data,
+                    input_tokens=token_data.get("input_tokens", 0),
+                    output_tokens=token_data.get("output_tokens", 0),
+                    total_tokens=token_data.get("total_tokens", 0),
+                )
                 auto_title(conversation_id, message)
 
-            yield _sse({"type": "done", "content": ""})
+            yield _sse({
+                "type": "done", "content": "",
+                "input_tokens": token_data.get("input_tokens", 0),
+                "output_tokens": token_data.get("output_tokens", 0),
+                "total_tokens": token_data.get("total_tokens", 0),
+            })
 
             # Don't call frappe.destroy() here — it kills the DB connection
             # for subsequent requests. Let Frappe's request lifecycle handle cleanup.

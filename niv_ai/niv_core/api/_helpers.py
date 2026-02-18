@@ -96,14 +96,18 @@ def save_user_message(conversation_id: str, message: str, dedup: bool = False):
     frappe.db.commit()
 
 
-def save_assistant_message(conversation_id: str, content: str, tool_calls: list = None):
-    """Save assistant response to Niv Message."""
+def save_assistant_message(conversation_id: str, content: str, tool_calls: list = None,
+                          input_tokens: int = 0, output_tokens: int = 0, total_tokens: int = 0):
+    """Save assistant response to Niv Message with token usage."""
     try:
         msg_data = {
             "doctype": "Niv Message",
             "conversation": conversation_id,
             "role": "assistant",
             "content": content or "",
+            "input_tokens": input_tokens or 0,
+            "output_tokens": output_tokens or 0,
+            "total_tokens": total_tokens or 0,
         }
         if tool_calls:
             msg_data["tool_calls_json"] = json.dumps(tool_calls, default=str)
