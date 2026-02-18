@@ -90,6 +90,18 @@ def clean_text_for_tts(text):
     # Emoji shortcodes :emoji_name:
     t = re.sub(r':([a-zA-Z0-9_+-]+):', r'\1', t)
 
+    # Remove remaining special characters that TTS reads aloud
+    t = re.sub(r'@{2,}', '', t)  # @@@@
+    t = re.sub(r'"{2,}', '', t)  # """"
+    t = re.sub(r'#{2,}', '', t)  # ####
+    t = re.sub(r'\*{2,}', '', t)  # ****
+    t = re.sub(r'_{2,}', '', t)  # ____
+    t = re.sub(r'={2,}', '', t)  # ====
+    t = re.sub(r'~{2,}', '', t)  # ~~~~
+    t = re.sub(r'\|', '', t)  # pipe characters from tables
+    t = re.sub(r'[{}\[\]<>\\]', '', t)  # braces, brackets, backslash
+    t = re.sub(r'&(?:amp|lt|gt|quot|apos);', '', t)  # HTML entities
+
     # Collapse whitespace
     t = re.sub(r'\n{2,}', '. ', t)
     t = re.sub(r'\n', ' ', t)
