@@ -1723,7 +1723,13 @@ ${htmlCode}
 
         // Auto-open artifacts and render preview if HTML detected
         if (!isUser && this.is_html_response(content)) {
-            this.toggle_artifacts_panel(true);
+            // Open panel WITHOUT loading artifacts from DB (avoids overwriting preview with stale placeholder)
+            if (!this.artifacts_open) {
+                this.artifacts_open = true;
+                this.wrapper.find(".niv-main").addClass("niv-artifacts-open");
+                this.$artifactPanel.show();
+                this.wrapper.find(".btn-artifacts-toggle").addClass("active");
+            }
             // Unescape HTML entities if content came from DB
             let rawContent = content;
             if (content.includes("&lt;")) {
