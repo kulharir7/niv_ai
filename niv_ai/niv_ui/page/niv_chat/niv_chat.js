@@ -2569,6 +2569,21 @@ ${htmlCode}
         // Emoji shortcodes
         t = t.replace(/:([a-zA-Z0-9_+-]+):/g, '$1');
 
+        // Remove special characters TTS reads aloud
+        t = t.replace(/@{2,}/g, '');
+        t = t.replace(/"{2,}/g, '');
+        t = t.replace(/#{2,}/g, '');
+        t = t.replace(/\*{2,}/g, '');
+        t = t.replace(/_{2,}/g, '');
+        t = t.replace(/={2,}/g, '');
+        t = t.replace(/~{2,}/g, '');
+        t = t.replace(/\|/g, '');
+        t = t.replace(/[{}\[\]<>\\]/g, '');
+        t = t.replace(/&(?:amp|lt|gt|quot|apos);/g, '');
+        // Remove tool call JSON artifacts
+        t = t.replace(/\w+_\w+\s*\{[^}]*\}/g, '');
+        t = t.replace(/\{"[^"]*":[^}]*\}/g, '');
+
         // Collapse whitespace
         t = t.replace(/\n{2,}/g, '. ');
         t = t.replace(/\n/g, ' ');
@@ -3156,7 +3171,7 @@ ${htmlCode}
                 this.voiceSpeechRecog = new SpeechRecog();
                 this.voiceSpeechRecog.continuous = true;
                 this.voiceSpeechRecog.interimResults = true;
-                this.voiceSpeechRecog.lang = "en-IN";
+                this.voiceSpeechRecog.lang = "hi-IN";  // Hindi primary (also understands English)
                 this.voiceSpeechRecog.onresult = (event) => {
                     let finalTranscript = "";
                     let interimTranscript = "";
@@ -3480,7 +3495,9 @@ ${htmlCode}
         this.set_voice_state("speaking");
         window.speechSynthesis.cancel();
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-IN";
+        // Auto-detect Hindi vs English for browser TTS
+        const hasDevanagari = /[\u0900-\u097F]/.test(text);
+        utterance.lang = hasDevanagari ? "hi-IN" : "en-IN";
         utterance.rate = 1.0;
         utterance.pitch = 1.0;
         utterance.onend = () => {
@@ -3498,6 +3515,12 @@ ${htmlCode}
 
     play_voice_response(audioUrl) {
         this.set_voice_state("speaking");
+
+        // Disconnect previous source to avoid "already connected" error
+        if (this.voicePlaybackSource) {
+            try { this.voicePlaybackSource.disconnect(); } catch(e) {}
+            this.voicePlaybackSource = null;
+        }
 
         this.voiceAudio = new Audio(audioUrl);
 
@@ -3738,6 +3761,7 @@ ${htmlCode}
                         this.$voiceResponse.text(fullContent.substring(Math.max(0, fullContent.length - 200)));
 
                         // Feed token to sentence buffer for streaming TTS
+                        // (skip tool_call/tool_result events — they are separate types)
                         this.voice_on_stream_token(data.content);
                         
                         // Switch to speaking state once we start getting content
