@@ -332,3 +332,36 @@
     color: rgba(255, 255, 255, 0.6) !important;
     font-style: italic !important;
 }
+
+/* ── Export Buttons ── */
+.niv-export-bar {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    padding: 6px 0;
+}
+
+.niv-export-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 14px;
+    border-radius: 6px;
+    border: 1px solid rgba(124, 58, 237, 0.4);
+    background: rgba(124, 58, 237, 0.12);
+    color: #c4b5fd;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.niv-export-btn:hover {
+    background: rgba(124, 58, 237, 0.3);
+    color: #e2e8f0;
+    border-color: rgba(124, 58, 237, 0.6);
+}
+
+.niv-export-btn i {
+    font-size: 13px;
+}

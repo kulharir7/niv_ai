@@ -1705,6 +1705,7 @@ ${htmlCode}
         }
 
         this.add_code_copy_buttons($msg);
+        if (!isUser) this.add_export_buttons($msg, content);
 
         if (window.hljs) {
             $msg.find("pre code").each(function () {
@@ -1742,6 +1743,81 @@ ${htmlCode}
                 });
             });
         });
+    }
+
+    /**
+     * Add Excel/CSV export buttons below messages that contain tables.
+     * Parses markdown table from the raw content and sends to server for file generation.
+     */
+    add_export_buttons($msg, content) {
+        if (!content) return;
+        // Remove existing export bar (avoid duplicates on reload)
+        $msg.find(".niv-export-bar").remove();
+
+        // Check if content has a markdown table (| header1 | header2 |)
+        const tableMatch = content.match(/^\|.+\|$/gm);
+        if (!tableMatch || tableMatch.length < 3) return; // Need header + separator + at least 1 row
+
+        // Parse the markdown table into JSON for export
+        const lines = tableMatch.map(l => l.trim());
+        const headers = lines[0].replace(/^\||\|$/g, '').split('|').map(h => h.trim()).filter(h => h);
+        if (!headers.length) return;
+
+        const dataRows = [];
+        for (let i = 1; i < lines.length; i++) {
+            const cells = lines[i].replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+            // Skip separator rows (|---|---|)
+            if (cells.every(c => /^[-:]+$/.test(c))) continue;
+            if (!cells.length) continue;
+            const row = {};
+            headers.forEach((h, idx) => { row[h] = (cells[idx] || '').trim(); });
+            dataRows.push(row);
+        }
+
+        if (dataRows.length === 0) return;
+
+        const $bar = $(`
+            <div class="niv-export-bar">
+                <button class="niv-export-btn niv-export-excel" title="Download as Excel">
+                    <i class="fa fa-file-excel-o"></i> Excel
+                </button>
+                <button class="niv-export-btn niv-export-csv" title="Download as CSV">
+                    <i class="fa fa-file-text-o"></i> CSV
+                </button>
+            </div>
+        `);
+
+        const jsonData = JSON.stringify(dataRows);
+
+        $bar.find(".niv-export-excel").on("click", () => this._do_export(jsonData, "excel"));
+        $bar.find(".niv-export-csv").on("click", () => this._do_export(jsonData, "csv"));
+
+        $msg.find(".msg-content").after($bar);
+    }
+
+    async _do_export(jsonData, format) {
+        try {
+            frappe.show_alert({ message: `Generating ${format.toUpperCase()} file...`, indicator: "blue" });
+            const r = await frappe.call({
+                method: "niv_ai.niv_core.api.export.export_data",
+                args: { data: jsonData, format: format },
+            });
+            if (r.message && r.message.file_url) {
+                // Trigger browser download
+                const a = document.createElement("a");
+                a.href = r.message.file_url;
+                a.download = r.message.filename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                frappe.show_alert({ message: "Download started", indicator: "green" });
+            } else {
+                frappe.show_alert({ message: "Export failed", indicator: "red" });
+            }
+        } catch (e) {
+            console.error("Export error:", e);
+            frappe.show_alert({ message: `Export failed: ${e.message || e}`, indicator: "red" });
+        }
     }
 
     render_markdown(text) {
@@ -2300,6 +2376,10 @@ ${htmlCode}
                                 this.is_streaming = false;
                                 this.$sendBtn.show();
                                 this.$stopBtn.hide();
+                                // Add export buttons if response has table data
+                                if ($msgEl && fullContent) {
+                                    this.add_export_buttons($msgEl, fullContent);
+                                }
                                 this.load_messages(conv_id); // Refresh to get final saved state
                             }
                             resolve();
