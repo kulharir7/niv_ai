@@ -2524,8 +2524,8 @@ ${htmlCode}
 
         // Remove code blocks entirely → "code block"
         t = t.replace(/```[\s\S]*?```/g, ' code block ');
-        // Remove inline code
-        t = t.replace(/`[^`]+`/g, '');
+        // Inline code: keep text inside backticks
+        t = t.replace(/`([^`]+)`/g, '$1');
 
         // Collapse error stack traces
         t = t.replace(/Traceback \(most recent call last\):[\s\S]*?(?:\n\S|$)/g, ' There was an error. ');
@@ -2541,9 +2541,12 @@ ${htmlCode}
         // Bare URLs
         t = t.replace(/https?:\/\/\S+/g, '');
 
-        // Tables (lines of pipes)
-        t = t.replace(/^\|.*\|$/gm, '');
-        t = t.replace(/^[\s|:-]+$/gm, '');
+        // Convert tables to spoken format
+        t = t.replace(/^\|[-:\s|]+\|$/gm, '');  // remove separator rows
+        t = t.replace(/^\|(.+)\|$/gm, (match) => {
+            const cells = match.replace(/^\||\|$/g, '').split('|').map(c => c.trim()).filter(c => c && !/^[-:]+$/.test(c));
+            return cells.length ? cells.join(', ') + '.' : '';
+        });
 
         // Headings → sentence ending
         t = t.replace(/^#{1,6}\s+(.*)/gm, '$1.');
