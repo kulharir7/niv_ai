@@ -48,10 +48,12 @@ def stream_chat(**kwargs):
         conversation_id = data.get("conversation_id") or frappe.form_dict.get("conversation_id")
         message = data.get("message") or frappe.form_dict.get("message")
         page_context = data.get("context") or frappe.form_dict.get("context")
+        model = data.get("model") or frappe.form_dict.get("model")
     else:
         conversation_id = kwargs.get("conversation_id") or frappe.form_dict.get("conversation_id")
         message = kwargs.get("message") or frappe.form_dict.get("message")
         page_context = kwargs.get("context") or frappe.form_dict.get("context")
+        model = kwargs.get("model") or frappe.form_dict.get("model")
 
     # Parse page context JSON
     if page_context and isinstance(page_context, str):
@@ -99,6 +101,7 @@ def stream_chat(**kwargs):
                 message=message,
                 conversation_id=conversation_id,
                 user=user,
+                model=model or None,
                 page_context=page_context,
             ):
                 event_type = event.get("type", "")
