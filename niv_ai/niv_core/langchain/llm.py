@@ -52,7 +52,14 @@ def get_llm(provider_name=None, model=None, streaming=True, callbacks=None):
         frappe.throw("No AI provider configured. Set default_provider in Niv Settings.")
 
     provider = frappe.get_doc("Niv AI Provider", provider_name)
-    api_key = provider.get_password("api_key")
+    # Get API key — auto-refresh OAuth tokens if expired
+    auth_type = getattr(provider, "auth_type", "API Key") or "API Key"
+    if auth_type == "Setup Token" and getattr(provider, "refresh_token", None):
+        from niv_ai.niv_core.api.oauth import refresh_if_needed
+        api_key = refresh_if_needed(provider_name)
+    else:
+        api_key = provider.get_password("api_key")
+    
     model = model or provider.default_model or settings.default_model
 
     if not model:
