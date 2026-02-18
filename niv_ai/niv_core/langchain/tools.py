@@ -11,6 +11,7 @@ Per-user permission isolation:
 import hashlib
 import json
 import threading
+import time as _time
 import frappe
 from langchain_core.tools import StructuredTool
 from pydantic import create_model, Field
@@ -61,6 +62,19 @@ EXAMPLE: {"doctype": "Loan", "name": "LOAN-001", "data": {"status": "Closed"}}""
 def _enhance_description(name: str, desc: str) -> str:
     """Replace short descriptions with enhanced ones."""
     return ENHANCED_DESCRIPTIONS.get(name, desc)
+
+
+# ─── Failure Tracking & Rate Limiting ──────────────────────────────
+# Track consecutive failures per conversation to prevent retry loops
+# Key: (conversation_id, tool_name, args_hash) → count
+_failure_tracker = {}
+_FAILURE_TRACKER_TTL = 300  # 5 min
+_MAX_CONSECUTIVE_FAILURES = 2
+
+# Rate limiting per conversation
+_RATE_LIMIT_WINDOW = 60  # 1 minute window
+_RATE_LIMIT_MAX_CALLS = 50  # max calls per window
+_rate_limit_tracker = {}  # conv_id → [(timestamp, tool_name), ...]
 
 
 # JSON Schema type → Python type mapping
@@ -481,6 +495,99 @@ def _get_recovery_hint(tool_name, args, error_str):
     )
 
 
+def _check_failure_limit(tool_name: str, arguments: dict) -> str:
+    """Check if this tool+args combo has failed too many times.
+    
+    Returns error message if limit exceeded, None otherwise.
+    Prevents the LLM from retrying the same failed operation in a loop.
+    """
+    conv_id = get_active_dev_conv_id()
+    if not conv_id:
+        return None
+    
+    args_hash = hashlib.md5(json.dumps(arguments, sort_keys=True, default=str).encode()).hexdigest()[:8]
+    key = f"{conv_id}:{tool_name}:{args_hash}"
+    
+    # Clean old entries
+    now = _time.time()
+    stale_keys = [k for k, v in _failure_tracker.items() if v.get("expires", 0) < now]
+    for k in stale_keys:
+        _failure_tracker.pop(k, None)
+    
+    entry = _failure_tracker.get(key)
+    if entry and entry.get("count", 0) >= _MAX_CONSECUTIVE_FAILURES:
+        return (
+            f"STOP: Tool '{tool_name}' has already failed {entry['count']} times with similar arguments. "
+            "Do NOT retry. Use a completely different approach or tell the user you cannot complete this request. "
+            "Try: (1) a different tool, (2) simpler arguments, or (3) explain to the user what went wrong."
+        )
+    return None
+
+
+def _record_tool_failure(tool_name: str, arguments: dict):
+    """Record a tool failure for consecutive failure tracking."""
+    conv_id = get_active_dev_conv_id()
+    if not conv_id:
+        return
+    
+    args_hash = hashlib.md5(json.dumps(arguments, sort_keys=True, default=str).encode()).hexdigest()[:8]
+    key = f"{conv_id}:{tool_name}:{args_hash}"
+    
+    entry = _failure_tracker.get(key, {"count": 0})
+    entry["count"] = entry.get("count", 0) + 1
+    entry["expires"] = _time.time() + _FAILURE_TRACKER_TTL
+    _failure_tracker[key] = entry
+
+
+def _clear_tool_failures(tool_name: str, arguments: dict):
+    """Clear failure tracking on success."""
+    conv_id = get_active_dev_conv_id()
+    if not conv_id:
+        return
+    
+    args_hash = hashlib.md5(json.dumps(arguments, sort_keys=True, default=str).encode()).hexdigest()[:8]
+    key = f"{conv_id}:{tool_name}:{args_hash}"
+    _failure_tracker.pop(key, None)
+
+
+def _check_tool_rate_limit(tool_name: str) -> str:
+    """Check if tool calls are being rate limited.
+    
+    Returns error message if rate limit exceeded, None otherwise.
+    """
+    conv_id = get_active_dev_conv_id()
+    if not conv_id:
+        return None
+    
+    now = _time.time()
+    calls = _rate_limit_tracker.get(conv_id, [])
+    
+    # Remove old entries outside window
+    calls = [(ts, tn) for ts, tn in calls if now - ts < _RATE_LIMIT_WINDOW]
+    calls.append((now, tool_name))
+    _rate_limit_tracker[conv_id] = calls
+    
+    if len(calls) > _RATE_LIMIT_MAX_CALLS:
+        return (
+            f"RATE LIMIT: Too many tool calls ({len(calls)}) in the last {_RATE_LIMIT_WINDOW}s. "
+            "Slow down and plan your approach. Summarize what you have and ask the user if you should continue."
+        )
+    return None
+
+
+def _sanitize_tool_error(error_str: str) -> str:
+    """Sanitize error messages to remove sensitive info before returning to LLM."""
+    # Remove file paths
+    import re
+    sanitized = re.sub(r'(/[^\s]+/)+[^\s]+\.py', '[internal]', error_str)
+    # Remove stack traces
+    sanitized = re.sub(r'Traceback \(most recent.*?\n(?:.*?\n)*?(?=\w)', '', sanitized, flags=re.DOTALL)
+    # Truncate very long errors
+    if len(sanitized) > 500:
+        sanitized = sanitized[:500] + "..."
+    return sanitized
+
+
 def _make_mcp_executor(tool_name: str, input_schema: dict = None):
     """Create a closure that calls MCP tool by name.
 
@@ -491,6 +598,16 @@ def _make_mcp_executor(tool_name: str, input_schema: dict = None):
     def execute(**kwargs):
         # Remove None values — MCP servers don't expect them
         clean_args = {k: v for k, v in kwargs.items() if v is not None}
+
+        # ── Rate limit check ──
+        rate_msg = _check_tool_rate_limit(tool_name)
+        if rate_msg:
+            return json.dumps({"error": rate_msg})
+
+        # ── Check consecutive failure limit ──
+        failure_msg = _check_failure_limit(tool_name, clean_args)
+        if failure_msg:
+            return json.dumps({"error": failure_msg})
 
         # ─── Confirmation Flow ───
         # Dev Mode: ALL write tools need confirmation
@@ -569,6 +686,12 @@ def _make_mcp_executor(tool_name: str, input_schema: dict = None):
             if validation_error:
                 return json.dumps({"error": validation_error})
 
+        # ── Check result cache for read-only tools ──
+        from niv_ai.niv_core.tools.result_cache import get_cached_result, set_cached_result
+        cached = get_cached_result(tool_name, clean_args)
+        if cached is not None:
+            return cached
+
         server_name = find_tool_server(tool_name)
         if not server_name:
             return json.dumps({"error": f"No MCP server found for tool: {tool_name}"})
@@ -585,6 +708,7 @@ def _make_mcp_executor(tool_name: str, input_schema: dict = None):
             )
 
             # MCP returns {"content": [{"type": "text", "text": "..."}]}
+            result_text = None
             if isinstance(result, dict) and "content" in result:
                 contents = result["content"]
                 if isinstance(contents, list):
@@ -596,17 +720,32 @@ def _make_mcp_executor(tool_name: str, input_schema: dict = None):
                             text_parts.append(json.dumps(c, default=str))
                         else:
                             text_parts.append(str(c))
-                    return "\n".join(text_parts)
+                    result_text = "\n".join(text_parts)
 
-            # BUG-012: Ensure result is always a string for the LLM
-            if isinstance(result, (dict, list)):
-                return json.dumps(result, default=str, ensure_ascii=False)
-            return str(result)
+            if result_text is None:
+                # BUG-012: Ensure result is always a string for the LLM
+                if isinstance(result, (dict, list)):
+                    result_text = json.dumps(result, default=str, ensure_ascii=False)
+                else:
+                    result_text = str(result)
+
+            # ── Post-process: Summarize large results + add next-step hints ──
+            from niv_ai.niv_core.tools.result_processor import post_process_result, add_next_steps
+            result_text = post_process_result(tool_name, result_text)
+            result_text = add_next_steps(tool_name, result_text)
+
+            # Cache read-only tool results
+            set_cached_result(tool_name, clean_args, result_text)
+
+            _clear_tool_failures(tool_name, clean_args)
+
+            return result_text
 
         except Exception as e:
             frappe.log_error(f"MCP tool '{tool_name}' failed: {e}", "Niv AI MCP")
+            _record_tool_failure(tool_name, clean_args)
             # Return actionable error — guides LLM to self-correct
-            err_str = str(e)
+            err_str = _sanitize_tool_error(str(e))
             hint = _get_recovery_hint(tool_name, clean_args, err_str)
             return json.dumps({
                 "error": f"Tool '{tool_name}' failed: {err_str}",
@@ -673,15 +812,22 @@ def get_langchain_tools() -> list:
     
     lc_tools = []
 
+    from niv_ai.niv_core.tools.tool_descriptions import (
+        get_enhanced_description, enhance_tool_schema
+    )
+
     for tool_def in mcp_tools:
         func_def = tool_def.get("function", {})
         name = func_def.get("name", "")
         if not name:
             continue
 
-        description = func_def.get("description", "")[:4096]
-        description = _enhance_description(name, description)  # Use enhanced if available
-        parameters = func_def.get("parameters", {})
+        # Use enhanced descriptions if available (much better for LLM tool selection)
+        enhanced_desc = get_enhanced_description(name)
+        description = (enhanced_desc or func_def.get("description", ""))[:4096]
+        
+        # Enhance parameter schemas with better descriptions and examples
+        parameters = enhance_tool_schema(name, func_def.get("parameters", {}))
 
         args_schema = _build_pydantic_model(name, parameters)
         executor = _make_mcp_executor(name, input_schema=parameters)

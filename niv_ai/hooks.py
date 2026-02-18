@@ -29,7 +29,7 @@ page_modules = {
 
 # Installation
 after_install = "niv_ai.install.after_install"
-after_migrate = "niv_ai.install.after_migrate"
+after_migrate = ["niv_ai.install.after_migrate", "niv_ai.niv_core.mcp_client.warm_cache"]
 
 # Website route rules
 website_route_rules = [
