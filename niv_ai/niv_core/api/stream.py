@@ -151,11 +151,21 @@ def stream_chat(**kwargs):
             # Save response - ensure DB connection is alive
             if full_response.strip():
                 _ensure_db(_site_name)
+                # Resolve actual model name for DB
+                _model_used = model
+                if not _model_used:
+                    try:
+                        from niv_ai.niv_core.utils import get_niv_settings
+                        _s = get_niv_settings()
+                        _model_used = _s.default_model
+                    except Exception:
+                        pass
                 save_assistant_message(
                     conversation_id, full_response, tool_calls_data,
                     input_tokens=token_data.get("input_tokens", 0),
                     output_tokens=token_data.get("output_tokens", 0),
                     total_tokens=token_data.get("total_tokens", 0),
+                    model=_model_used,
                 )
                 auto_title(conversation_id, message)
 

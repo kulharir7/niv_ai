@@ -40,7 +40,8 @@ def send_message(conversation_id, message, model=None, provider=None):
         user=user,
     )
 
-    save_assistant_message(conversation_id, response_text)
+    _model_used = model or settings.default_model
+    save_assistant_message(conversation_id, response_text, model=_model_used)
     auto_title(conversation_id, message)
 
     return {
