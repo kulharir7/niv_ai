@@ -804,39 +804,46 @@ def speech_to_text(audio_file, engine=None):
     if not os.path.exists(file_path):
         frappe.throw(f"Audio file not found: {audio_file}")
 
+    # ── Try Mistral Voxtral STT first (fast, multilingual, Hindi+English) ──
+    if stt_engine in ("auto", "voxtral", "mistral", "api") and config.get("api_key"):
+        provider_type = config.get("provider_type", "openai")
+        if provider_type == "mistral":
+            stt_model = "voxtral-mini-latest"
+        else:
+            stt_model = "whisper-1"
+
+        data = {"model": stt_model}
+        lang = config.get("tts_language", "")
+        if lang:
+            data["language"] = lang
+
+        try:
+            with open(file_path, "rb") as f:
+                resp = requests.post(
+                    f"{config['base_url']}/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {config['api_key']}"},
+                    files={"file": (os.path.basename(audio_file), f, "audio/webm")},
+                    data=data,
+                    timeout=60,
+                )
+
+            if resp.status_code == 200:
+                result = resp.json()
+                text = result.get("text", "")
+                if text.strip():
+                    return {"text": text, "engine": f"voxtral ({stt_model})", "language": result.get("language", "")}
+            else:
+                frappe.logger().warning(f"Voxtral STT failed ({resp.status_code}): {resp.text[:200]}")
+        except Exception as e:
+            frappe.logger().warning(f"Voxtral STT error: {e}")
+
+    # ── Fallback: Local Faster-Whisper ──
     if stt_engine in ("auto", "whisper", "whisper-local"):
         result = _stt_whisper(file_path)
         if result:
             return result
 
-    if not config.get("api_key"):
-        frappe.throw("No STT available. Install faster-whisper or configure API key.")
-
-    provider_type = config.get("provider_type", "openai")
-    if provider_type == "mistral":
-        stt_model = "mistral-stt-latest"
-    else:
-        stt_model = "whisper-1"
-
-    data = {"model": stt_model}
-    lang = config.get("tts_language", "")
-    if lang:
-        data["language"] = lang
-
-    with open(file_path, "rb") as f:
-        resp = requests.post(
-            f"{config['base_url']}/audio/transcriptions",
-            headers={"Authorization": f"Bearer {config['api_key']}"},
-            files={"file": (os.path.basename(audio_file), f, "audio/webm")},
-            data=data,
-            timeout=60,
-        )
-
-    if resp.status_code != 200:
-        frappe.throw(f"STT API error ({resp.status_code}): {resp.text[:300]}")
-
-    result = resp.json()
-    return {"text": result.get("text", "")}
+    frappe.throw("No STT available. Configure Mistral API key or install faster-whisper.")
 
 
 
@@ -864,7 +871,41 @@ def stt_from_base64(**kwargs):
         tmp.write(audio_bytes)
         tmp.close()
         
-        # Try Faster-Whisper first
+        # Try Voxtral/API STT first (fast, accurate, Hindi+English)
+        config = _get_voice_config()
+        if config.get("api_key"):
+            provider_type = config.get("provider_type", "openai")
+            stt_model = "voxtral-mini-latest" if provider_type == "mistral" else "whisper-1"
+            
+            try:
+                with open(tmp.name, "rb") as f:
+                    resp = requests.post(
+                        f"{config['base_url']}/audio/transcriptions",
+                        headers={"Authorization": f"Bearer {config['api_key']}"},
+                        files={"file": ("audio.webm", f, "audio/webm")},
+                        data={"model": stt_model},
+                        timeout=30,
+                    )
+                
+                if resp.status_code == 200:
+                    api_result = resp.json()
+                    text = api_result.get("text", "")
+                    if text.strip():
+                        try:
+                            os.unlink(tmp.name)
+                        except Exception:
+                            pass
+                        return {
+                            "text": text,
+                            "language": api_result.get("language", ""),
+                            "engine": f"voxtral ({stt_model})",
+                        }
+                else:
+                    frappe.logger().warning(f"Voxtral STT failed ({resp.status_code}): {resp.text[:200]}")
+            except Exception as e:
+                frappe.logger().warning(f"Voxtral STT error: {e}")
+        
+        # Fallback: Local Faster-Whisper
         result = _stt_whisper(tmp.name)
         
         if result and result.get("text"):
@@ -877,32 +918,6 @@ def stt_from_base64(**kwargs):
                 "language": result.get("language", ""),
                 "engine": "whisper-local",
             }
-        
-        # Fallback to API STT
-        config = _get_voice_config()
-        if config.get("api_key"):
-            provider_type = config.get("provider_type", "openai")
-            stt_model = "mistral-stt-latest" if provider_type == "mistral" else "whisper-1"
-            
-            with open(tmp.name, "rb") as f:
-                resp = requests.post(
-                    f"{config['base_url']}/audio/transcriptions",
-                    headers={"Authorization": f"Bearer {config['api_key']}"},
-                    files={"file": ("audio.webm", f, "audio/webm")},
-                    data={"model": stt_model},
-                    timeout=30,
-                )
-            
-            if resp.status_code == 200:
-                api_result = resp.json()
-                try:
-                    os.unlink(tmp.name)
-                except Exception:
-                    pass
-                return {
-                    "text": api_result.get("text", ""),
-                    "engine": "api",
-                }
         
         try:
             os.unlink(tmp.name)
