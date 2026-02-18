@@ -71,6 +71,12 @@
     "image_api_key",
     "column_break_image",
     "image_api_url",
+    "telegram_section",
+    "telegram_bot_token",
+    "telegram_webhook_url",
+    "column_break_telegram",
+    "telegram_secret_token",
+    "telegram_live_stream",
     "advanced_section",
     "advanced_help"
   ],
@@ -472,6 +478,41 @@
       "default": "https://api.openai.com/v1",
       "description": "Base URL for image generation API (OpenAI-compatible)",
       "depends_on": "enable_image_generation"
+    },
+    {
+      "fieldname": "telegram_section",
+      "fieldtype": "Section Break",
+      "label": "Telegram Bot",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "telegram_bot_token",
+      "fieldtype": "Password",
+      "label": "Bot Token",
+      "description": "Get from @BotFather on Telegram"
+    },
+    {
+      "fieldname": "telegram_webhook_url",
+      "fieldtype": "Data",
+      "label": "Webhook URL",
+      "description": "e.g. https://yoursite.com/api/method/niv_ai.niv_core.api.telegram.webhook"
+    },
+    {
+      "fieldname": "column_break_telegram",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "telegram_secret_token",
+      "fieldtype": "Data",
+      "label": "Secret Token",
+      "description": "Optional. Set in BotFather webhook for security validation."
+    },
+    {
+      "fieldname": "telegram_live_stream",
+      "fieldtype": "Check",
+      "label": "Live Stream Responses",
+      "default": "1",
+      "description": "Edit message in real-time as AI generates response (like ChatGPT bots)"
     },
     {
       "fieldname": "advanced_section",
