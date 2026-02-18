@@ -98,6 +98,26 @@ def clean_text_for_tts(text):
     # Emoji shortcodes :emoji_name:
     t = re.sub(r':([a-zA-Z0-9_+-]+):', r'\1', t)
 
+    # Remove Unicode emoji (flags, symbols, faces, etc.)
+    t = re.sub(
+        r'[\U0001F600-\U0001F64F'   # emoticons
+        r'\U0001F300-\U0001F5FF'    # symbols & pictographs
+        r'\U0001F680-\U0001F6FF'    # transport & map
+        r'\U0001F1E0-\U0001F1FF'    # flags
+        r'\U0001F900-\U0001F9FF'    # supplemental symbols
+        r'\U0001FA00-\U0001FA6F'    # chess symbols
+        r'\U0001FA70-\U0001FAFF'    # symbols extended-A
+        r'\U00002702-\U000027B0'    # dingbats
+        r'\U0000FE00-\U0000FE0F'    # variation selectors
+        r'\U0000200D'               # zero width joiner
+        r'\U000020E3'               # combining enclosing keycap
+        r'\U00002600-\U000026FF'    # misc symbols
+        r'\U00002300-\U000023FF'    # misc technical
+        r'\U0000200B-\U0000200F'    # zero-width chars
+        r'\U000025A0-\U000025FF'    # geometric shapes
+        r']+', '', t
+    )
+
     # Remove remaining special characters that TTS reads aloud
     t = re.sub(r'@{2,}', '', t)  # @@@@
     t = re.sub(r'"{2,}', '', t)  # """"
@@ -268,7 +288,7 @@ def _text_to_ssml(text, voice):
 
     Args:
         text: Clean text (already stripped of markdown)
-        voice: Edge TTS voice name (e.g. en-US-JennyNeural)
+        voice: Edge TTS voice name (e.g. en-IN-NeerjaExpressiveNeural)
 
     Returns:
         SSML string ready for edge_tts.Communicate()
@@ -284,7 +304,7 @@ def _text_to_ssml(text, voice):
     if voice and voice.startswith("hi-"):
         lang = "hi-IN"
     else:
-        lang = "en-US"
+        lang = "en-IN"
 
     # Build SSML body with breaks and emphasis
     ssml_body = _add_ssml_breaks_and_emphasis(text)
@@ -637,7 +657,7 @@ def _tts_edge(text, voice=None, use_ssml=False):
         if lang == "hi":
             voice = "hi-IN-SwaraNeural"
         else:
-            voice = "en-US-JennyNeural"
+            voice = "en-IN-NeerjaExpressiveNeural"
 
     try:
         output_dir = frappe.get_site_path("public", "files")
@@ -791,7 +811,7 @@ def stream_tts(text, voice=None):
         if lang in ("hi", "hindi"):
             voice = "hi-IN-SwaraNeural"  # Edge TTS for Hindi (Piper has no Hindi)
         else:
-            voice = "en-US-JennyNeural"
+            voice = "en-IN-NeerjaExpressiveNeural"
 
     # Check configured TTS engine
     settings = frappe.get_single("Niv Settings")
