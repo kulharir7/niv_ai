@@ -111,17 +111,24 @@ def stream_chat(**kwargs):
             frappe.log_error(f"Stream error: {e}", "Niv AI Stream")
             yield _sse({"type": "error", "content": error_msg})
 
-        # Save response
-        if full_response.strip():
-            try:
-                frappe.db.sql("SELECT 1")
-            except Exception:
-                frappe.init(site=_site_name)
-                frappe.connect()
-            save_assistant_message(conversation_id, full_response, tool_calls_data)
-            auto_title(conversation_id, message)
+        finally:
+            # Save response
+            if full_response.strip():
+                try:
+                    frappe.db.sql("SELECT 1")
+                except Exception:
+                    frappe.init(site=_site_name)
+                    frappe.connect()
+                save_assistant_message(conversation_id, full_response, tool_calls_data)
+                auto_title(conversation_id, message)
 
-        yield _sse({"type": "done", "content": ""})
+            yield _sse({"type": "done", "content": ""})
+
+            # Cleanup DB connection to prevent leaks
+            try:
+                frappe.destroy()
+            except Exception:
+                pass
 
     from werkzeug.wrappers import Response
     return Response(

@@ -75,11 +75,11 @@ def _seed_default_plans():
 def _run_auto_discovery():
     """Run auto-discovery to scan and learn the system."""
     try:
-        from niv_ai.niv_core.adk.discovery import trigger_discovery
-        result = trigger_discovery()
-        doctypes = len(result.get("custom_doctypes", []))
-        workflows = len(result.get("active_workflows", []))
-        print(f"  → System Discovery complete: {doctypes} Custom DocTypes, {workflows} Workflows mapped.")
+        from niv_ai.niv_core.knowledge.unified_discovery import UnifiedDiscovery
+        discovery = UnifiedDiscovery()
+        data = discovery.run_full_scan()
+        doctypes = len(data.get("doctypes", {}))
+        print(f"  → System Discovery complete: {doctypes} DocTypes scanned.")
     except Exception as e:
         print("  → System Discovery skipped: {0}".format(str(e)))
 

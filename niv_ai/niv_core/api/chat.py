@@ -59,7 +59,7 @@ def save_reaction(message_name, reaction=""):
 
     # Only allow reacting to messages in user's own conversations
     conv = frappe.get_doc("Niv Conversation", msg.conversation)
-    if conv.owner != frappe.session.user and frappe.session.user != "Administrator":
+    if conv.user != frappe.session.user and "System Manager" not in frappe.get_roles(frappe.session.user):
         frappe.throw(_("Not permitted"), frappe.PermissionError)
 
     import json
