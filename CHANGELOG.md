@@ -1,3 +1,44 @@
+## [0.9.0] - 2026-02-18
+
+### 🔧 MCP Tools Optimization & UI Overhaul
+
+#### Tool Selection Revolution
+- **Removed keyword routing entirely** — LLM freely selects from all 34 tools (no filtering)
+- **576 lines removed** from `agent_router.py` (dead routing code)
+- **Few-shot examples** retained as hints, not routing rules
+- **Proven improvement**: WRR query fixed (was 0%, now correctly returns IRR from data)
+
+#### System Prompt Optimization
+- **82% reduction**: 23,472 → 4,146 chars
+- **Slim NBFC knowledge** (`domain_nbfc_slim.py`) — 1.2K chars for production, full 23K only in dev mode
+- **Current date injected** into system prompt — LLM now knows today's date
+- **Tool usage guidelines** trimmed from 10 lines to 4
+
+#### Result Processing
+- **4KB result cap** — large tool results intelligently summarized
+- **Single document summarization** — 32KB+ responses reduced to ~3KB (child tables trimmed)
+- **Result caching** — 2min TTL for read-only tools (e.g., `get_doctype_info`)
+- **Consecutive failure cap** — after 2 identical failures, suggests different approach
+
+#### Enhanced Tool Descriptions
+- **20+ tools** enhanced with USE/DON'T USE guidance in `tool_descriptions.py`
+- **Override at client layer** — FAC untouched, descriptions enhanced at Niv AI layer
+
+#### WRR Definition Fix
+- **Corrected**: WRR = Weighted Risk Rate (IRR on reducing balance), not "Weighted Risk Rating"
+- **LLM now reads** `irr`/`rate_of_interest` fields from Loan documents instead of calculating
+
+#### UI Improvements
+- **Markdown table fix** — broken tables from LLM (missing newlines) auto-repaired in JS
+- **Table wrapper** — horizontal scroll for wide tables
+- **Table CSS** — dark theme with purple headers, hover effects, proper borders
+
+#### Safety & Limits
+- **Rate limiting** — 50 tool calls/min/user
+- **Error sanitization** — internal errors cleaned before showing to user
+
+---
+
 ## [0.7.0] - 2026-02-17
 
 ### 🚀 Major Release: Smart Tool Calling + Advanced Memory
