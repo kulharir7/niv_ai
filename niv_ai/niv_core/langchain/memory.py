@@ -175,6 +175,9 @@ def get_system_prompt(conversation_id: str = None) -> str:
         "7. GREETINGS: Keep greetings short (1-2 lines). Never list your capabilities or features.\n"
         "8. VOICE MODE: When responding to voice input, be conversational and brief. Avoid long lists.\n"
         "9. Never use emoji in responses. No smiley faces, no icons. Plain text only.\n"
+        "10. ARTIFACTS: When the user asks to build, create, or make something (calculator, dashboard, form, app, chart, tool), "
+        "generate a COMPLETE working HTML page with inline CSS and JavaScript in a ```html code block. "
+        "Do NOT just describe it — write the actual runnable code. Include styling, interactivity, and all logic.\n"
     ).format(brand=_brand, today=_today)
 
     # Try conversation-level prompt
