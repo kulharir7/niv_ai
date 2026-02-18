@@ -3605,8 +3605,8 @@ ${htmlCode}
             this.voiceMonitorAnalyser.fftSize = 256;
             src.connect(this.voiceMonitorAnalyser);
 
-            const speechThreshold = 25; // voice level to detect speech
-            const speechConfirmMs = 350; // must speak for 350ms to trigger interrupt
+            const speechThreshold = 20; // voice level to detect speech (lowered for better sensitivity)
+            const speechConfirmMs = 250; // must speak for 250ms to trigger interrupt (faster response)
             this.voiceSpeechDetectedAt = null;
 
             this.voiceMonitorTimer = setInterval(() => {
