@@ -110,6 +110,20 @@ def clean_text_for_tts(text):
     t = re.sub(r'[{}\[\]<>\\]', '', t)  # braces, brackets, backslash
     t = re.sub(r'&(?:amp|lt|gt|quot|apos);', '', t)  # HTML entities
 
+    # Clean punctuation that TTS reads aloud
+    t = re.sub(r'/{2,}', ' ', t)      # // or ///
+    t = re.sub(r'/(?=\s)', ' ', t)    # trailing slash
+    t = re.sub(r'-{2,}', ', ', t)     # -- or --- → pause
+    t = re.sub(r',{2,}', ',', t)      # ,,,, → single comma
+    t = re.sub(r'!{2,}', '!', t)      # !!!! → single !
+    t = re.sub(r'\?{2,}', '?', t)     # ???? → single ?
+    t = re.sub(r'\.{3,}', '.', t)     # ... → single .
+    t = re.sub(r'[""„"]+', '', t)     # fancy quotes
+    t = re.sub(r"[''‚']+", '', t)     # fancy single quotes
+    t = re.sub(r'[→←↑↓•·►▶▸‣⁃]', '', t)  # arrows, bullets
+    t = re.sub(r'[─━═│┃┌┐└┘├┤┬┴┼╔╗╚╝╠╣╦╩╬]', '', t)  # box drawing chars
+    t = re.sub(r'[\U0001F300-\U0001F9FF]', '', t)  # emoji
+
     # Collapse whitespace
     t = re.sub(r'\n{2,}', '. ', t)
     t = re.sub(r'\n', ' ', t)
@@ -117,6 +131,8 @@ def clean_text_for_tts(text):
 
     # Clean up punctuation artifacts
     t = re.sub(r'\.(\s*\.)+', '.', t)
+    t = re.sub(r',(\s*,)+', ',', t)
+    t = re.sub(r'^\s*[,.:;!?]\s*', '', t)  # leading punctuation
 
     return t.strip()
 
