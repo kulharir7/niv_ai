@@ -20,7 +20,7 @@
     {"fieldname": "provider_type", "fieldtype": "Select", "label": "Provider Type", "options": "openai_compatible\nanthropic\ngoogle", "default": "openai_compatible", "reqd": 1},
     {"fieldname": "is_active", "fieldtype": "Check", "label": "Active", "default": "1"},
     {"fieldname": "column_break_1", "fieldtype": "Column Break"},
-    {"fieldname": "auth_type", "fieldtype": "Select", "label": "Auth Type", "options": "API Key\nSetup Token", "default": "API Key", "description": "API Key: Get from provider console (e.g. console.anthropic.com). Setup Token: Run 'claude setup-token' in terminal — uses your Claude subscription, no API billing."},
+    {"fieldname": "auth_type", "fieldtype": "Select", "label": "Auth Type", "options": "API Key\nSetup Token\nChatGPT Login", "default": "API Key", "description": "API Key: Get from provider console. Setup Token: Claude subscription (run 'claude setup-token'). ChatGPT Login: Use your ChatGPT Plus/Pro subscription."},
     {"fieldname": "api_key", "fieldtype": "Password", "label": "API Key / Token", "reqd": 1, "description": "Paste your API key or setup-token here"},
     {"fieldname": "base_url", "fieldtype": "Data", "label": "Base URL", "reqd": 1, "default": "https://api.mistral.ai/v1", "mandatory_depends_on": "eval:doc.auth_type=='API Key'"},
     {"fieldname": "refresh_token", "fieldtype": "Password", "label": "Refresh Token", "hidden": 1, "description": "OAuth refresh token (auto-managed)"},
