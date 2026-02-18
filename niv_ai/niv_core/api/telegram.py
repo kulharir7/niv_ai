@@ -461,6 +461,9 @@ def _handle_stream(chat_id, text, conversation_id, frappe_user):
     """Live streaming — edit message as tokens arrive."""
     msg_id = _send_telegram(chat_id, "💭 _Thinking..._")
 
+    # Ensure DB connection is alive before agent call
+    _ensure_db()
+
     full_response = ""
     tools_used = []
     last_edit_time = time.time()
@@ -550,6 +553,7 @@ def _handle_stream(chat_id, text, conversation_id, frappe_user):
 
 def _handle_batch(chat_id, text, conversation_id, frappe_user):
     """Batch mode — collect full response then send."""
+    _ensure_db()
     _send_chat_action(chat_id, "typing")
     status_msg_id = _send_telegram(chat_id, "⏳ _Processing..._")
 
@@ -1152,6 +1156,10 @@ def _clean_response(text):
     # Remove system hints
     text = re.sub(r'\[TELEGRAM:.*?\]', '', text, flags=re.IGNORECASE)
 
+    # Remove raw tool call leaks (when LLM outputs tool calls as text)
+    text = re.sub(r'\b\w+_\w+\s*"?\w+_\w+"?\s*\{[^}]+\}\}?', '', text)
+    text = re.sub(r'\b(list_documents|get_document|run_database_query|search_documents|create_document|update_document|get_doctype_info)\s*[\{"\[].*?[\}"\]]\s*', '', text, flags=re.DOTALL)
+
     # Headers → bold
     text = re.sub(r'^#{1,3}\s*(.+)$', r'*\1*', text, flags=re.MULTILINE)
 
@@ -1321,6 +1329,27 @@ def _get_or_create_conversation(user, chat_id):
 # ═══════════════════════════════════════════════════════════════════════
 # SECTION 11: TELEGRAM API HELPERS
 # ═══════════════════════════════════════════════════════════════════════
+
+def _ensure_db():
+    """Ensure DB connection is alive. Reconnect if dead."""
+    try:
+        frappe.db.sql("SELECT 1")
+    except Exception:
+        try:
+            frappe.connect()
+        except Exception:
+            pass
+
+    # Also clear the LangChain tools cache to force fresh tool load
+    try:
+        from niv_ai.niv_core.langchain.tools import _lc_tools_cache
+        import time as _t
+        if _lc_tools_cache.get("expires", 0) < _t.time():
+            _lc_tools_cache["tools"] = []
+            _lc_tools_cache["expires"] = 0
+    except Exception:
+        pass
+
 
 def _get_settings():
     """Get Niv Settings (cached)."""
