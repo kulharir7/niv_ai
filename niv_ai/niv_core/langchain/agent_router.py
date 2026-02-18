@@ -234,19 +234,49 @@ AGENT_REGISTRY = {
             "pre-emi", "moratorium", "foreclosure", "topup"
         ],
         "tools": CORE_TOOLS | REPORT_TOOLS | NBFC_TOOLS | {"run_python_code", "submit_document", "run_workflow"},
-        "prompt_suffix": """
-
-You are specialized in NBFC and lending operations. You understand:
+        "prompt_suffix": """\n\nYou are specialized in NBFC and lending operations. You understand:
 - Loan Application lifecycle (Lead → Application → Sanction → Disbursement)
 - NPA Classification (SMA-0, SMA-1, SMA-2, Sub-standard, Doubtful, Loss)
 - Collection and Recovery processes
 - Co-lending and Balance Transfer
 - Regulatory compliance (RBI guidelines)
 
-""" + NBFC_TOOL_EXAMPLES + """
+Always show financial data in proper tables with formatted numbers (₹ symbol, Indian number format).
 
-For calculations, use the NBFC-specific tools (nbfc_credit_scoring, etc.) when available.
-Always show financial data in proper tables with formatted numbers (₹ symbol, commas).""",
+## Key DocTypes & Fields (USE DIRECTLY — no need to call get_doctype_info)
+
+### Loan Application
+- Fields: name, applicant, applicant_name, loan_amount, loan_type, status, posting_date, company, rate_of_interest, repayment_method, repayment_periods
+- Status values: Open, Approved, Rejected, Sanctioned, Disbursed, Closed
+- Table name: `tabLoan Application`
+
+### Loan
+- Fields: name, applicant, applicant_name, loan_amount, loan_type, status, disbursement_date, repayment_start_date, total_payment, total_interest_payable, total_amount_paid, monthly_repayment_amount, rate_of_interest, company
+- Status values: Sanctioned, Partially Disbursed, Disbursed, Loan Closure Requested, Closed
+- Table name: `tabLoan`
+
+### Loan Repayment
+- Fields: name, against_loan, applicant, payment_type, amount_paid, posting_date, principal_amount, interest_amount, penalty_amount
+- Table name: `tabLoan Repayment`
+
+### Loan Disbursement
+- Fields: name, against_loan, applicant, disbursed_amount, posting_date, disbursement_date
+- Table name: `tabLoan Disbursement`
+
+### Journal Entry
+- Fields: name, voucher_type, posting_date, total_debit, total_credit, company, remark
+- Table name: `tabJournal Entry`
+
+### Customer
+- Fields: name, customer_name, customer_type, customer_group, territory, default_currency
+- Table name: `tabCustomer`
+
+## Common SQL Patterns for NBFC
+- Overdue loans: SELECT * FROM `tabLoan` WHERE status='Disbursed' AND name IN (SELECT parent FROM `tabRepayment Schedule` WHERE payment_date < CURDATE() AND is_paid=0)
+- Loan count by status: SELECT status, COUNT(*) as count, SUM(loan_amount) as total FROM `tabLoan` GROUP BY status
+- Total AUM: SELECT SUM(loan_amount) as total_aum, COUNT(*) as loan_count FROM `tabLoan` WHERE docstatus=1 AND status IN ('Disbursed', 'Partially Disbursed')
+
+""" + NBFC_TOOL_EXAMPLES,
     },
 
     "accounts": {
@@ -366,34 +396,78 @@ class AgentRouter:
     def classify(self, query: str) -> Tuple[str, Dict[str, Any]]:
         """
         Classify a query and return the best agent.
-
+        
+        Uses weighted keyword scoring:
+        - Single word match: +1 point
+        - Multi-word phrase match: +3 points (more specific = more reliable)
+        - If top two agents are within 1 point, falls back to "general" (ambiguous)
+        
         Returns: (agent_id, metadata)
         """
         query_lower = query.lower()
         query_words = set(re.findall(r'\b\w+\b', query_lower))
 
-        # Step 1: Exact keyword match (instant)
-        matches = {}
-        for word in query_words:
-            if word in self._keyword_index:
-                for agent_id in self._keyword_index[word]:
-                    matches[agent_id] = matches.get(agent_id, 0) + 1
+        # Step 1: Weighted keyword scoring
+        scores = {}
+        matched_keywords = {}
+        
+        for agent_id, config in AGENT_REGISTRY.items():
+            if agent_id in ("general", "orchestrator"):
+                continue
+                
+            score = 0
+            matches = []
+            
+            for kw in config.get("keywords", []):
+                kw_lower = kw.lower()
+                
+                # Multi-word keyword (phrase match) — higher weight
+                if " " in kw_lower:
+                    if kw_lower in query_lower:
+                        score += 3
+                        matches.append(kw)
+                else:
+                    # Single word match
+                    if kw_lower in query_words:
+                        score += 1
+                        matches.append(kw)
+            
+            if score > 0:
+                scores[agent_id] = score
+                matched_keywords[agent_id] = matches
 
-        if matches:
-            best_agent = max(matches.keys(), key=lambda a: matches[a])
-            confidence = min(1.0, matches[best_agent] / 3.0)
+        if scores:
+            # Sort by score descending
+            sorted_agents = sorted(scores.keys(), key=lambda a: scores[a], reverse=True)
+            best_agent = sorted_agents[0]
+            best_score = scores[best_agent]
+            
+            # Ambiguity detection: if top two are close, fall to general
+            if len(sorted_agents) > 1:
+                second_score = scores[sorted_agents[1]]
+                if best_score - second_score <= 1 and best_score <= 2:
+                    # Too close to call — use general agent with all tools
+                    return "general", {
+                        "method": "ambiguous",
+                        "confidence": 0.3,
+                        "candidates": {a: scores[a] for a in sorted_agents[:3]},
+                        "matched_keywords": matched_keywords,
+                    }
+            
+            confidence = min(1.0, best_score / 4.0)  # 4+ points = 100%
             return best_agent, {
                 "method": "keyword",
                 "confidence": confidence,
-                "matched_keywords": matches
+                "score": best_score,
+                "matched_keywords": matched_keywords.get(best_agent, []),
             }
 
-        # Step 2: Semantic similarity (if enabled)
+        # Step 2: Semantic similarity (slower, more accurate)
         try:
             if self._should_use_embedding():
                 return self._classify_by_embedding(query)
         except Exception as e:
-            frappe.logger().warning(f"AgentRouter embedding failed: {e}")
+            frappe.logger().warning(f"AgentRouter embedding classification failed: {e}")
 
         # Step 3: Fallback to general agent
         return "general", {"method": "fallback", "confidence": 0.0}

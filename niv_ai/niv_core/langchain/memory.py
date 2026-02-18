@@ -9,6 +9,36 @@ from niv_ai.niv_core.knowledge.memory_service import get_user_context, extract_m
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 
 
+TOOL_USAGE_GUIDELINES = """
+## Tool Usage Guidelines (MANDATORY — Follow These Rules)
+
+### Tool Selection Decision Tree
+- Need a single document by name/ID? → get_document
+- Need a list with simple filters? → list_documents
+- Need SQL-level analytics (JOIN, GROUP BY, SUM, AVG, COUNT)? → run_database_query
+- Don't know the DocType name? → search_doctype
+- Don't know field names for a DocType? → get_doctype_info
+- Need to create/update/delete? → create_document / update_document / delete_document
+- Need a pre-built report? → report_requirements FIRST, then generate_report
+- Need full-text search across fields? → search_documents
+- Need to find an exact linked record name? → search_link
+
+### Efficiency Rules (CRITICAL)
+1. MAXIMUM 4 tool calls per user question. If you need more, summarize and ask to continue.
+2. For "how many X" questions → use run_database_query with SELECT COUNT(*), NOT list_documents.
+3. For "total/sum/average" questions → use run_database_query with SUM/AVG, NOT list_documents.
+4. If you know the DocType fields already, do NOT call get_doctype_info first.
+5. If a tool fails, try ONE different approach. If that also fails, explain the issue to the user.
+6. NEVER call the same tool with the same arguments twice.
+7. After getting tool results, ALWAYS write a text summary. Never end with just tool calls.
+
+### Common Mistakes to Avoid
+- Using list_documents to count records → Use run_database_query with COUNT(*)
+- Calling get_doctype_info for well-known DocTypes (Customer, Item, Sales Invoice, Loan)
+- Calling list_documents + get_document for the same record → Just use get_document directly
+- Using run_python_code for simple math → Calculate it yourself
+"""
+
 # Rough token estimate: 1 token ≈ 4 chars (conservative)
 _CHARS_PER_TOKEN = 4
 
@@ -281,9 +311,12 @@ def get_system_prompt(conversation_id: str = None) -> str:
     except Exception:
         user_memory = ""
 
+    # Always append tool usage guidelines
+    full_prompt = default_prompt + "\n\n" + TOOL_USAGE_GUIDELINES
     if discovery_ctx:
-        return default_prompt + "\n\n" + discovery_ctx + user_memory
-    return default_prompt + user_memory
+        full_prompt += "\n\n" + discovery_ctx
+    full_prompt += user_memory
+    return full_prompt
 
 
 def get_dev_system_prompt() -> str:

@@ -580,6 +580,18 @@ def call_tool_fast(server_name, tool_name, arguments, user_api_key=None):
             raise MCPError(f"Tool '{tool_name}' failed (SDK): {e}")
 
 
+def warm_cache():
+    """Pre-warm MCP tool caches after migrate. Called by hooks.py after_migrate."""
+    try:
+        tools = get_all_mcp_tools_cached()
+        if tools:
+            frappe.logger().info(f"Niv MCP: Cache warmed with {len(tools)} tools")
+        else:
+            frappe.logger().warning("Niv MCP: Cache warm returned 0 tools")
+    except Exception as e:
+        frappe.logger().warning(f"Niv MCP: Cache warm failed (non-fatal): {e}")
+
+
 def get_all_mcp_tools_cached():
     """Get all MCP tools in OpenAI function format. Cached."""
     global _openai_tools_cache
