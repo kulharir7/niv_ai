@@ -44,7 +44,7 @@ def webhook(**kwargs):
         # Security: validate secret token if configured
         settings = _get_settings()
         secret = getattr(settings, "telegram_secret_token", None)
-        if secret:
+        if secret and secret not in ("None", "none", ""):
             header_secret = frappe.request.headers.get("X-Telegram-Bot-Api-Secret-Token", "")
             if header_secret != secret:
                 frappe.log_error("Telegram webhook: invalid secret token", "Niv AI Telegram")
@@ -428,16 +428,18 @@ def _cmd_status(chat_id, telegram_user_id):
         _send_telegram(chat_id, "No linked account. Use /link your@email.com")
         return
 
-    # Get conversation stats
+    # Get conversation stats (single efficient query)
     conv_count = frappe.db.count("Niv Conversation", {"owner": frappe_user, "channel": "telegram"})
     msg_count = 0
-    convs = frappe.get_all(
-        "Niv Conversation",
-        filters={"owner": frappe_user, "channel": "telegram"},
-        fields=["name"]
-    )
-    for c in convs:
-        msg_count += frappe.db.count("Niv Message", {"parent": c.name})
+    try:
+        result = frappe.db.sql("""
+            SELECT COUNT(*) FROM `tabNiv Message` m
+            JOIN `tabNiv Conversation` c ON m.parent = c.name
+            WHERE c.owner = %s AND c.channel = 'telegram'
+        """, (frappe_user,))
+        msg_count = result[0][0] if result else 0
+    except Exception:
+        msg_count = 0
 
     settings = _get_settings()
     model = getattr(settings, "default_model", "unknown")
@@ -620,6 +622,7 @@ def _handle_batch(chat_id, text, conversation_id, frappe_user):
 
 def _handle_voice_message(chat_id, voice, conversation_id, frappe_user, message):
     """Process voice message: Download → STT → AI → Reply (+ optional TTS)."""
+    _ensure_db()
     msg_id = _send_telegram(chat_id, "🎙️ _Transcribing your voice..._")
     _send_chat_action(chat_id, "typing")
 
@@ -846,47 +849,53 @@ def _handle_callback_query(callback_query):
         _answer_callback(callback_id, "Invalid request")
         return
 
-    # Parse callback data
-    if ":" in data:
-        action, payload = data.split(":", 1)
-    else:
-        action, payload = data, ""
+    try:
+        # Parse callback data
+        if ":" in data:
+            action, payload = data.split(":", 1)
+        else:
+            action, payload = data, ""
 
-    if action == "quick":
-        # Quick query — run through AI
-        _answer_callback(callback_id, "Processing...")
-        _cmd_quick_query(chat_id, telegram_user_id, payload)
+        if action == "quick":
+            _answer_callback(callback_id, "Processing...")
+            _cmd_quick_query(chat_id, telegram_user_id, payload)
 
-    elif action == "report":
-        # Report shortcut
-        _answer_callback(callback_id, f"Generating {payload} report...")
-        report_queries = {
-            "sales": "Show me the sales summary report for this month",
-            "collection": "Show me the collection efficiency report",
-            "overdue": "Show me all overdue loans with days overdue",
-            "npa": "Show me the complete NPA report",
-        }
-        query = report_queries.get(payload, f"Generate {payload} report")
-        _cmd_quick_query(chat_id, telegram_user_id, query)
+        elif action == "report":
+            _answer_callback(callback_id, f"Generating {payload} report...")
+            report_queries = {
+                "sales": "Show me the sales summary report for this month",
+                "collection": "Show me the collection efficiency report",
+                "overdue": "Show me all overdue loans with days overdue",
+                "npa": "Show me the complete NPA report",
+            }
+            query = report_queries.get(payload, f"Generate {payload} report")
+            _cmd_quick_query(chat_id, telegram_user_id, query)
 
-    elif action == "export":
-        # Export in specified format
-        _answer_callback(callback_id, f"Exporting as {payload}...")
-        _cmd_export(chat_id, telegram_user_id, payload)
+        elif action == "export":
+            _answer_callback(callback_id, f"Exporting as {payload}...")
+            _cmd_export(chat_id, telegram_user_id, payload)
 
-    elif action == "cmd":
-        # Command shortcut
-        _answer_callback(callback_id)
-        if payload == "help":
-            _cmd_help(chat_id)
+        elif action == "cmd":
+            _answer_callback(callback_id)
+            if payload == "help":
+                _cmd_help(chat_id)
 
-    elif action == "more":
-        # Follow-up query
-        _answer_callback(callback_id, "Processing...")
-        _cmd_quick_query(chat_id, telegram_user_id, payload)
+        elif action == "more":
+            _answer_callback(callback_id, "Processing...")
+            _cmd_quick_query(chat_id, telegram_user_id, payload)
 
-    else:
-        _answer_callback(callback_id, "Unknown action")
+        else:
+            _answer_callback(callback_id, "Unknown action")
+
+        frappe.db.commit()
+
+    except Exception as e:
+        frappe.log_error("Telegram Callback Error", frappe.get_traceback())
+        _answer_callback(callback_id, "Something went wrong")
+        try:
+            _send_telegram(chat_id, f"❌ Error processing your request: {str(e)[:100]}")
+        except Exception:
+            pass
 
 
 def _auto_send_excel(chat_id, response):
@@ -1157,8 +1166,9 @@ def _clean_response(text):
     text = re.sub(r'\[TELEGRAM:.*?\]', '', text, flags=re.IGNORECASE)
 
     # Remove raw tool call leaks (when LLM outputs tool calls as text)
-    text = re.sub(r'\b\w+_\w+\s*"?\w+_\w+"?\s*\{[^}]+\}\}?', '', text)
-    text = re.sub(r'\b(list_documents|get_document|run_database_query|search_documents|create_document|update_document|get_doctype_info)\s*[\{"\[].*?[\}"\]]\s*', '', text, flags=re.DOTALL)
+    # Pattern: tool_name followed by JSON-like args on same line
+    text = re.sub(r'\b(list_documents|get_document|run_database_query|search_documents|create_document|update_document|get_doctype_info)\s*"?\1"?\s*\{[^}\n]*\}', '', text)
+    text = re.sub(r'\b(list_documents|get_document|run_database_query|search_documents|create_document|update_document|get_doctype_info)\s*[\{"][^\n]*[\}"]', '', text)
 
     # Headers → bold
     text = re.sub(r'^#{1,3}\s*(.+)$', r'*\1*', text, flags=re.MULTILINE)
@@ -1332,23 +1342,24 @@ def _get_or_create_conversation(user, chat_id):
 
 def _ensure_db():
     """Ensure DB connection is alive. Reconnect if dead."""
+    reconnected = False
     try:
         frappe.db.sql("SELECT 1")
     except Exception:
         try:
             frappe.connect()
+            reconnected = True
         except Exception:
             pass
 
-    # Also clear the LangChain tools cache to force fresh tool load
-    try:
-        from niv_ai.niv_core.langchain.tools import _lc_tools_cache
-        import time as _t
-        if _lc_tools_cache.get("expires", 0) < _t.time():
+    # Only clear tools cache if we had to reconnect (stale connection = stale tools)
+    if reconnected:
+        try:
+            from niv_ai.niv_core.langchain.tools import _lc_tools_cache
             _lc_tools_cache["tools"] = []
             _lc_tools_cache["expires"] = 0
-    except Exception:
-        pass
+        except Exception:
+            pass
 
 
 def _get_settings():
@@ -1402,7 +1413,7 @@ def _send_telegram_with_buttons(chat_id, text, buttons, parse_mode="Markdown"):
         "chat_id": chat_id,
         "text": text,
         "parse_mode": parse_mode,
-        "reply_markup": json.dumps(keyboard),
+        "reply_markup": keyboard,  # Pass as dict, not json.dumps — requests handles serialization
     }
 
     try:
