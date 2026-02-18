@@ -91,6 +91,68 @@
     padding-bottom: 30px !important;
 }
 
+/* Input text color fix for dark mode */
+.niv-input-textarea,
+.niv-input-pill textarea,
+.niv-input-pill input,
+.niv-input-area textarea,
+.niv-input-area input {
+    color: #e2e8f0 !important;
+    caret-color: #a78bfa !important;
+}
+
+.niv-input-textarea::placeholder,
+.niv-input-area textarea::placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+}
+
+.niv-input-pill {
+    background: rgba(30, 41, 59, 0.8) !important;
+    border-color: rgba(124, 58, 237, 0.3) !important;
+}
+
+/* Sidebar text colors */
+.niv-sidebar {
+    color: #e2e8f0 !important;
+}
+
+.niv-sidebar .conversation-item,
+.niv-sidebar .conv-title {
+    color: #cbd5e1 !important;
+}
+
+.niv-sidebar .conversation-item:hover,
+.niv-sidebar .conversation-item.active {
+    background: rgba(124, 58, 237, 0.15) !important;
+}
+
+.niv-sidebar .conversation-item.active .conv-title {
+    color: #fff !important;
+}
+
+/* Search input in sidebar */
+.niv-sidebar-search input {
+    color: #e2e8f0 !important;
+    background: rgba(30, 41, 59, 0.6) !important;
+    border-color: rgba(124, 58, 237, 0.3) !important;
+}
+
+.niv-sidebar-search input::placeholder {
+    color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* General text on dark bg */
+.niv-chat-container,
+.niv-chat-container * {
+    --text-color: #e2e8f0;
+}
+
+.niv-chat-container .text-muted,
+.niv-chat-container .msg-time,
+.niv-chat-container .msg-tokens {
+    color: rgba(255, 255, 255, 0.5) !important;
+}
+
 /* Message Content Spacing */
 .msg-content {
     color: #e2e8f0 !important;
