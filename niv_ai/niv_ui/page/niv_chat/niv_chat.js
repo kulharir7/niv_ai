@@ -1866,34 +1866,19 @@ ${htmlCode}
     render_markdown(text) {
         if (!text) return "";
         
-        // Fix broken markdown tables from LLM
-        // 1. Missing newlines between rows: "| col1 || col2" → "| col1 |\n| col2"
-        let processedText = text.replace(/\|\|/g, '|\n|');
-        
-        // 2. Missing header separator row — detect table rows and add |---| if missing
-        // Split into lines, find sequences of pipe-rows, insert separator after first row if missing
-        const lines = processedText.split('\n');
-        const fixed = [];
-        for (let i = 0; i < lines.length; i++) {
-            fixed.push(lines[i]);
-            // If this line looks like a table row and next line is also a table row (not a separator)
-            if (/^\s*\|.*\|/.test(lines[i]) && i + 1 < lines.length && 
-                /^\s*\|.*\|/.test(lines[i + 1]) && !/^\s*\|[\s\-:]+\|/.test(lines[i + 1])) {
-                // Check if there's no separator anywhere before the next non-table line
-                let hasSep = false;
-                for (let j = i + 1; j < lines.length && /^\s*\|/.test(lines[j]); j++) {
-                    if (/^\s*\|[\s\-:]+\|/.test(lines[j])) { hasSep = true; break; }
-                }
-                if (!hasSep) {
-                    // Count columns from this row and insert separator
-                    const cols = lines[i].split('|').length - 2;
-                    if (cols > 0) {
-                        fixed.push('|' + ' --- |'.repeat(cols));
-                    }
-                }
+        // Fix broken markdown tables from LLM — only fix rows that are clearly run together
+        // Pattern: "|\n| text |" at end of row followed immediately by "| text |" without newline
+        // Only split "|| " when it appears to be two rows joined (end-pipe + start-pipe)  
+        let processedText = text.replace(/\|\s*\|\s*(?=\S)/g, (match, offset, str) => {
+            // Only split if there's actual content before (not just starting)
+            const lineStart = str.lastIndexOf('\n', offset);
+            const lineContent = str.substring(lineStart + 1, offset);
+            // If line has multiple pipes already (it's a table row), this || is row boundary
+            if ((lineContent.match(/\|/g) || []).length >= 2) {
+                return '|\n| ';
             }
-        }
-        processedText = fixed.join('\n');
+            return match;
+        });
         
         // Handle [[THOUGHT]] blocks before markdown parsing
         
