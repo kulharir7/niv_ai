@@ -44,30 +44,30 @@ def webhook(**kwargs):
         # Commands
         if text == "/start":
             _send_telegram(chat_id, 
-                "🤖 *Namaste! Main Niv AI hoon*\n\n"
-                "Mujhse kuch bhi pucho:\n"
-                "• _Top 5 loans dikhao_\n"
-                "• _Naya Customer banao_\n"
-                "• _Sales report do_\n\n"
-                "Shuru karte hain! 🚀"
+                "🤖 *Hello! I'm Niv AI*\n\n"
+                "Ask me anything:\n"
+                "• _Show top 5 loans_\n"
+                "• _Create a new Customer_\n"
+                "• _Give me the sales report_\n\n"
+                "Let's get started! 🚀"
             )
             return {"ok": True}
 
         if text == "/help":
             _send_telegram(chat_id,
-                "💬 *Kuch bhi type karo!*\n\n"
+                "💬 *Just type anything!*\n\n"
                 "*Examples:*\n"
-                "• Top 5 loans dikhao\n"
-                "• Overdue loans kitne hain?\n"
-                "• Customer XYZ ki details\n"
-                "• NPA report do"
+                "• Show top 5 loans\n"
+                "• How many overdue loans?\n"
+                "• Details of Customer XYZ\n"
+                "• NPA report"
             )
             return {"ok": True}
 
         # Map telegram user
         frappe_user = _get_frappe_user(telegram_user_id, chat_id)
         if not frappe_user:
-            _send_telegram(chat_id, "❌ Account link nahi hai. Admin se contact karo.")
+            _send_telegram(chat_id, "❌ No linked account found. Please contact your admin.")
             return {"ok": True}
 
         # Get conversation
@@ -93,7 +93,7 @@ def webhook(**kwargs):
 def _handle_stream(chat_id, text, conversation_id, frappe_user):
     """Live streaming — edit message as tokens arrive."""
     # Send initial "thinking" message
-    msg_id = _send_telegram(chat_id, "💭 _Soch raha hoon..._")
+    msg_id = _send_telegram(chat_id, "💭 _Thinking..._")
     
     agent_message = text
     full_response = ""
@@ -113,7 +113,7 @@ def _handle_stream(chat_id, text, conversation_id, frappe_user):
                 if tool_name and tool_name not in tools_used:
                     tools_used.append(tool_name)
                     # Show which tool is being used
-                    tool_text = f"🔧 _{tool_name}_ use kar raha hoon..."
+                    tool_text = f"🔧 Using _{tool_name}_..."
                     if msg_id:
                         _edit_telegram(chat_id, msg_id, tool_text)
             
@@ -145,7 +145,7 @@ def _handle_stream(chat_id, text, conversation_id, frappe_user):
         full_response = full_response or ("❌ " + str(e)[:200])
 
     if not full_response.strip():
-        full_response = "🤔 Koi response nahi mila."
+        full_response = "🤔 No response received."
 
     # Final edit with complete response (remove cursor)
     final_msg = _clean_response(full_response)
@@ -213,7 +213,7 @@ def _handle_batch(chat_id, text, conversation_id, frappe_user):
         _delete_telegram(chat_id, status_msg_id)
 
     if not full_response.strip():
-        full_response = "🤔 Koi response nahi mila."
+        full_response = "🤔 No response received."
 
     final_msg = _clean_response(full_response)
     _send_long_message(chat_id, final_msg)
@@ -281,7 +281,7 @@ def _format_tables(text):
 
 
 def _render_table(rows):
-    """Render table as clean bullet list for Telegram."""
+    """Render table as mobile-friendly stacked cards for Telegram."""
     if not rows or len(rows) < 2:
         return ""
     
@@ -294,20 +294,20 @@ def _render_table(rows):
     output = []
     
     for i, row in enumerate(data_rows):
-        # Each data row as a numbered entry
-        entry_parts = []
+        # Each row as a numbered card with fields on separate lines
+        entry_lines = []
         for j, cell in enumerate(row):
             if j < len(headers) and cell.strip():
                 header = headers[j].strip()
                 value = cell.strip()
                 if header and value and value != "-":
-                    entry_parts.append(f"{header}: *{value}*")
+                    entry_lines.append(f"  {header}: *{value}*")
         
-        if entry_parts:
+        if entry_lines:
             num = i + 1
-            output.append(f"{num}. " + " | ".join(entry_parts))
+            output.append(f"*{num}.*\n" + "\n".join(entry_lines))
     
-    return '\n'.join(output)
+    return '\n\n'.join(output)
 
 
 # ─── User Mapping ───────────────────────────────────────────────────
