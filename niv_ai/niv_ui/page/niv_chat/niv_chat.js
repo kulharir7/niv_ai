@@ -3652,11 +3652,12 @@ ${htmlCode}
     stop_voice_playback() {
         this.stop_voice_monitor();
         
-        // Cancel all pending audio in queue
+        // Cancel all pending audio in queue + prevent new TTS from being queued
         this.voiceAudioQueue = [];
         this.voiceIsPlaying = false;
         this.voiceStreamDone = true;
         this.voiceSentenceBuffer = "";
+        this.voiceCancelled = true;  // Flag to reject pending TTS callbacks
         
         if (this.voiceAudio) {
             this.voiceAudio.pause();
@@ -3693,6 +3694,7 @@ ${htmlCode}
         this.voiceSentenceBuffer = "";
         this.voiceStreamDone = false;
         this.voiceStreamingMode = true;
+        this.voiceCancelled = false;  // Reset cancel flag for new stream
 
         // Ensure conversation exists
         if (!this.current_conversation) {
@@ -3812,6 +3814,7 @@ ${htmlCode}
      * Buffers tokens and sends complete sentences to TTS.
      */
     voice_on_stream_token(token) {
+        if (this.voiceCancelled) return;  // User interrupted, stop buffering
         this.voiceSentenceBuffer += token;
 
         // Check for sentence boundary: . ! ? followed by space/newline, or double newline
@@ -3858,11 +3861,13 @@ ${htmlCode}
      * Queue a sentence for TTS generation and playback.
      */
     async voice_queue_sentence_tts(sentence) {
+        if (this.voiceCancelled) return;  // User interrupted, skip
         try {
             const r = await frappe.call({
                 method: "niv_ai.niv_core.api.voice.stream_tts",
                 args: { text: sentence, language: this.voiceDetectedLanguage || "" },
             });
+            if (this.voiceCancelled) return;  // Check again after async call
             if (r.message && r.message.audio_url) {
                 this.voiceAudioQueue.push(r.message.audio_url);
                 if (!this.voiceIsPlaying) {
