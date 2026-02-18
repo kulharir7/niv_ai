@@ -22,6 +22,35 @@ def _sse(data):
     return f"data: {json.dumps(data)}\n\n"
 
 
+def _is_simple_query(message: str) -> bool:
+    """Detect simple queries that don't need a powerful model.
+    Greetings, thanks, yes/no, short confirmations, etc."""
+    msg = (message or "").strip().lower()
+    # Very short messages (1-3 words) are usually simple
+    word_count = len(msg.split())
+    if word_count <= 3:
+        # Check if it's a greeting/thanks/confirmation
+        simple_patterns = {
+            "hi", "hello", "hey", "hii", "hiii", "namaste", "namaskar",
+            "thanks", "thank you", "thankyou", "dhanyavaad", "shukriya",
+            "ok", "okay", "k", "done", "yes", "no", "haan", "nahi", "na",
+            "good", "great", "nice", "awesome", "cool", "fine", "accha",
+            "bye", "goodbye", "good night", "good morning", "good evening",
+            "gm", "gn", "morning", "evening",
+            "hmm", "hm", "oh", "ah", "wow",
+        }
+        if msg.rstrip("!.?") in simple_patterns:
+            return True
+        # Very short messages without question words
+        question_words = {"what", "how", "why", "when", "where", "which", "who",
+                         "kya", "kaise", "kab", "kahan", "kaun", "kitna", "kitne",
+                         "show", "list", "get", "find", "create", "make", "delete",
+                         "calculate", "report", "export", "analyze"}
+        if word_count <= 2 and not any(w in msg for w in question_words):
+            return True
+    return False
+
+
 def _ensure_db(site_name=None):
     """Ensure DB connection is alive, reconnect if dead.
     Fixes pymysql.err.InterfaceError: (0, '') from stale connections."""
@@ -67,6 +96,17 @@ def stream_chat(**kwargs):
 
     if not message:
         frappe.throw(_("Message cannot be empty"))
+
+    # Auto-route to fast model for simple queries (when user hasn't explicitly picked a model)
+    if not model:
+        try:
+            from niv_ai.niv_core.utils import get_niv_settings
+            _settings = get_niv_settings()
+            fast_model = getattr(_settings, "fast_model", None)
+            if fast_model and _is_simple_query(message):
+                model = fast_model
+        except Exception:
+            pass
 
     # Auto-create conversation if not provided
     if not conversation_id:

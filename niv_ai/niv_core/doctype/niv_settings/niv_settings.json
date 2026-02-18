@@ -7,6 +7,7 @@
     "ai_section",
     "default_provider",
     "default_model",
+    "fast_model",
     "system_prompt",
     "max_tokens_per_message",
     "max_messages_per_conversation",
@@ -86,7 +87,14 @@
     {
       "fieldname": "default_model",
       "fieldtype": "Data",
-      "label": "Default Model"
+      "label": "Default Model",
+      "description": "Primary model for complex queries requiring tools (e.g. mistral-large-latest)"
+    },
+    {
+      "fieldname": "fast_model",
+      "fieldtype": "Data",
+      "label": "Fast Model",
+      "description": "Lightweight model for simple queries like greetings, thanks, yes/no (e.g. mistral-small-latest). Leave blank to always use Default Model."
     },
     {
       "fieldname": "system_prompt",
