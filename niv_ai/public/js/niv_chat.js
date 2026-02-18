@@ -793,11 +793,20 @@ class NivChat {
 
     is_html_response(content) {
         // Detect if AI response contains renderable HTML
+        // Checks both raw HTML and HTML inside markdown code blocks
         if (!content) return false;
-        return content.includes("<!DOCTYPE") || 
-               content.includes("<html") || 
-               (content.includes("<head") && content.includes("<body")) ||
-               (content.includes("<style>") && content.includes("<script>"));
+        // Direct HTML in response
+        if (content.includes("<!DOCTYPE") || 
+            content.includes("<html") || 
+            (content.includes("<head") && content.includes("<body")) ||
+            (content.includes("<style>") && content.includes("<script>"))) {
+            return true;
+        }
+        // HTML inside markdown code block: ```html ... ```
+        if (/```html\s*[\s\S]*?```/i.test(content)) {
+            return true;
+        }
+        return false;
     }
 
     extract_artifact_title(text) {
@@ -2308,6 +2317,21 @@ ${htmlCode}
                                 this.is_streaming = false;
                                 this.$sendBtn.show();
                                 this.$stopBtn.hide();
+
+                                // Artifact: update preview if HTML detected in response
+                                if (fullContent && this.is_html_response(fullContent)) {
+                                    const extractedCode = this.extract_code_from_response(fullContent);
+                                    const htmlToRender = extractedCode || fullContent;
+                                    if (this._pendingArtifactId) {
+                                        // Update the pre-created artifact with actual content
+                                        this.update_artifact_with_code(this._pendingArtifactId, htmlToRender);
+                                    } else {
+                                        // No pending artifact — auto-create from response
+                                        this.auto_create_artifact_from_response(htmlToRender);
+                                    }
+                                }
+                                this._pendingArtifactId = null;
+
                                 this.load_messages(conv_id); // Refresh to get final saved state
                             }
                             resolve();
