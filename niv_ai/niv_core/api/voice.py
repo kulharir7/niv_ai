@@ -791,13 +791,8 @@ def stream_tts(text, voice=None):
     if not text or not text.strip():
         return {"audio_url": None}
 
-    # Light cleaning — don't do full markdown strip since streaming sends clean sentences
-    text = text.strip()
-    # Remove any residual markdown that might slip through
-    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
-    text = re.sub(r'\*(.+?)\*', r'\1', text)
-    text = re.sub(r'`([^`]+)`', r'\1', text)
-    text = re.sub(r'#{1,6}\s+', '', text)
+    # Full cleaning — same as text_to_speech for consistency
+    text = clean_text_for_tts(text)
 
     if not text.strip():
         return {"audio_url": None}
