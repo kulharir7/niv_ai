@@ -528,6 +528,9 @@ def _handle_stream(chat_id, text, conversation_id, frappe_user):
     else:
         _send_long_message(chat_id, final_msg)
 
+    # Auto-send Excel if response has structured data
+    _auto_send_excel(chat_id, full_response)
+
     # Send follow-up buttons based on response content
     _send_context_buttons(chat_id, full_response, text)
 
@@ -591,6 +594,9 @@ def _handle_batch(chat_id, text, conversation_id, frappe_user):
 
     final_msg = _clean_response(full_response)
     _send_long_message(chat_id, final_msg)
+
+    # Auto-send Excel if response has structured data
+    _auto_send_excel(chat_id, full_response)
 
     # Follow-up buttons
     _send_context_buttons(chat_id, full_response, text)
@@ -879,6 +885,169 @@ def _handle_callback_query(callback_query):
         _answer_callback(callback_id, "Unknown action")
 
 
+def _auto_send_excel(chat_id, response):
+    """Auto-detect structured data in response and send as Excel file."""
+    try:
+        # Parse structured data from response
+        records = _parse_structured_data(response)
+        if not records or len(records) < 3:
+            return  # Only send Excel for 3+ records
+
+        # Build Excel using openpyxl
+        headers = list(records[0].keys())
+        rows = [[r.get(h, "") for h in headers] for r in records]
+
+        try:
+            import openpyxl
+            from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+            wb = openpyxl.Workbook()
+            ws = wb.active
+            ws.title = "Niv AI Data"
+
+            # Header style
+            header_font = Font(bold=True, color="FFFFFF", size=11)
+            header_fill = PatternFill(start_color="4472C4", end_color="4472C4", fill_type="solid")
+            header_align = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            thin_border = Border(
+                left=Side(style="thin"),
+                right=Side(style="thin"),
+                top=Side(style="thin"),
+                bottom=Side(style="thin"),
+            )
+
+            # Write headers
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.alignment = header_align
+                cell.border = thin_border
+
+            # Write data
+            data_align = Alignment(vertical="center", wrap_text=True)
+            alt_fill = PatternFill(start_color="D9E2F3", end_color="D9E2F3", fill_type="solid")
+
+            for row_idx, row in enumerate(rows, 2):
+                for col_idx, value in enumerate(row, 1):
+                    cell = ws.cell(row=row_idx, column=col_idx, value=value)
+                    cell.border = thin_border
+                    cell.alignment = data_align
+                    if row_idx % 2 == 0:
+                        cell.fill = alt_fill
+
+            # Auto-width columns
+            for col in ws.columns:
+                max_len = 0
+                col_letter = col[0].column_letter
+                for cell in col:
+                    try:
+                        if cell.value:
+                            max_len = max(max_len, len(str(cell.value)))
+                    except Exception:
+                        pass
+                ws.column_dimensions[col_letter].width = min(max_len + 4, 40)
+
+            # Freeze header row
+            ws.freeze_panes = "A2"
+
+            # Save to temp file
+            tmp_path = os.path.join(tempfile.gettempdir(), f"niv_data_{uuid.uuid4().hex[:8]}.xlsx")
+            wb.save(tmp_path)
+
+            # Send as document
+            _send_document(chat_id, tmp_path, "niv_ai_data.xlsx")
+
+            # Cleanup
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+        except ImportError:
+            # openpyxl not available, try CSV
+            import csv
+            tmp_path = os.path.join(tempfile.gettempdir(), f"niv_data_{uuid.uuid4().hex[:8]}.csv")
+            with open(tmp_path, "w", newline="", encoding="utf-8") as f:
+                writer = csv.writer(f)
+                writer.writerow(headers)
+                writer.writerows(rows)
+            _send_document(chat_id, tmp_path, "niv_ai_data.csv")
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    except Exception as e:
+        frappe.logger().warning(f"Auto Excel generation failed: {e}")
+
+
+def _parse_structured_data(text):
+    """Parse numbered list data from LLM response into list of dicts.
+    
+    Detects patterns like:
+    1.
+      LoanID: LBJPUR0125-0007309
+      Amount: 10,000,000
+      Status: Disbursed
+    
+    2.
+      LoanID: LBJPUR0625-0008131
+      ...
+    
+    Also detects: | table format and inline key:value format.
+    """
+    records = []
+
+    # Pattern 1: Markdown tables (| col1 | col2 |)
+    lines = text.split("\n")
+    table_rows = []
+    for line in lines:
+        stripped = line.strip()
+        if stripped.startswith("|") and stripped.endswith("|"):
+            if not re.match(r'^[\|\s\-:]+$', stripped):
+                cells = [c.strip() for c in stripped.split("|")[1:-1]]
+                if cells:
+                    table_rows.append(cells)
+
+    if len(table_rows) >= 3:
+        headers = table_rows[0]
+        for row in table_rows[1:]:
+            record = {}
+            for i, cell in enumerate(row):
+                if i < len(headers) and cell.strip():
+                    record[headers[i].strip()] = cell.strip()
+            if record:
+                records.append(record)
+        if records:
+            return records
+
+    # Pattern 2: Numbered stacked cards
+    # Split by numbered items: "1." or "*1.*" or "**1.**"
+    chunks = re.split(r'(?:^|\n)\s*\*?\*?\d+\.?\*?\*?\s*\n', text)
+    if len(chunks) < 3:
+        # Try alternate split: "1. " on same line
+        chunks = re.split(r'(?:^|\n)\s*\*?\*?\d+\.\*?\*?\s+', text)
+
+    if len(chunks) >= 3:
+        for chunk in chunks:
+            chunk = chunk.strip()
+            if not chunk:
+                continue
+            record = {}
+            # Parse key: value or key: *value* lines
+            kv_lines = re.findall(r'(?:^|\n)\s*([^:\n]+?):\s*\*?([^*\n]+)\*?\s*$', chunk, re.MULTILINE)
+            for key, val in kv_lines:
+                key = key.strip().lstrip("•-* ")
+                val = val.strip().rstrip("*")
+                if key and val and len(key) < 50:
+                    record[key] = val
+            if len(record) >= 2:
+                records.append(record)
+
+    return records
+
+
 def _send_context_buttons(chat_id, response, original_query):
     """Send relevant follow-up buttons based on response content."""
     buttons = []
@@ -1033,7 +1202,11 @@ def _format_tables(text):
 
 
 def _render_table(rows):
-    """Render table as mobile-friendly stacked cards for Telegram."""
+    """Render table as compact one-liner format for Telegram.
+    
+    For few columns (<=4): compact inline format
+    For many columns (>4): stacked card format
+    """
     if not rows or len(rows) < 2:
         return ""
 
@@ -1043,22 +1216,36 @@ def _render_table(rows):
     if not data_rows:
         return ""
 
+    # Count actual columns (non-empty headers)
+    real_headers = [h.strip() for h in headers if h.strip()]
+    
     output = []
 
-    for i, row in enumerate(data_rows):
-        entry_lines = []
-        for j, cell in enumerate(row):
-            if j < len(headers) and cell.strip():
-                header = headers[j].strip()
-                value = cell.strip()
-                if header and value and value != "-":
-                    entry_lines.append(f"  {header}: *{value}*")
+    if len(real_headers) <= 4:
+        # Compact one-liner: "1. Name | Amount | Status"
+        for i, row in enumerate(data_rows):
+            parts = []
+            for j, cell in enumerate(row):
+                if j < len(headers) and cell.strip() and cell.strip() != "-":
+                    parts.append(cell.strip())
+            if parts:
+                output.append(f"{i+1}. " + " | ".join(parts))
+        return '\n'.join(output)
+    else:
+        # Stacked card format for many columns
+        for i, row in enumerate(data_rows):
+            entry_lines = []
+            for j, cell in enumerate(row):
+                if j < len(headers) and cell.strip():
+                    header = headers[j].strip()
+                    value = cell.strip()
+                    if header and value and value != "-":
+                        entry_lines.append(f"  {header}: *{value}*")
 
-        if entry_lines:
-            num = i + 1
-            output.append(f"*{num}.*\n" + "\n".join(entry_lines))
+            if entry_lines:
+                output.append(f"*{i+1}.*\n" + "\n".join(entry_lines))
 
-    return '\n\n'.join(output)
+        return '\n\n'.join(output)
 
 
 # ═══════════════════════════════════════════════════════════════════════
