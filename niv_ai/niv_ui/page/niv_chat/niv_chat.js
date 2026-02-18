@@ -2587,11 +2587,26 @@ ${htmlCode}
         t = t.replace(/\w+_\w+\s*\{[^}]*\}/g, '');
         t = t.replace(/\{"[^"]*":[^}]*\}/g, '');
 
+        // Clean punctuation TTS reads aloud
+        t = t.replace(/\/{2,}/g, ' ');
+        t = t.replace(/\/(?=\s)/g, ' ');
+        t = t.replace(/-{2,}/g, ', ');
+        t = t.replace(/,{2,}/g, ',');
+        t = t.replace(/!{2,}/g, '!');
+        t = t.replace(/\?{2,}/g, '?');
+        t = t.replace(/\.{3,}/g, '.');
+        t = t.replace(/[""„"]+/g, '');
+        t = t.replace(/[''‚']+/g, '');
+        t = t.replace(/[→←↑↓•·►▶▸‣⁃]/g, '');
+        t = t.replace(/[─━═│┃┌┐└┘├┤┬┴┼╔╗╚╝╠╣╦╩╬]/g, '');
+
         // Collapse whitespace
         t = t.replace(/\n{2,}/g, '. ');
         t = t.replace(/\n/g, ' ');
         t = t.replace(/\s{2,}/g, ' ');
         t = t.replace(/\.(\s*\.)+/g, '.');
+        t = t.replace(/,(\s*,)+/g, ',');
+        t = t.replace(/^\s*[,.:;!?]\s*/, '');
 
         return t.trim();
     }
