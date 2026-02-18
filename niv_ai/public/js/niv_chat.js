@@ -793,7 +793,7 @@ class NivChat {
 
     is_html_response(content) {
         // Detect if AI response contains renderable HTML
-        // Checks both raw HTML and HTML inside markdown code blocks
+        // Checks raw HTML, escaped HTML entities, and markdown code blocks
         if (!content) return false;
         // Direct HTML in response
         if (content.includes("<!DOCTYPE") || 
@@ -804,6 +804,12 @@ class NivChat {
         }
         // HTML inside markdown code block: ```html
         if (content.includes("```html")) {
+            return true;
+        }
+        // Escaped HTML entities (from DB storage)
+        if (content.includes("&lt;html") || content.includes("&lt;!DOCTYPE") ||
+            (content.includes("&lt;style&gt;") && content.includes("&lt;script&gt;")) ||
+            (content.includes("&lt;head") && content.includes("&lt;body"))) {
             return true;
         }
         return false;
@@ -1722,8 +1728,13 @@ ${htmlCode}
         // Auto-open artifacts and render preview if HTML detected
         if (!isUser && this.is_html_response(content)) {
             this.toggle_artifacts_panel(true);
+            // Unescape HTML entities if content came from DB
+            let rawContent = content;
+            if (content.includes("&lt;") && !content.includes("```html")) {
+                rawContent = content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+            }
             // Extract and render HTML in preview iframe
-            const extractedHtml = this.extract_code_from_response(content);
+            const extractedHtml = this.extract_code_from_response(rawContent);
             if (extractedHtml) {
                 this.show_live_preview(extractedHtml);
                 this.current_artifact_content = extractedHtml;
