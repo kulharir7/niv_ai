@@ -58,7 +58,13 @@ def get_llm(provider_name=None, model=None, streaming=True, callbacks=None):
     if not model:
         frappe.throw(f"No model specified and provider '{provider_name}' has no default_model.")
 
-    provider_type = _detect_provider_type(provider.base_url, provider_name)
+    auth_type = getattr(provider, "auth_type", "API Key") or "API Key"
+
+    # Setup Token → force anthropic provider type
+    if auth_type == "Setup Token":
+        provider_type = "anthropic"
+    else:
+        provider_type = _detect_provider_type(provider.base_url, provider_name)
 
     common_kwargs = {
         "model": model,
