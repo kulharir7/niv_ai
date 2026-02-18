@@ -1,8 +1,9 @@
 """
 Niv AI Agent — LangGraph ReAct agent with MCP tools.
-Main entry point for all LangChain-powered chat.
+Simple flow: User → LLM (thinks) → MCP Tools (data) → LLM (summarize) → Response
 """
 import json
+import re
 import frappe
 from niv_ai.niv_core.utils import get_niv_settings
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -10,29 +11,28 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from .llm import get_llm
 from .tools import get_langchain_tools
 from .memory import get_chat_history, get_system_prompt
-from niv_ai.niv_core.knowledge.memory_service import extract_memories
-from .agent_router import classify_query, get_agent_tools, get_agent_prompt_suffix
+from .agent_router import get_agent_prompt_suffix
 from .callbacks import NivStreamingCallback, NivBillingCallback, NivLoggingCallback
 
 
+# ─── Helpers ────────────────────────────────────────────────────────
+
 def _parse_tc_args(args_str):
-    """BUG-004: Parse accumulated tool_call_chunks args string into dict."""
+    """Parse tool_call_chunks args string into dict."""
     if isinstance(args_str, dict):
         return args_str
     if not args_str:
         return {}
     try:
         return json.loads(args_str)
-    except (json.JSONDecodeError, TypeError) as e:
-        frappe.log_error(f"Niv AI: Failed to parse tool call arguments: {e}\nArgs: {args_str}", "Niv AI Agent")
+    except (json.JSONDecodeError, TypeError):
         return {}
 
 
 def _build_messages(message: str, conversation_id: str = None, system_prompt: str = ""):
-    """Build the full message list: system + RAG + history + user message."""
+    """Build message list: system + history + user message."""
     messages = []
 
-    # System prompt
     if system_prompt:
         messages.append(SystemMessage(content=system_prompt))
 
@@ -45,111 +45,67 @@ def _build_messages(message: str, conversation_id: str = None, system_prompt: st
     except Exception:
         pass
 
-    # Conversation history
     if conversation_id:
         history = get_chat_history(conversation_id)
         messages.extend(history)
 
-    # New user message
     messages.append(HumanMessage(content=message))
-
     return messages
 
 
 def _sanitize_error(error: Exception) -> str:
-    """Return user-friendly error message — never expose raw internals."""
+    """User-friendly error message."""
     err_str = str(error).lower()
     if "api key" in err_str or "auth" in err_str:
-        return "AI provider authentication failed. Please check your API key configuration."
+        return "AI provider authentication failed. Please check your API key."
     if "rate limit" in err_str or "429" in err_str:
-        return "AI provider rate limit reached. Please try again in a moment."
+        return "Rate limit reached. Please try again in a moment."
     if "timeout" in err_str:
         return "Request timed out. Please try again."
     if "connection" in err_str:
-        return "Could not connect to AI provider. Please check your network."
-    if "model" in err_str and "not found" in err_str:
-        return "The configured AI model was not found. Please check Niv Settings."
+        return "Could not connect to AI provider."
     if "recursion" in err_str or "iteration" in err_str:
-        return "The request required too many steps. Please try a simpler query."
+        return "Too many steps. Please try a simpler query."
     if "insufficient" in err_str or "balance" in err_str or "credit" in err_str:
-        return "Insufficient credits. Please recharge to continue using Niv AI."
-    # Generic — don't leak stack traces
-    return "I wasn't able to complete that request. Please try rephrasing your question or try again."
+        return "Insufficient credits. Please recharge."
+    return "Something went wrong. Please try again."
 
 
-def create_niv_agent(
-    provider_name: str = None,
-    model: str = None,
-    conversation_id: str = None,
-    user: str = None,
-    streaming: bool = True,
-    agent_id: str = "general",
-    prompt_text: str = None,
-):
-    """Create a LangGraph ReAct agent with MCP tools.
+_THINKING_PATTERNS = [
+    (r'<think>[\s\S]*?</think>', ''),
+    (r'<reasoning>[\s\S]*?</reasoning>', ''),
+    (r'\[\[THOUGHT\]\][\s\S]*?\[\[/THOUGHT\]\]', ''),
+    (r'\[\[THINKING\]\][\s\S]*?\[\[/THINKING\]\]', ''),
+    (r'(?m)^Thought:.*$', ''),
+    (r'(?m)^Action:.*$', ''),
+    (r'(?m)^Action Input:.*$', ''),
+    (r'(?m)^Observation:.*$', ''),
+]
 
-    Returns (agent, config, system_prompt, callbacks_dict)
-    """
-    from langgraph.prebuilt import create_react_agent
+def _strip_thinking(text):
+    """Remove thinking/reasoning tags from response."""
+    if not text:
+        return text
+    for pattern, repl in _THINKING_PATTERNS:
+        text = re.sub(pattern, repl, text)
+    return re.sub(r'\n{3,}', '\n\n', text).strip()
 
-    user = user or frappe.session.user
 
-    # Callbacks
-    stream_cb = NivStreamingCallback(conversation_id or "")
-    billing_cb = NivBillingCallback(user, conversation_id or "", prompt_text=prompt_text)
-    logging_cb = NivLoggingCallback(user, conversation_id or "")
-    all_callbacks = [stream_cb, billing_cb, logging_cb]
-
-    # LLM (callbacks attached for streaming token capture)
-    llm = get_llm(provider_name, model, streaming=streaming, callbacks=all_callbacks)
-
-    # Tools (agent-aware filtering)
-    all_tools = get_langchain_tools()
-    tools = get_agent_tools(agent_id, all_tools)
-
-    # System prompt (agent-aware specialization)
-    system_prompt = get_system_prompt(conversation_id)
-    prompt_suffix = get_agent_prompt_suffix(agent_id)
-    if prompt_suffix:
-        system_prompt = f"{system_prompt}\n\n{prompt_suffix}"
-
-    # Create agent
-    agent = create_react_agent(
-        model=llm,
-        tools=tools,
-    )
-
-    config = {
-        "recursion_limit": 25,  # Each tool call = 2 steps (call + result) + 1 for final response
-        "callbacks": all_callbacks,
-    }
-
-    callbacks_dict = {
-        "stream": stream_cb,
-        "billing": billing_cb,
-        "logging": logging_cb,
-    }
-
-    return agent, config, system_prompt, callbacks_dict
-
+# ─── API Key Isolation ──────────────────────────────────────────────
 
 def _setup_user_api_key(user: str):
     """Set per-user API key for MCP tool permission isolation."""
     try:
-        from niv_ai.niv_core.api._helpers import get_user_api_key
-        from .tools import set_current_user_api_key
-        
-        # Check if per-user tool permissions is enabled
         settings = get_niv_settings()
         if not getattr(settings, "per_user_tool_permissions", 0):
-            return  # Feature disabled — use admin key (default behavior)
-        
+            return
+        from niv_ai.niv_core.api._helpers import get_user_api_key
+        from .tools import set_current_user_api_key
         api_key = get_user_api_key(user)
         if api_key:
             set_current_user_api_key(api_key)
-    except Exception as e:
-        # Non-fatal — falls back to admin key
-        frappe.logger().warning(f"Niv AI: Per-user key setup failed for {user}: {e}")
+    except Exception:
+        pass
 
 
 def _cleanup_user_api_key():
@@ -161,27 +117,55 @@ def _cleanup_user_api_key():
         pass
 
 
+# ─── Agent Creation ─────────────────────────────────────────────────
 
-def _strip_thinking(text):
-    """Remove <think>...</think> and similar reasoning tags from response"""
-    import re
-    if not text:
-        return text
-    # Remove <think>...</think> blocks (Mistral/DeepSeek style)
-    text = re.sub(r'<think>[\s\S]*?</think>', '', text)
-    # Remove <reasoning>...</reasoning>
-    text = re.sub(r'<reasoning>[\s\S]*?</reasoning>', '', text)
-    # Remove [[THOUGHT]]...[[/THOUGHT]] blocks (Mistral Large style)
-    text = re.sub(r'\[\[THOUGHT\]\][\s\S]*?\[\[/THOUGHT\]\]', '', text)
-    text = re.sub(r'\[\[THINKING\]\][\s\S]*?\[\[/THINKING\]\]', '', text)
-    # Remove Thought: ... Action: patterns (ReAct leftovers)
-    text = re.sub(r'(?m)^Thought:.*$', '', text)
-    text = re.sub(r'(?m)^Action:.*$', '', text)
-    text = re.sub(r'(?m)^Action Input:.*$', '', text)
-    text = re.sub(r'(?m)^Observation:.*$', '', text)
-    # Clean up extra whitespace
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    return text.strip()
+def create_niv_agent(
+    provider_name: str = None,
+    model: str = None,
+    conversation_id: str = None,
+    user: str = None,
+    streaming: bool = True,
+    prompt_text: str = None,
+):
+    """Create a LangGraph ReAct agent with MCP tools."""
+    from langgraph.prebuilt import create_react_agent
+
+    user = user or frappe.session.user
+
+    # Callbacks
+    stream_cb = NivStreamingCallback(conversation_id or "")
+    billing_cb = NivBillingCallback(user, conversation_id or "", prompt_text=prompt_text)
+    logging_cb = NivLoggingCallback(user, conversation_id or "")
+    all_callbacks = [stream_cb, billing_cb, logging_cb]
+
+    # LLM
+    llm = get_llm(provider_name, model, streaming=streaming, callbacks=all_callbacks)
+
+    # ALL tools — LLM decides which to use
+    tools = get_langchain_tools()
+
+    # System prompt + few-shot examples
+    system_prompt = get_system_prompt(conversation_id)
+    prompt_suffix = get_agent_prompt_suffix("general")
+    if prompt_suffix:
+        system_prompt = f"{system_prompt}\n\n{prompt_suffix}"
+
+    # Create agent
+    agent = create_react_agent(model=llm, tools=tools)
+
+    config = {
+        "recursion_limit": 25,
+        "callbacks": all_callbacks,
+    }
+
+    return agent, config, system_prompt, {
+        "stream": stream_cb,
+        "billing": billing_cb,
+        "logging": logging_cb,
+    }
+
+
+# ─── Run (non-streaming) ───────────────────────────────────────────
 
 def run_agent(
     message: str,
@@ -194,47 +178,26 @@ def run_agent(
     """Run agent synchronously — returns final response text."""
     user = user or frappe.session.user
 
-    # Agent routing (feature-flagged)
-    agent_id = "general"
-    try:
-        settings = get_niv_settings()
-        if getattr(settings, "enable_agent_routing", 0):
-            agent_id, _meta = classify_query(message)
-    except Exception:
-        pass
-
-    agent, config, default_system_prompt, cbs = create_niv_agent(
+    agent, config, default_prompt, cbs = create_niv_agent(
         provider_name=provider_name,
         model=model,
         conversation_id=conversation_id,
         user=user,
         streaming=False,
-        agent_id=agent_id,
         prompt_text=message,
     )
-    # Use custom system_prompt if provided, else default
-    final_system_prompt = system_prompt or default_system_prompt
 
-    messages = _build_messages(message, conversation_id, final_system_prompt)
+    messages = _build_messages(message, conversation_id, system_prompt or default_prompt)
 
     _setup_user_api_key(user)
     try:
         result = agent.invoke({"messages": messages}, config=config)
 
-        # Extract final AI response
         for msg in reversed(result.get("messages", [])):
             if hasattr(msg, "type") and msg.type == "ai" and msg.content:
                 return _strip_thinking(msg.content)
 
-        response = _strip_thinking(cbs["stream"].get_full_response() or "I could not generate a response.")
-        
-        # Auto-extract memories from conversation
-        try:
-            extract_memories(user, message, response)
-        except Exception:
-            pass  # Non-critical
-        
-        return response
+        return _strip_thinking(cbs["stream"].get_full_response() or "I could not generate a response.")
 
     except Exception as e:
         frappe.log_error(f"Agent error: {e}", "Niv AI Agent")
@@ -246,6 +209,8 @@ def run_agent(
         cbs["logging"].finalize()
 
 
+# ─── Stream ─────────────────────────────────────────────────────────
+
 def stream_agent(
     message: str,
     conversation_id: str = None,
@@ -254,24 +219,8 @@ def stream_agent(
     user: str = None,
     dev_mode: bool = False,
 ):
-    """Stream agent — yields SSE event dicts.
-
-    Handles LangGraph stream_mode="messages" output format.
-    """
+    """Stream agent — yields SSE event dicts."""
     user = user or frappe.session.user
-
-    # Agent routing (feature-flagged, dev mode aware)
-    agent_id = "developer" if dev_mode else "general"
-    route_meta = {"method": "default", "confidence": 1.0}
-    try:
-        settings = get_niv_settings()
-        if dev_mode:
-            agent_id = "developer"
-            route_meta = {"method": "dev_mode", "confidence": 1.0}
-        elif getattr(settings, "enable_agent_routing", 0):
-            agent_id, route_meta = classify_query(message)
-    except Exception:
-        pass
 
     agent, config, system_prompt, cbs = create_niv_agent(
         provider_name=provider_name,
@@ -279,7 +228,6 @@ def stream_agent(
         conversation_id=conversation_id,
         user=user,
         streaming=True,
-        agent_id=agent_id,
         prompt_text=message,
     )
 
@@ -293,94 +241,21 @@ def stream_agent(
     _setup_user_api_key(user)
     pending_tool_calls = {}
     tool_call_count = 0
-    # Dev mode supports complex multi-step builds; normal mode remains controlled.
     MAX_TOOL_CALLS = 40 if dev_mode else 12
     start_ts = frappe.utils.now_datetime()
     
-    # State for ReAct thought extraction
-    # Using mutable dict for state to be shared with generator helper
-    state = {
-        "in_thought": False,
-        "current_thought": "",
-        "message_buffer": "",
-        "active_end_tag": ""
-    }
-    
-    def process_and_yield(buffer, is_flushing=False):
-        remaining = buffer
-        while remaining:
-            upper = remaining.upper()
-            if not state["in_thought"]:
-                # Find any starting tag
-                idx1 = upper.find("[[THOUGHT]]")
-                idx2 = upper.find("<THOUGHT>")
-                
-                tag, idx = None, -1
-                if idx1 != -1 and (idx2 == -1 or idx1 < idx2):
-                    tag, idx = "[[THOUGHT]]", idx1
-                elif idx2 != -1:
-                    tag, idx = "<THOUGHT>", idx2
-                
-                if idx != -1:
-                    if idx > 0:
-                        yield {"type": "token", "content": remaining[:idx]}
-                    state["in_thought"] = True
-                    state["active_end_tag"] = "[[/THOUGHT]]" if tag == "[[THOUGHT]]" else "</THOUGHT>"
-                    remaining = remaining[idx + len(tag):]
-                    continue
-                
-                if not is_flushing:
-                    last_lt = max(remaining.rfind("["), remaining.rfind("<"))
-                    if last_lt != -1:
-                        tail = remaining[last_lt:].upper()
-                        if "[[THOUGHT]]".startswith(tail) or "<THOUGHT>".startswith(tail):
-                            if last_lt > 0:
-                                yield {"type": "token", "content": remaining[:last_lt]}
-                            state["message_buffer"] = remaining[last_lt:]
-                            return
-                
-                yield {"type": "token", "content": remaining}
-                state["message_buffer"] = ""
-                return
-            else:
-                idx = upper.find(state["active_end_tag"])
-                if idx != -1:
-                    state["current_thought"] += remaining[:idx]
-                    yield {"type": "thought", "content": state["current_thought"]}
-                    state["current_thought"] = ""
-                    state["in_thought"] = False
-                    remaining = remaining[idx + len(state["active_end_tag"]):]
-                    continue
-                
-                if not is_flushing:
-                    last_lt = max(remaining.rfind("["), remaining.rfind("<"))
-                    if last_lt != -1:
-                        tail = remaining[last_lt:].upper()
-                        if state["active_end_tag"].startswith(tail):
-                            if last_lt > 0:
-                                state["current_thought"] += remaining[:last_lt]
-                                yield {"type": "thought", "content": remaining[:last_lt]}
-                            state["message_buffer"] = remaining[last_lt:]
-                            return
-                
-                state["current_thought"] += remaining
-                yield {"type": "thought", "content": remaining}
-                state["message_buffer"] = ""
-                return
+    # Thought tag stripping state
+    buffer = ""
 
     try:
         for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
-            # Runtime guard
+            # Timeout guard
             elapsed = (frappe.utils.now_datetime() - start_ts).total_seconds()
             if elapsed > (180 if dev_mode else 90):
-                yield {"type": "error", "content": "Request took too long. I stopped safely."}
+                yield {"type": "error", "content": "Request took too long."}
                 break
 
-            if isinstance(event, tuple):
-                msg, _meta = event
-            else:
-                msg = event
-
+            msg = event[0] if isinstance(event, tuple) else event
             if not hasattr(msg, "type"):
                 continue
 
@@ -388,15 +263,22 @@ def stream_agent(
                 tool_calls = getattr(msg, "tool_calls", None) or []
                 tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
                 
+                # Stream text content (strip thinking tags inline)
                 if msg.content:
-                    state["message_buffer"] += msg.content
-                    yield from process_and_yield(state["message_buffer"])
+                    buffer += msg.content
+                    # Check for thinking tags
+                    clean = _strip_thinking(buffer)
+                    if clean:
+                        yield {"type": "token", "content": clean}
+                        buffer = ""
                 
+                # Tool calls
                 if tool_calls or tool_call_chunks:
-                    # Flush buffer before tools
-                    if state["message_buffer"]:
-                        yield from process_and_yield(state["message_buffer"], is_flushing=True)
-                        state["message_buffer"] = ""
+                    if buffer:
+                        clean = _strip_thinking(buffer)
+                        if clean:
+                            yield {"type": "token", "content": clean}
+                        buffer = ""
                         
                     if tool_calls:
                         for tc in tool_calls:
@@ -404,24 +286,29 @@ def stream_agent(
                     else:
                         for tc in tool_call_chunks:
                             idx = tc.get("index", 0)
-                            if idx not in pending_tool_calls: pending_tool_calls[idx] = {"name": "", "args": ""}
-                            if tc.get("name"): pending_tool_calls[idx]["name"] = tc["name"]
-                            if tc.get("args"): pending_tool_calls[idx]["args"] += tc["args"]
+                            if idx not in pending_tool_calls:
+                                pending_tool_calls[idx] = {"name": "", "args": ""}
+                            if tc.get("name"):
+                                pending_tool_calls[idx]["name"] = tc["name"]
+                            if tc.get("args"):
+                                pending_tool_calls[idx]["args"] += tc["args"]
 
             elif msg.type == "tool":
                 tool_call_count += 1
+                # Flush pending tool call chunks
                 for idx in list(pending_tool_calls.keys()):
                     tc_data = pending_tool_calls[idx]
                     if tc_data["name"]:
                         yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
                 pending_tool_calls.clear()
+                
                 yield {
                     "type": "tool_result",
                     "tool": getattr(msg, "name", "unknown"),
                     "result": (str(msg.content) or "")[:2000],
                 }
                 if tool_call_count >= MAX_TOOL_CALLS:
-                    yield {"type": "error", "content": "I reached the tool-call safety limit."}
+                    yield {"type": "error", "content": "Tool call limit reached."}
                     break
 
     except Exception as e:
