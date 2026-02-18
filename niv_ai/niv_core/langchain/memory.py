@@ -166,7 +166,7 @@ def get_system_prompt(conversation_id: str = None) -> str:
         "2. Start every response with [[THOUGHT]]your reasoning[[/THOUGHT]] before the answer.\n"
         "3. Never say 'ERPNext' or 'Frappe' — always say '{brand}'.\n"
         "4. Never fabricate data. If a tool fails or data doesn't exist, say so honestly.\n"
-        "5. Use YOUR BRAIN for math (EMI, WRR, NPA, percentages) — don't use tools for calculations.\n"
+        "5. For WRR/interest rates, ALWAYS use data from the Loan document (irr, rate_of_interest fields). Never calculate or guess.\n"
         "6. After tool results, ALWAYS write a text summary. Never end with just tool output.\n\n"
         "ERROR RECOVERY:\n"
         "- If a tool fails, check the recovery_hint. Retry once with a different approach.\n"

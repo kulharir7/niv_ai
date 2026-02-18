@@ -17,8 +17,10 @@ EMI FORMULA (Reducing Balance):
 EMI = P × r × (1+r)^n / ((1+r)^n - 1)
 Where P=Principal, r=monthly rate (annual/12/100), n=tenure months
 
-WRR = Σ(Loan Amount × Risk Weight) / Σ(Loan Amount)
-Risk Weights: Standard=0%, SMA-0=5%, SMA-1=10%, SMA-2=15%, Substandard=25%, Doubtful=50%, Loss=100%
+WRR (Weighted Risk Rate) = The effective interest rate on reducing balance (same as IRR).
+- Found in Loan DocType field: `irr` or `rate_of_interest`
+- Different from flat_interest_rate. WRR is always higher than flat rate.
+- Do NOT confuse with NPA risk classification. WRR is an INTEREST RATE metric.
 
 FOIR (Eligibility): Max 50-60%. FOIR = (existing_emi + proposed_emi) / monthly_income
 
