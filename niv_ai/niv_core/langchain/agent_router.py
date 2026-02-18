@@ -245,36 +245,28 @@ Always show financial data in proper tables with formatted numbers (₹ symbol, 
 
 ## Key DocTypes & Fields (USE DIRECTLY — no need to call get_doctype_info)
 
-### Loan Application
-- Fields: name, applicant, applicant_name, loan_amount, loan_type, status, posting_date, company, rate_of_interest, repayment_method, repayment_periods
-- Status values: Open, Approved, Rejected, Sanctioned, Disbursed, Closed
-- Table name: `tabLoan Application`
+### Loan (table: `tabLoan`)
+- Key fields: name, applicant, applicant_name, loan_amount, loan_type, status, posting_date (=Sanction Date), company, rate_of_interest, flat_interest_rate, irr, loan_duration, product, product_category, applicant_mobile_number, co_applicant, co_applicant_name, is_unsecured, delinquent_since, interest_type, asset_type
+- Status values: Sanctioned, Partially Disbursed, Disbursed, Loan Closure Requested, Closed, Cancel
+- NOTE: loan_type is a Link field to "Loan Category". 210+ fields total — use get_doctype_info if you need others.
 
-### Loan
-- Fields: name, applicant, applicant_name, loan_amount, loan_type, status, disbursement_date, repayment_start_date, total_payment, total_interest_payable, total_amount_paid, monthly_repayment_amount, rate_of_interest, company
-- Status values: Sanctioned, Partially Disbursed, Disbursed, Loan Closure Requested, Closed
-- Table name: `tabLoan`
+### Loan Application (table: `tabLoan Application`)
+- Key fields: name, applicant, applicant_type, first_name, middle_name, last_name, workflow_state, status, company
+- Status values: Open
+- NOTE: 341 fields — heavily customized. Use get_doctype_info for specific field discovery.
 
-### Loan Repayment
-- Fields: name, against_loan, applicant, payment_type, amount_paid, posting_date, principal_amount, interest_amount, penalty_amount
-- Table name: `tabLoan Repayment`
+### Loan Repayment (table: `tabLoan Repayment`)
+- Key fields: name, against_loan, applicant, applicant_name, posting_date, receipt_date, repayment_mode, reference_number, product, company, cheque_no
+- NOTE: 82 fields.
 
-### Loan Disbursement
-- Fields: name, against_loan, applicant, disbursed_amount, posting_date, disbursement_date
-- Table name: `tabLoan Disbursement`
+### Customer (table: `tabCustomer`)
+- Key fields: name, customer_name, customer_type, first_name, last_name, date_of_birth, gender, father_name, npa (Check)
 
-### Journal Entry
-- Fields: name, voucher_type, posting_date, total_debit, total_credit, company, remark
-- Table name: `tabJournal Entry`
-
-### Customer
-- Fields: name, customer_name, customer_type, customer_group, territory, default_currency
-- Table name: `tabCustomer`
-
-## Common SQL Patterns for NBFC
-- Overdue loans: SELECT * FROM `tabLoan` WHERE status='Disbursed' AND name IN (SELECT parent FROM `tabRepayment Schedule` WHERE payment_date < CURDATE() AND is_paid=0)
+## Common SQL Patterns
+- Loan list: SELECT name, applicant_name, loan_amount, status, posting_date FROM `tabLoan` ORDER BY posting_date DESC LIMIT 20
 - Loan count by status: SELECT status, COUNT(*) as count, SUM(loan_amount) as total FROM `tabLoan` GROUP BY status
 - Total AUM: SELECT SUM(loan_amount) as total_aum, COUNT(*) as loan_count FROM `tabLoan` WHERE docstatus=1 AND status IN ('Disbursed', 'Partially Disbursed')
+- IMPORTANT: This system has many custom fields. If a field name causes an error, use get_doctype_info or SELECT * FROM `tabX` LIMIT 1 to discover correct field names.
 
 """ + NBFC_TOOL_EXAMPLES,
     },
