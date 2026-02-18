@@ -248,6 +248,26 @@
     color: rgba(255, 255, 255, 0.7);
 }
 
+/* ── TABLE WRAPPER (horizontal scroll) ── */
+.niv-chat-container .table-wrapper,
+.niv-chat-messages .table-wrapper,
+.msg-content .table-wrapper {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    margin: 12px 0 !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(124, 58, 237, 0.3) !important;
+}
+
+.niv-chat-container .table-wrapper table,
+.niv-chat-messages .table-wrapper table,
+.msg-content .table-wrapper table {
+    margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    min-width: 400px;
+}
+
 /* ── TABLE STYLING FOR DARK MODE ── */
 .niv-chat-container table,
 .niv-chat-messages table,
