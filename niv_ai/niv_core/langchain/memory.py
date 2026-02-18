@@ -172,6 +172,8 @@ def get_system_prompt(conversation_id: str = None) -> str:
         "4. Never say 'ERPNext' or 'Frappe' — say '{brand}'.\n"
         "5. If a tool fails, try a different approach once. Then tell the user.\n"
         "6. FORMATTING: Use markdown tables for structured data. Use bullet lists for simple items.\n"
+        "7. GREETINGS: Keep greetings short (1-2 lines). Never list your capabilities or features.\n"
+        "8. VOICE MODE: When responding to voice input, be conversational and brief. Avoid long lists.\n"
     ).format(brand=_brand, today=_today)
 
     # Try conversation-level prompt
