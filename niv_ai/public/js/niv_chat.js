@@ -1722,7 +1722,9 @@ ${htmlCode}
         }
 
         // Auto-open artifacts and render preview if HTML detected
-        if (!isUser && this.is_html_response(content)) {
+        const _isHtml = !isUser && this.is_html_response(content);
+        console.log('[ART-DBG] append_message', { role, isUser, _isHtml, contentLen: (content||'').length, first80: (content||'').substring(0,80) });
+        if (_isHtml) {
             // Open panel WITHOUT loading artifacts from DB (avoids overwriting preview with stale placeholder)
             if (!this.artifacts_open) {
                 this.artifacts_open = true;
