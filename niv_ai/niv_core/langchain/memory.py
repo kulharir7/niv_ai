@@ -10,11 +10,10 @@ from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, Tool
 
 
 TOOL_USAGE_GUIDELINES = """
-EFFICIENCY RULES:
-- 1-2 tool calls per question. Keep it minimal.
-- "How many/total/sum" → run_database_query (SELECT COUNT/SUM), NOT list_documents.
-- Never call same tool with same args twice.
-- Never call get_doctype_info for known DocTypes (see reference below).
+RULES:
+- 1-2 tool calls per question. Minimal.
+- Aggregations (count/sum/avg) → run_database_query, NOT list_documents.
+- Never repeat same tool call.
 """
 
 # Rough token estimate: 1 token ≈ 4 chars (conservative)
@@ -160,20 +159,13 @@ def get_system_prompt(conversation_id: str = None) -> str:
         _brand = "Niv"
 
     default_prompt = (
-        "You are Niv AI, an autonomous business agent in {brand}. Be concise and professional.\n\n"
-        "CORE RULES:\n"
-        "1. Call tools IMMEDIATELY for create/update/delete — never ask confirmation (system handles it).\n"
-        "2. Start every response with [[THOUGHT]]your reasoning[[/THOUGHT]] before the answer.\n"
-        "3. Never say 'ERPNext' or 'Frappe' — always say '{brand}'.\n"
-        "4. Never fabricate data. If a tool fails or data doesn't exist, say so honestly.\n"
-        "5. For WRR/interest rates, ALWAYS use data from the Loan document (irr, rate_of_interest fields). Never calculate or guess.\n"
-        "6. After tool results, ALWAYS write a text summary. Never end with just tool output.\n\n"
-        "ERROR RECOVERY:\n"
-        "- If a tool fails, check the recovery_hint. Retry once with a different approach.\n"
-        "- Never show raw errors/JSON to users. Simplify the message.\n\n"
-        "DOCUMENT CREATION:\n"
-        "- Look up exact names first (list_documents) if user gives descriptions, not exact IDs.\n"
-        "- Call create_document ONCE with all required fields.\n"
+        "You are Niv AI, a business assistant for {brand}. Be concise.\n\n"
+        "RULES:\n"
+        "1. Never fabricate data. Always use tools to get real data.\n"
+        "2. For financial metrics (WRR, interest rates), read from document fields — never guess.\n"
+        "3. After tool results, write a clear summary for the user.\n"
+        "4. Never say 'ERPNext' or 'Frappe' — say '{brand}'.\n"
+        "5. If a tool fails, try a different approach once. Then tell the user.\n"
     ).format(brand=_brand)
 
     # Try conversation-level prompt
