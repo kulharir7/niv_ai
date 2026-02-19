@@ -390,6 +390,21 @@ def _ensure_filler_cache():
                 frappe.logger().info(f"Pre-cached filler phrase: '{phrase}' ({voice})")
 
 
+def _safe_ensure_filler_cache(site_name):
+    """Thread-safe filler cache warmup — runs in background thread."""
+    try:
+        frappe.init(site=site_name)
+        frappe.connect()
+        _ensure_filler_cache()
+    except Exception:
+        pass
+    finally:
+        try:
+            frappe.db.close()
+        except Exception:
+            pass
+
+
 # ─── Main Streaming Voice Endpoint ──────────────────────────────────────
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -580,11 +595,14 @@ def stream_voice_chat(**kwargs):
             files_dir = frappe.get_site_path("private", "files")
             os.makedirs(files_dir, exist_ok=True)
 
-            # Pre-cache filler phrases (one-time, non-blocking if cached)
-            try:
-                _ensure_filler_cache()
-            except Exception:
-                pass
+            # Pre-cache filler phrases in background thread (non-blocking)
+            # Don't let this delay the LLM call
+            _filler_thread = threading.Thread(
+                target=lambda: _safe_ensure_filler_cache(_site_name),
+                daemon=True,
+                name="niv-filler-warmup",
+            )
+            _filler_thread.start()
 
             from niv_ai.niv_core.langchain.agent import stream_agent
             from niv_ai.niv_core.langchain.tools import (
