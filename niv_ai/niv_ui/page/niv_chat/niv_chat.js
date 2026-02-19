@@ -3306,13 +3306,24 @@ ${htmlCode}
         try {
             await this._ensureAudioContext();
 
-            this.voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.voiceStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1,
+                    sampleRate: 16000,
+                }
+            });
 
-            // Setup analyser for input visualization
+            // Setup analyser for input visualization with software gain
             const source = this.voiceAudioCtx.createMediaStreamSource(this.voiceStream);
+            this._inputGain = this.voiceAudioCtx.createGain();
+            this._inputGain.gain.value = 2.5; // Software amplification for low-volume mics
             const inputAnalyser = this.voiceAudioCtx.createAnalyser();
             inputAnalyser.fftSize = 256;
-            source.connect(inputAnalyser);
+            source.connect(this._inputGain);
+            this._inputGain.connect(inputAnalyser);
             this._inputAnalyser = inputAnalyser;
 
             // MediaRecorder is kept for fallback (server STT) but primary is browser STT
@@ -3415,8 +3426,8 @@ ${htmlCode}
 
     voice_start_silence_detection() {
         this.voiceSilenceStart = null;
-        const silenceThreshold = 10;
-        const silenceDuration = 1500; // 1.5 seconds for faster turn-taking
+        const silenceThreshold = 8;
+        const silenceDuration = 1000; // 1s for faster turn-taking
 
         this.voiceSilenceTimer = setInterval(() => {
             if (this.voiceState !== "listening" || !this._inputAnalyser) return;
@@ -3434,7 +3445,7 @@ ${htmlCode}
             } else {
                 this.voiceSilenceStart = null;
             }
-        }, 200);
+        }, 100);
     }
 
     cancel_voice_animation() {
@@ -3790,14 +3801,21 @@ ${htmlCode}
         try {
             await this._ensureAudioContext();
 
-            this.voiceMonitorStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.voiceMonitorStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    channelCount: 1,
+                }
+            });
             const src = this.voiceAudioCtx.createMediaStreamSource(this.voiceMonitorStream);
             this.voiceMonitorAnalyser = this.voiceAudioCtx.createAnalyser();
             this.voiceMonitorAnalyser.fftSize = 256;
             src.connect(this.voiceMonitorAnalyser);
 
-            const speechThreshold = 25;
-            const speechConfirmMs = 350; // Must speak 350ms to trigger interrupt
+            const speechThreshold = 15;
+            const speechConfirmMs = 250; // Must speak 250ms to trigger interrupt
             this.voiceSpeechDetectedAt = null;
 
             this.voiceMonitorTimer = setInterval(() => {
