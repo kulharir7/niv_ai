@@ -541,13 +541,10 @@ def _stream_two_model(
             "result": result_str,
         })
 
-    # ── If all tools failed → fall back to single-model (can retry) ──
-    all_failed = all("error" in (tr["result"] or "").lower() for tr in tool_results)
-    if all_failed:
-        yield {"type": "_fallback"}
-        return
-
     # ── Step 3: Big model streams answer with tool results ──
+    # Even if tools failed, let big model handle it — it can tell the user
+    # about the error or answer from context. This is faster than falling back
+    # to single-model which would re-discover and re-call tools (~12s saved).
     answer_messages = list(messages)
     answer_messages.append(fast_response)  # AI message with tool_calls
     for tr in tool_results:

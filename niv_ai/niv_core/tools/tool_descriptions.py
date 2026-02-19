@@ -59,8 +59,14 @@ TOOL_ENHANCEMENTS = {
                 "type": "array",
                 "description": (
                     "Fields to return. Use get_doctype_info to discover available fields. "
-                    "Always include 'name'. Use ['*'] for all fields (expensive). "
-                    "Example: [\"name\", \"status\", \"loan_amount\", \"posting_date\"]"
+                    "Always include 'name'. Use ['*'] for all fields (expensive).\n"
+                    "COMMON FIELDS BY DOCTYPE:\n"
+                    "- Sales Order: name, customer_name, transaction_date, grand_total, status, delivery_date\n"
+                    "- Sales Invoice: name, customer_name, posting_date, grand_total, status\n"
+                    "- Purchase Order: name, supplier_name, transaction_date, grand_total, status\n"
+                    "- Loan: name, applicant_name, loan_amount, status, posting_date, disbursement_date\n"
+                    "- Customer: name, customer_name, customer_type, territory\n"
+                    "NOTE: Sales Order uses 'transaction_date' NOT 'posting_date'. Check DocType fields if unsure."
                 ),
             },
             "limit": {
@@ -206,7 +212,7 @@ TOOL_ENHANCEMENTS = {
             "RULES:\n"
             "- SELECT queries ONLY (no INSERT/UPDATE/DELETE)\n"
             "- Table names are like `tabDocType Name` (e.g., `tabSales Invoice`, `tabLoan Application`)\n"
-            "- Field names use snake_case (e.g., loan_amount, posting_date)\n"
+            "- Field names use snake_case (e.g., loan_amount, transaction_date, grand_total)\n"
             "- Always add LIMIT to prevent huge result sets\n\n"
             "EXAMPLES:\n"
             "- SELECT COUNT(*) FROM `tabLoan Application` WHERE status='Active'\n"
