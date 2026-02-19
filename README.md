@@ -2,7 +2,7 @@
 
 > AI-powered assistant with voice, MCP tools, two-model optimization, Excel/PDF export, and developer mode
 
-[![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
+[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
 [![ERPNext](https://img.shields.io/badge/ERPNext-v15-green.svg)](https://erpnext.com)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
@@ -28,6 +28,7 @@ Niv AI is a production-ready AI assistant that sits inside your ERPNext system. 
 - **Browser STT** (hi-IN) → Server STT (Voxtral Mini) → LLM → TTS
 - **ElevenLabs** (primary) / **Edge TTS** (free fallback) — Indian accent, Hindi + English
 - **Clause-level chunking** — first audio plays in ~2s, not after full response
+- **Instant voice filler** — browser TTS plays acknowledgment immediately while server processes
 
 ### 📊 Data Export
 - **Excel** — Styled headers, auto-width columns, freeze panes, auto-filter
@@ -215,7 +216,7 @@ niv_ai/
 | Stage | Engine | Details |
 |-------|--------|---------|
 | **STT** (primary) | Browser Web Speech | `hi-IN`, instant, no upload needed |
-| **STT** (server) | Voxtral Mini | Mistral API, Hindi+English |
+| **STT** (server) | Voxtral Mini Realtime | Mistral API, realtime transcription, Hindi+English |
 | **TTS** (primary) | ElevenLabs | `eleven_multilingual_v2`, auto language |
 | **TTS** (free) | Edge TTS | `en-IN-NeerjaExpressiveNeural` / `hi-IN-SwaraNeural` |
 | **TTS** (offline) | Piper | Local, English only |
@@ -237,7 +238,8 @@ Token pool is shared across all users. Atomic SQL deduction prevents negative ba
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **v1.0.0** | 2026-02-19 | Stable release — reliable streaming, two-model optimization, tool error resilience, export buttons restored, Razorpay removed |
+| **v1.0.1** | 2026-02-19 | Voice overhaul — instant filler TTS, Voxtral Realtime STT, voice orb fixes, SSE streaming fixes, one-command setup.sh |
+| v1.0.0 | 2026-02-19 | Stable release — reliable streaming, two-model optimization, tool error resilience, export buttons restored, Razorpay removed |
 | v0.9.2 | 2026-02-19 | Two-model tool optimization, streaming fix, DB resilience, billing accuracy |
 | v0.9.0 | 2026-02-18 | MCP optimization (82% prompt reduction), voice overhaul, Excel/CSV/PDF export |
 | v0.8.0 | 2026-02-17 | Voice pipeline (STT + TTS + VAD) |
