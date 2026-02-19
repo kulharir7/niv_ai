@@ -2914,7 +2914,18 @@ ${htmlCode}
         return Number(n).toLocaleString();
     }
 
-    // ─── Voice Mode ─────────────────────────────────────────────────
+    // ─── Voice Mode (Streaming) ──────────────────────────────────────
+    //
+    // Architecture:
+    //   Browser STT (instant) → text → SSE stream_voice_chat endpoint
+    //   → LLM streaming → clause-level TTS chunks → audio queue → gapless playback
+    //
+    // First audio latency target: ~1.5–2 seconds
+    //
+    // Audio Pipeline:
+    //   SSE event (base64 audio) → decode → AudioBuffer → queue → play seamlessly
+    //   Each chunk plays immediately while next chunks are being generated.
+    //   Interruption: user speaks → flush queue → stop playback → start recording.
 
     setup_voice_mode() {
         this.$voiceOverlay = this.wrapper.find(".niv-voice-overlay");
@@ -2923,6 +2934,7 @@ ${htmlCode}
         this.$voiceTranscript = this.$voiceOverlay.find(".voice-transcript");
         this.$voiceResponse = this.$voiceOverlay.find(".voice-response-text");
 
+        // Core state
         this.voiceState = "idle"; // idle | listening | processing | speaking | error
         this.voiceAudioCtx = null;
         this.voiceAnalyser = null;
@@ -2932,10 +2944,17 @@ ${htmlCode}
         this.voiceAnimFrame = null;
         this.voiceSilenceTimer = null;
         this.voiceSilenceStart = null;
-        this.voiceAudio = null;
-        this.voicePlaybackSource = null;
         this.voiceContinuous = true;
-        // Conversational mode: monitor mic during AI speech for auto-interrupt
+
+        // Streaming audio queue (gapless playback)
+        this._audioQueue = [];           // Array of { buffer: AudioBuffer, text: string }
+        this._audioPlaying = false;       // Whether a chunk is currently playing
+        this._audioSource = null;         // Current AudioBufferSourceNode
+        this._streamEventSource = null;   // Active SSE connection
+        this._streamFullResponse = "";    // Accumulated response text
+        this._streamAborted = false;      // Whether user interrupted
+
+        // Voice monitor (interrupt detection during playback)
         this.voiceMonitorStream = null;
         this.voiceMonitorAnalyser = null;
         this.voiceMonitorTimer = null;
@@ -2949,16 +2968,20 @@ ${htmlCode}
 
         // Control bar buttons
         this.$voiceOverlay.find(".voice-end-btn").on("click", () => this.close_voice_mode());
-        this.$voiceOverlay.find(".voice-mute-btn").on("click", function() {
+        this.$voiceOverlay.find(".voice-mute-btn").on("click", function () {
             $(this).toggleClass("active");
             if (self.voiceStream) {
                 self.voiceStream.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
             }
         });
-        this.$voiceOverlay.find(".voice-speaker-btn").on("click", function() {
+        this.$voiceOverlay.find(".voice-speaker-btn").on("click", function () {
             $(this).toggleClass("active");
-            if (self.voiceAudio) {
-                self.voiceAudio.muted = !self.voiceAudio.muted;
+            // Mute/unmute active playback
+            if (self.voiceAudioCtx) {
+                const gain = self._masterGain;
+                if (gain) {
+                    gain.gain.value = gain.gain.value > 0 ? 0 : 1;
+                }
             }
         });
 
@@ -2975,12 +2998,16 @@ ${htmlCode}
         this.$voiceOverlay.fadeIn(200);
         this.set_voice_state("idle");
         $("body").css("overflow", "hidden");
+
+        // Pre-initialize AudioContext for gapless playback
+        await this._ensureAudioContext();
     }
 
     close_voice_mode() {
         this.stop_voice_recording();
         this.stop_voice_playback();
         this.stop_voice_monitor();
+        this._abortVoiceStream();
         this.cancel_voice_animation();
         if (this.voiceStream) {
             this.voiceStream.getTracks().forEach(t => t.stop());
@@ -2990,12 +3017,7 @@ ${htmlCode}
             this.voiceMonitorStream.getTracks().forEach(t => t.stop());
             this.voiceMonitorStream = null;
         }
-        if (this.voiceAudioCtx && this.voiceAudioCtx.state !== "closed") {
-            this.voiceAudioCtx.close().catch(() => {});
-            this.voiceAudioCtx = null;
-            this.voiceAnalyser = null;
-            this.voiceMonitorAnalyser = null;
-        }
+        // Don't close AudioContext — reuse across voice sessions for faster startup
         this.$voiceOverlay.fadeOut(200);
         this.voiceState = "idle";
         $("body").css("overflow", "");
@@ -3007,8 +3029,9 @@ ${htmlCode}
         } else if (this.voiceState === "listening") {
             this.stop_voice_recording();
         } else if (this.voiceState === "speaking") {
-            // Interrupt AI speech → immediately start listening
+            // Interrupt AI speech → flush queue → start listening
             this.stop_voice_playback();
+            this._abortVoiceStream();
             this.start_voice_recording();
         }
     }
@@ -3037,24 +3060,159 @@ ${htmlCode}
         }
     }
 
+    // ─── Audio Context & Gapless Playback Engine ───────────────────
+
+    async _ensureAudioContext() {
+        /* Initialize or resume the shared AudioContext for playback. */
+        if (!this.voiceAudioCtx || this.voiceAudioCtx.state === "closed") {
+            this.voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            // Master gain node for mute/unmute
+            this._masterGain = this.voiceAudioCtx.createGain();
+            this._masterGain.connect(this.voiceAudioCtx.destination);
+            // Analyser for playback visualization
+            this.voiceAnalyser = this.voiceAudioCtx.createAnalyser();
+            this.voiceAnalyser.fftSize = 256;
+            this.voiceAnalyser.connect(this._masterGain);
+        }
+        if (this.voiceAudioCtx.state === "suspended") {
+            await this.voiceAudioCtx.resume();
+        }
+    }
+
+    _flushAudioQueue() {
+        /* Clear the audio queue and stop any playing chunk. */
+        this._audioQueue = [];
+        this._audioPlaying = false;
+        if (this._audioSource) {
+            try {
+                this._audioSource.onended = null;
+                this._audioSource.stop();
+            } catch (e) { /* already stopped */ }
+            this._audioSource = null;
+        }
+    }
+
+    async _enqueueAudioChunk(base64Audio, format, chunkText) {
+        /* Decode base64 audio and add to the playback queue.
+        Starts playback immediately if nothing is playing.
+         */
+        try {
+            await this._ensureAudioContext();
+
+            // Decode base64 → ArrayBuffer → AudioBuffer
+            const binaryStr = atob(base64Audio);
+            const bytes = new Uint8Array(binaryStr.length);
+            for (let i = 0; i < binaryStr.length; i++) {
+                bytes[i] = binaryStr.charCodeAt(i);
+            }
+            const audioBuffer = await this.voiceAudioCtx.decodeAudioData(bytes.buffer.slice(0));
+
+            this._audioQueue.push({ buffer: audioBuffer, text: chunkText });
+
+            // Start playing if not already
+            if (!this._audioPlaying) {
+                this._playNextChunk();
+            }
+        } catch (e) {
+            console.warn("Failed to decode audio chunk:", e);
+            // Fallback: use browser TTS for this chunk
+            this._browserTTSChunk(chunkText);
+        }
+    }
+
+    _playNextChunk() {
+        /* Play the next AudioBuffer from the queue. Chain to next on end. */
+        if (this._audioQueue.length === 0 || this._streamAborted) {
+            this._audioPlaying = false;
+            this.cancel_voice_animation();
+
+            // All chunks played — check if stream is done
+            if (!this._streamEventSource && this.voiceState === "speaking") {
+                // Stream finished and all audio played
+                this._onStreamPlaybackComplete();
+            }
+            return;
+        }
+
+        this._audioPlaying = true;
+        const chunk = this._audioQueue.shift();
+
+        // Create source → analyser → gain → destination
+        const source = this.voiceAudioCtx.createBufferSource();
+        source.buffer = chunk.buffer;
+        source.connect(this.voiceAnalyser); // analyser → masterGain → destination
+        this._audioSource = source;
+
+        // Update response text progressively
+        if (chunk.text) {
+            const currentText = this.$voiceResponse.text();
+            const separator = currentText ? " " : "";
+            this.$voiceResponse.text(currentText + separator + chunk.text);
+        }
+
+        // Visualize during playback
+        this.voice_visualize_playback();
+
+        // Chain to next chunk on end (gapless)
+        source.onended = () => {
+            this._audioSource = null;
+            this._playNextChunk();
+        };
+
+        source.start(0);
+
+        // Start voice monitor for interruption
+        if (!this.voiceMonitorTimer) {
+            this.start_voice_monitor();
+        }
+    }
+
+    _browserTTSChunk(text) {
+        /* Fallback: speak a single chunk via browser speechSynthesis. */
+        if (!text || !("speechSynthesis" in window)) return;
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "en-IN";
+        utterance.rate = 1.0;
+        utterance.onend = () => {
+            // Continue queue after browser TTS finishes
+            this._playNextChunk();
+        };
+        window.speechSynthesis.speak(utterance);
+    }
+
+    _onStreamPlaybackComplete() {
+        /* Called when all audio chunks have been played and stream is done. */
+        this.cancel_voice_animation();
+        this.stop_voice_monitor();
+
+        if (this.voiceContinuous && this.voiceState === "speaking") {
+            // Auto-start next recording for continuous conversation
+            if (this.$voiceOverlay.is(":visible")) {
+                this.start_voice_recording();
+            } else {
+                this.set_voice_state("idle");
+            }
+        } else {
+            this.set_voice_state("idle");
+        }
+    }
+
+    // ─── Recording ─────────────────────────────────────────────────
+
     async start_voice_recording() {
         try {
-            if (!this.voiceAudioCtx || this.voiceAudioCtx.state === "closed") {
-                this.voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (this.voiceAudioCtx.state === "suspended") {
-                await this.voiceAudioCtx.resume();
-            }
+            await this._ensureAudioContext();
 
             this.voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            // Setup analyser for visualization
+            // Setup analyser for input visualization
             const source = this.voiceAudioCtx.createMediaStreamSource(this.voiceStream);
-            this.voiceAnalyser = this.voiceAudioCtx.createAnalyser();
-            this.voiceAnalyser.fftSize = 256;
-            source.connect(this.voiceAnalyser);
+            const inputAnalyser = this.voiceAudioCtx.createAnalyser();
+            inputAnalyser.fftSize = 256;
+            source.connect(inputAnalyser);
+            this._inputAnalyser = inputAnalyser;
 
-            // Start MediaRecorder
+            // MediaRecorder is kept for fallback (server STT) but primary is browser STT
             let mimeType = "audio/webm;codecs=opus";
             if (!MediaRecorder.isTypeSupported(mimeType)) {
                 mimeType = "audio/webm";
@@ -3068,21 +3226,22 @@ ${htmlCode}
             this.voiceMediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) this.voiceAudioChunks.push(e.data);
             };
-            this.voiceMediaRecorder.onstop = () => this.process_voice_recording();
+            this.voiceMediaRecorder.onstop = () => this._onRecordingStopped();
 
-            this.voiceMediaRecorder.start(250); // collect in 250ms chunks
+            this.voiceMediaRecorder.start(250);
             this.set_voice_state("listening");
-            this.voice_visualize_input();
+            this._voice_visualize_input();
             this.voice_start_silence_detection();
 
-            // Also start browser STT as fallback transcript
+            // Start browser STT (primary transcription — instant, no upload needed)
             this.voiceBrowserTranscript = "";
+            this._voiceInterimTranscript = "";
             const SpeechRecog = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (SpeechRecog) {
                 this.voiceSpeechRecog = new SpeechRecog();
                 this.voiceSpeechRecog.continuous = true;
                 this.voiceSpeechRecog.interimResults = true;
-                this.voiceSpeechRecog.lang = "en-IN";
+                this.voiceSpeechRecog.lang = "hi-IN"; // Hindi primary (NBFC users)
                 this.voiceSpeechRecog.onresult = (event) => {
                     let finalTranscript = "";
                     let interimTranscript = "";
@@ -3093,18 +3252,20 @@ ${htmlCode}
                             interimTranscript += event.results[i][0].transcript;
                         }
                     }
-                    // Store only final results for sending
                     this.voiceBrowserTranscript = finalTranscript.trim();
-                    // Show both for live feedback (final + interim in gray)
+                    this._voiceInterimTranscript = interimTranscript.trim();
+                    // Live feedback: show final + interim (grayed)
                     this.$voiceTranscript.html(
-                        finalTranscript + (interimTranscript ? '<span style="opacity:0.5">' + interimTranscript + '</span>' : '')
+                        finalTranscript +
+                        (interimTranscript
+                            ? '<span style="opacity:0.5">' + interimTranscript + "</span>"
+                            : "")
                     );
                 };
                 this.voiceSpeechRecog.onerror = () => {};
                 this.voiceSpeechRecog.onend = () => {};
-                try { this.voiceSpeechRecog.start(); } catch(e) {}
+                try { this.voiceSpeechRecog.start(); } catch (e) {}
             }
-
         } catch (err) {
             console.error("Voice recording error:", err);
             if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
@@ -3122,7 +3283,7 @@ ${htmlCode}
         }
         this.cancel_voice_animation();
         if (this.voiceSpeechRecog) {
-            try { this.voiceSpeechRecog.stop(); } catch(e) {}
+            try { this.voiceSpeechRecog.stop(); } catch (e) {}
             this.voiceSpeechRecog = null;
         }
         if (this.voiceMediaRecorder && this.voiceMediaRecorder.state !== "inactive") {
@@ -3134,16 +3295,16 @@ ${htmlCode}
         }
     }
 
-    voice_visualize_input() {
-        if (!this.voiceAnalyser || this.voiceState !== "listening") return;
-        const dataArray = new Uint8Array(this.voiceAnalyser.frequencyBinCount);
+    _voice_visualize_input() {
+        if (!this._inputAnalyser || this.voiceState !== "listening") return;
+        const dataArray = new Uint8Array(this._inputAnalyser.frequencyBinCount);
 
         const draw = () => {
             if (this.voiceState !== "listening") return;
             this.voiceAnimFrame = requestAnimationFrame(draw);
-            this.voiceAnalyser.getByteFrequencyData(dataArray);
+            this._inputAnalyser.getByteFrequencyData(dataArray);
             const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-            const level = Math.min(avg / 80, 1); // normalize 0-1
+            const level = Math.min(avg / 80, 1);
             this.$voiceOrb.css("--voice-level", level);
         };
         draw();
@@ -3155,16 +3316,15 @@ ${htmlCode}
         const silenceDuration = 1500; // 1.5 seconds for faster turn-taking
 
         this.voiceSilenceTimer = setInterval(() => {
-            if (this.voiceState !== "listening" || !this.voiceAnalyser) return;
-            const dataArray = new Uint8Array(this.voiceAnalyser.frequencyBinCount);
-            this.voiceAnalyser.getByteFrequencyData(dataArray);
+            if (this.voiceState !== "listening" || !this._inputAnalyser) return;
+            const dataArray = new Uint8Array(this._inputAnalyser.frequencyBinCount);
+            this._inputAnalyser.getByteFrequencyData(dataArray);
             const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
 
             if (avg < silenceThreshold) {
                 if (!this.voiceSilenceStart) this.voiceSilenceStart = Date.now();
                 if (Date.now() - this.voiceSilenceStart > silenceDuration) {
-                    // Only auto-stop if we have some audio data
-                    if (this.voiceAudioChunks.length > 0) {
+                    if (this.voiceAudioChunks.length > 0 || this.voiceBrowserTranscript) {
                         this.stop_voice_recording();
                     }
                 }
@@ -3182,89 +3342,235 @@ ${htmlCode}
         this.$voiceOrb && this.$voiceOrb.css("--voice-level", 0);
     }
 
-    async process_voice_recording() {
-        if (this.voiceAudioChunks.length === 0 && !this.voiceBrowserTranscript) {
-            this.set_voice_state("idle");
+    // ─── Streaming Voice Processing ────────────────────────────────
+
+    async _onRecordingStopped() {
+        /* Called when MediaRecorder stops. Initiates streaming voice chat. */
+        // Get transcript — prefer browser STT (instant), fallback to interim
+        const transcript = this.voiceBrowserTranscript || this._voiceInterimTranscript || "";
+
+        if (!transcript) {
+            this.set_voice_state("error", "Could not hear you. Try again.");
             return;
         }
 
+        this.$voiceTranscript.text(transcript);
         this.set_voice_state("processing");
 
+        // Append user message to chat UI immediately
+        this.append_message("user", transcript);
+        this.scroll_to_bottom();
+
+        // Reset streaming state
+        this._streamFullResponse = "";
+        this._streamAborted = false;
+        this._flushAudioQueue();
+
         try {
-            // Try server-side voice_chat first (OpenAI Whisper + TTS)
-            let useServerAPI = true;
-            let result = null;
+            // Start SSE stream to streaming voice endpoint
+            await this._startVoiceStream(transcript);
+        } catch (err) {
+            console.error("Voice stream error:", err);
 
+            // Fallback to old sequential method
+            await this._fallbackVoiceChat(transcript);
+        }
+    }
+
+    async _startVoiceStream(transcript) {
+        /* Open SSE connection to stream_voice_chat and process audio chunks. */
+        const conversationId = this.current_conversation || "";
+
+        // Build SSE URL with fetch (POST SSE)
+        const url = "/api/method/niv_ai.niv_core.api.voice_stream.stream_voice_chat";
+
+        const response = await fetch(url, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                "X-Frappe-CSRF-Token": frappe.csrf_token,
+            },
+            body: JSON.stringify({
+                text: transcript,
+                conversation_id: conversationId,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error(`Voice stream HTTP ${response.status}`);
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        this._streamEventSource = reader; // Store reference for abort
+
+        while (true) {
+            if (this._streamAborted) {
+                reader.cancel();
+                break;
+            }
+
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            buffer += decoder.decode(value, { stream: true });
+
+            // Parse SSE events from buffer
+            const lines = buffer.split("\n");
+            buffer = lines.pop() || ""; // Keep incomplete line in buffer
+
+            for (const line of lines) {
+                if (!line.startsWith("data: ")) continue;
+
+                let event;
+                try {
+                    event = JSON.parse(line.slice(6));
+                } catch (e) {
+                    continue;
+                }
+
+                if (this._streamAborted) break;
+
+                this._handleVoiceStreamEvent(event);
+            }
+        }
+
+        this._streamEventSource = null;
+
+        // If no audio was queued and we have text, use browser TTS as fallback
+        if (!this._audioPlaying && this._audioQueue.length === 0 && this._streamFullResponse) {
+            this._browserTTSChunk(this.cleanTextForTTS(this._streamFullResponse));
+        }
+    }
+
+    _handleVoiceStreamEvent(event) {
+        /* Process a single SSE event from the voice stream. */
+        switch (event.type) {
+            case "init":
+                // Update conversation_id if auto-created
+                if (event.conversation_id && !this.current_conversation) {
+                    this.current_conversation = event.conversation_id;
+                }
+                break;
+
+            case "audio_chunk":
+                // Core: decode and enqueue audio for gapless playback
+                this.set_voice_state("speaking");
+                this._streamFullResponse += (this._streamFullResponse ? " " : "") + (event.text || "");
+                this._enqueueAudioChunk(event.audio_base64, event.format, event.text);
+                break;
+
+            case "text_chunk":
+                // TTS failed for this chunk — use browser TTS
+                this.set_voice_state("speaking");
+                this._streamFullResponse += (this._streamFullResponse ? " " : "") + (event.text || "");
+                this._browserTTSChunk(event.text);
+                break;
+
+            case "filler":
+                // Filler audio during tool execution
+                this.set_voice_state("speaking");
+                this._enqueueAudioChunk(event.audio_base64, event.format, "");
+                break;
+
+            case "tool_call":
+                // Show tool being called
+                this.$voiceStatus.text("🔧 " + (event.tool || "Checking..."));
+                break;
+
+            case "tool_result":
+                // Tool completed — LLM will now generate response
+                this.$voiceStatus.text("Thinking...");
+                break;
+
+            case "thought":
+                // Internal reasoning — don't show to user
+                break;
+
+            case "done":
+                // Stream complete — finalize
+                this._streamEventSource = null;
+                const fullText = event.full_text || this._streamFullResponse || "";
+
+                // Append assistant message to chat UI
+                if (fullText) {
+                    this.append_message("assistant", fullText, {});
+                    this.update_last_assistant_actions();
+                    this.scroll_to_bottom();
+                    this.auto_title(this.voiceBrowserTranscript || "");
+                    this.load_balance();
+                }
+
+                // If audio is still playing, _onStreamPlaybackComplete handles state transition
+                if (!this._audioPlaying && this._audioQueue.length === 0) {
+                    this._onStreamPlaybackComplete();
+                }
+                break;
+
+            case "error":
+                console.error("Voice stream error:", event.content);
+                if (!this._audioPlaying) {
+                    this.set_voice_state("error", event.content || "Something went wrong");
+                }
+                break;
+        }
+    }
+
+    _abortVoiceStream() {
+        /* Abort the active voice stream and flush the audio queue. */
+        this._streamAborted = true;
+        if (this._streamEventSource) {
             try {
-                const blob = new Blob(this.voiceAudioChunks, { type: this.voiceAudioChunks[0]?.type || "audio/webm" });
+                this._streamEventSource.cancel();
+            } catch (e) {}
+            this._streamEventSource = null;
+        }
+        this._flushAudioQueue();
+    }
 
-                // Convert blob to base64 and send via voice_chat_base64 (bypasses upload_file 417)
+    // ─── Fallback: Sequential Voice Chat ───────────────────────────
+
+    async _fallbackVoiceChat(transcript) {
+        /* Fallback to old sequential voice_chat_base64 when streaming fails. */
+        try {
+            // Build audio blob if we have recorded chunks
+            let base64Data = "";
+            if (this.voiceAudioChunks.length > 0) {
+                const blob = new Blob(this.voiceAudioChunks, {
+                    type: this.voiceAudioChunks[0]?.type || "audio/webm",
+                });
                 const reader = new FileReader();
-                const base64Data = await new Promise((resolve, reject) => {
+                base64Data = await new Promise((resolve, reject) => {
                     reader.onloadend = () => resolve(reader.result.split(",")[1]);
                     reader.onerror = reject;
                     reader.readAsDataURL(blob);
                 });
-
-                const r = await frappe.call({
-                    method: "niv_ai.niv_core.api.voice.voice_chat_base64",
-                    args: {
-                        conversation_id: this.current_conversation || "",
-                        audio_base64: base64Data,
-                        browser_transcript: this.voiceBrowserTranscript || "",
-                    },
-                });
-                result = r.message;
-                if (!result || !result.response) throw new Error("Empty response");
-
-                // Update conversation_id if auto-created
-                if (result.conversation_id && !this.current_conversation) {
-                    this.current_conversation = result.conversation_id;
-                }
-            } catch (serverErr) {
-                console.warn("Server voice API failed:", serverErr.message);
-                useServerAPI = false;
             }
 
-            // Fallback: Browser STT (already captured) + regular chat API + Browser TTS
-            if (!useServerAPI) {
-                const transcript = this.voiceBrowserTranscript || "";
-                if (!transcript) {
-                    // Use browser STT as one-shot
-                    this.set_voice_state("error", "Could not transcribe. Try again.");
-                    return;
-                }
+            const r = await frappe.call({
+                method: "niv_ai.niv_core.api.voice.voice_chat_base64",
+                args: {
+                    conversation_id: this.current_conversation || "",
+                    audio_base64: base64Data,
+                    browser_transcript: transcript,
+                },
+            });
+            const result = r.message;
 
-                this.$voiceTranscript.text(transcript);
-
-                // Send to regular chat API
-                if (!this.current_conversation) {
-                    const conv = await this._create_conversation_on_server("Voice Chat");
-                    this.current_conversation = conv.name;
-                }
-                const chatResp = await frappe.call({
-                    method: "niv_ai.niv_core.api.chat.send_message",
-                    args: {
-                        conversation_id: this.current_conversation,
-                        message: transcript,
-                        attachments: "[]",
-                    },
-                });
-                const chatData = chatResp.message;
-                result = {
-                    text: transcript,
-                    response: chatData.message || chatData.content || "",
-                    tokens: { total: chatData.total_tokens, input: chatData.input_tokens, output: chatData.output_tokens },
-                    audio_url: null, // Will use browser TTS
-                };
+            if (!result || !result.response) {
+                this.set_voice_state("error", "No response received");
+                return;
             }
 
-            // Show transcript & response
-            this.$voiceTranscript.text(result.text || "");
+            // Update conversation
+            if (result.conversation_id && !this.current_conversation) {
+                this.current_conversation = result.conversation_id;
+            }
+
+            // Show response
             this.$voiceResponse.text(result.response || "");
-
-            // Append messages to chat UI
-            if (result.text) this.append_message("user", result.text);
             if (result.response) {
                 this.append_message("assistant", result.response, {
                     total_tokens: result.tokens?.total || 0,
@@ -3275,30 +3581,48 @@ ${htmlCode}
             }
             this.scroll_to_bottom();
             this.load_balance();
-            this.auto_title(result.text || "");
 
-            // Play audio: server TTS (Piper) or browser TTS fallback
+            // Play audio
             if (result.audio_url) {
-                this.play_voice_response(result.audio_url);
+                this._playFallbackAudio(result.audio_url);
             } else if (result.response) {
-                // Try Piper TTS first, then browser fallback
-                this.play_voice_piper_or_browser(result.response);
+                this._playFallbackTTS(result.response);
             } else {
                 this.set_voice_state("idle");
             }
-
         } catch (err) {
-            console.error("Voice chat error:", err);
+            console.error("Fallback voice chat error:", err);
             this.set_voice_state("error", err.message || "Voice chat failed");
         }
     }
 
-    _strip_markdown(text) {
-        return this.cleanTextForTTS(text);
+    _playFallbackAudio(audioUrl) {
+        /* Play a single audio URL (old-style sequential playback). */
+        this.set_voice_state("speaking");
+        const audio = new Audio(audioUrl);
+
+        audio.onended = () => {
+            frappe.call({
+                method: "niv_ai.niv_core.api.voice.cleanup_voice_file",
+                args: { file_url: audioUrl },
+            }).catch(() => {});
+
+            if (this.voiceContinuous && this.$voiceOverlay.is(":visible")) {
+                this.start_voice_recording();
+            } else {
+                this.set_voice_state("idle");
+            }
+        };
+        audio.onerror = () => this.set_voice_state("error", "Audio playback failed");
+        audio.play().catch((e) => {
+            console.error("Fallback audio play error:", e);
+            this.set_voice_state("error", "Could not play audio");
+        });
     }
 
-    async play_voice_piper_or_browser(text) {
-        const clean = this._strip_markdown(text);
+    async _playFallbackTTS(text) {
+        /* Try server TTS, then browser TTS as fallback. */
+        const clean = this.cleanTextForTTS(text);
         if (!clean) { this.set_voice_state("idle"); return; }
 
         this.set_voice_state("speaking");
@@ -3308,90 +3632,33 @@ ${htmlCode}
                 args: { text: clean },
             });
             if (r.message && r.message.audio_url) {
-                this.play_voice_response(r.message.audio_url);
+                this._playFallbackAudio(r.message.audio_url);
                 return;
             }
         } catch (e) {
-            console.warn("Piper TTS failed in voice mode, using browser:", e);
-        }
-        this.play_voice_browser_tts(clean);
-    }
-
-    play_voice_browser_tts(text) {
-        if (!("speechSynthesis" in window)) {
-            this.set_voice_state("idle");
-            return;
-        }
-        this.set_voice_state("speaking");
-        window.speechSynthesis.cancel();
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-IN";
-        utterance.rate = 1.0;
-        utterance.pitch = 1.0;
-        utterance.onend = () => {
-            if (this.voiceContinuous && this.voiceState === "speaking") {
-                this.start_voice_recording();
-            } else {
-                this.set_voice_state("idle");
-            }
-        };
-        utterance.onerror = () => this.set_voice_state("idle");
-        window.speechSynthesis.speak(utterance);
-        // Start monitoring mic for user interruption during browser TTS
-        this.start_voice_monitor();
-    }
-
-    play_voice_response(audioUrl) {
-        this.set_voice_state("speaking");
-
-        this.voiceAudio = new Audio(audioUrl);
-
-        // Try to connect to analyser for visualization
-        try {
-            if (!this.voiceAudioCtx || this.voiceAudioCtx.state === "closed") {
-                this.voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            this.voicePlaybackSource = this.voiceAudioCtx.createMediaElementSource(this.voiceAudio);
-            this.voiceAnalyser = this.voiceAudioCtx.createAnalyser();
-            this.voiceAnalyser.fftSize = 256;
-            this.voicePlaybackSource.connect(this.voiceAnalyser);
-            this.voiceAnalyser.connect(this.voiceAudioCtx.destination);
-            this.voice_visualize_playback();
-        } catch (e) {
-            // Fallback: play without visualization
-            console.warn("Could not setup audio visualization:", e);
+            console.warn("Server TTS failed, using browser:", e);
         }
 
-        this.voiceAudio.onended = () => {
-            this.cancel_voice_animation();
-            // Cleanup the TTS file
-            frappe.call({
-                method: "niv_ai.niv_core.api.voice.cleanup_voice_file",
-                args: { file_url: audioUrl },
-            }).catch(() => {});
-
-            if (this.voiceContinuous && this.voiceState === "speaking") {
-                // Auto-start next recording immediately
-                if (this.$voiceOverlay.is(":visible")) {
+        // Browser TTS fallback
+        if ("speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(clean);
+            utterance.lang = "en-IN";
+            utterance.onend = () => {
+                if (this.voiceContinuous && this.$voiceOverlay.is(":visible")) {
                     this.start_voice_recording();
+                } else {
+                    this.set_voice_state("idle");
                 }
-            } else {
-                this.set_voice_state("idle");
-            }
-        };
-
-        this.voiceAudio.onerror = () => {
-            this.set_voice_state("error", "Audio playback failed");
-        };
-
-        this.voiceAudio.play().then(() => {
-            // Start monitoring mic for user interruption during playback
-            this.start_voice_monitor();
-        }).catch((e) => {
-            console.error("Audio play error:", e);
-            this.set_voice_state("error", "Could not play audio");
-        });
+            };
+            utterance.onerror = () => this.set_voice_state("idle");
+            window.speechSynthesis.speak(utterance);
+        } else {
+            this.set_voice_state("idle");
+        }
     }
+
+    // ─── Playback Visualization ────────────────────────────────────
 
     voice_visualize_playback() {
         if (!this.voiceAnalyser || this.voiceState !== "speaking") return;
@@ -3409,23 +3676,20 @@ ${htmlCode}
     }
 
     // ─── Voice Monitor: detect user speech during AI playback ──────
+
     async start_voice_monitor() {
         this.stop_voice_monitor();
         try {
-            if (!this.voiceAudioCtx || this.voiceAudioCtx.state === "closed") {
-                this.voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            }
-            if (this.voiceAudioCtx.state === "suspended") {
-                await this.voiceAudioCtx.resume();
-            }
+            await this._ensureAudioContext();
+
             this.voiceMonitorStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const src = this.voiceAudioCtx.createMediaStreamSource(this.voiceMonitorStream);
             this.voiceMonitorAnalyser = this.voiceAudioCtx.createAnalyser();
             this.voiceMonitorAnalyser.fftSize = 256;
             src.connect(this.voiceMonitorAnalyser);
 
-            const speechThreshold = 25; // voice level to detect speech
-            const speechConfirmMs = 350; // must speak for 350ms to trigger interrupt
+            const speechThreshold = 25;
+            const speechConfirmMs = 350; // Must speak 350ms to trigger interrupt
             this.voiceSpeechDetectedAt = null;
 
             this.voiceMonitorTimer = setInterval(() => {
@@ -3443,6 +3707,7 @@ ${htmlCode}
                         // User is speaking — interrupt AI and start listening
                         console.log("Voice monitor: user speech detected, interrupting AI");
                         this.stop_voice_playback();
+                        this._abortVoiceStream();
                         this.stop_voice_monitor();
                         this.start_voice_recording();
                     }
@@ -3470,12 +3735,7 @@ ${htmlCode}
 
     stop_voice_playback() {
         this.stop_voice_monitor();
-        if (this.voiceAudio) {
-            this.voiceAudio.pause();
-            this.voiceAudio.currentTime = 0;
-            this.voiceAudio.onended = null;
-            this.voiceAudio = null;
-        }
+        this._flushAudioQueue();
         // Also stop browser speechSynthesis if playing
         if ("speechSynthesis" in window) {
             window.speechSynthesis.cancel();
