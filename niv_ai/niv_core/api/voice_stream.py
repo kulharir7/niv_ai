@@ -387,7 +387,7 @@ def _ensure_filler_cache():
 
 # ─── Main Streaming Voice Endpoint ──────────────────────────────────────
 
-@frappe.whitelist(methods=["POST"])
+@frappe.whitelist(methods=["GET", "POST"])
 def stream_voice_chat(**kwargs):
     """Stream voice chat — accepts text, streams audio chunks back via SSE.
 
