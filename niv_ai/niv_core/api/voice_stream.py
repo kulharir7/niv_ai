@@ -434,7 +434,7 @@ def stream_voice_chat(**kwargs):
             "doctype": "Niv Conversation",
             "user": user,
             "title": text[:50],
-            "channel": "voice",
+            "channel": "webchat",
         })
         conv.insert(ignore_permissions=True)
         frappe.db.commit()
@@ -858,7 +858,7 @@ def stream_voice_realtime(**kwargs):
             "doctype": "Niv Conversation",
             "user": user,
             "title": text[:50],
-            "channel": "voice",
+            "channel": "webchat",
         })
         conv.insert(ignore_permissions=True)
         frappe.db.commit()
