@@ -151,10 +151,12 @@ class NivCredits {
                 this.loadBalance();
                 this.loadTransactions();
                 return;
-            } else if (order.demo_mode) {
-                this.openDemoCheckout(order);
+            } else if (order.payment_mode === "erpnext") {
+                frappe.show_alert({ message: order.message || "Order created!", indicator: "green" }, 5);
+                this.loadBalance();
+                this.loadHistory();
             } else {
-                this.openRazorpayCheckout(order);
+                this.openDemoCheckout(order);
             }
         } catch (e) {
             frappe.msgprint({
@@ -187,60 +189,13 @@ class NivCredits {
             setTimeout(() => {
                 this.$demoModal.hide();
                 this.verifyPayment({
-                    razorpay_order_id: order.order_id,
-                    razorpay_payment_id: "demo_pay_" + Date.now(),
-                    razorpay_signature: "demo_sig_" + Date.now(),
+                    order_id: order.order_id,
+                    payment_id: "demo_pay_" + Date.now(),
                 });
             }, 2000);
         });
 
         this.$demoModal.show();
-    }
-
-    openRazorpayCheckout(order) {
-        const doOpen = () => {
-            const self = this;
-            const options = {
-                key: order.razorpay_key,
-                amount: order.amount,
-                currency: order.currency,
-                name: "Niv AI",
-                description: order.plan_name + " \u2014 " + Number(order.tokens).toLocaleString() + " tokens",
-                order_id: order.order_id,
-                prefill: {
-                    email: order.user_email,
-                    name: order.user_name,
-                },
-                theme: { color: "#7C3AED" },
-                handler: function (response) {
-                    self.verifyPayment(response);
-                },
-                modal: {
-                    ondismiss: function () {
-                        frappe.show_alert({ message: "Payment cancelled", indicator: "orange" });
-                    },
-                },
-            };
-            const rzp = new Razorpay(options);
-            rzp.on("payment.failed", function (response) {
-                frappe.msgprint({
-                    title: "Payment Failed",
-                    indicator: "red",
-                    message: response.error.description || "Payment was not completed.",
-                });
-            });
-            rzp.open();
-        };
-
-        if (!window.Razorpay) {
-            const s = document.createElement("script");
-            s.src = "https://checkout.razorpay.com/v1/checkout.js";
-            s.onload = doOpen;
-            s.onerror = () => frappe.msgprint("Failed to load Razorpay SDK");
-            document.head.appendChild(s);
-        } else {
-            doOpen();
-        }
     }
 
     async verifyPayment(response) {
@@ -250,9 +205,9 @@ class NivCredits {
             const data = await frappe.call({
                 method: "niv_ai.niv_billing.api.payment.verify_payment",
                 args: {
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_signature: response.razorpay_signature,
+                    order_id: response.order_id || response.razorpay_order_id,
+                    payment_id: response.payment_id || response.razorpay_payment_id || "",
+                    signature: response.signature || response.razorpay_signature || "",
                 },
             });
 
@@ -325,7 +280,7 @@ class NivCredits {
                 const date = frappe.datetime.str_to_user(r.creation);
                 const statusClass = "status-" + (r.status || "").toLowerCase();
                 const isDemo = (r.transaction_type === "demo" || (r.remarks && r.remarks.includes("[DEMO]")));
-                const paymentId = r.payment_id || r.razorpay_payment_id || "\u2014";
+                const paymentId = r.payment_id || "\u2014";
 
                 const tr = document.createElement("tr");
                 tr.innerHTML =

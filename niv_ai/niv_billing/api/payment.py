@@ -2,47 +2,27 @@ import frappe
 from frappe import _
 from frappe.utils import now_datetime, flt
 import json
-import hashlib
-import hmac
-import time
 import random
 import string
 from niv_ai.niv_core.compat import db_set_single_value
 
 
 def _get_payment_mode():
-    """Detect payment mode: 'erpnext' | 'razorpay' | 'demo'"""
+    """Detect payment mode: 'erpnext' | 'demo'"""
     settings = frappe.get_single("Niv Settings")
-    
-    # ERPNext billing takes priority if configured
+
+    # ERPNext billing if configured
     erp_url = getattr(settings, "billing_erp_url", None)
     erp_key = getattr(settings, "billing_erp_api_key", None)
     if erp_url and erp_key:
         return "erpnext"
-    
-    # Razorpay if keys configured
-    key_id = settings.razorpay_key_id
-    key_secret = settings.get_password("razorpay_key_secret") if settings.razorpay_key_secret else None
-    if key_id and key_secret and key_id.startswith("rzp_"):
-        return "razorpay"
-    
+
     return "demo"
 
 
 def _is_demo_mode():
     """Returns True if no real payment gateway configured"""
     return _get_payment_mode() == "demo"
-
-
-def _get_razorpay_client():
-    """Get authenticated Razorpay client. Only call when NOT in demo mode."""
-    import razorpay
-    settings = frappe.get_single("Niv Settings")
-    key_id = settings.razorpay_key_id
-    key_secret = settings.get_password("razorpay_key_secret")
-    if not key_id or not key_secret:
-        frappe.throw(_("Razorpay credentials not configured."))
-    return razorpay.Client(auth=(key_id, key_secret)), settings
 
 
 @frappe.whitelist(allow_guest=False)
@@ -68,10 +48,9 @@ def get_plans():
 @frappe.whitelist(allow_guest=False)
 def create_order(plan_name):
     """Create a payment order for a credit plan.
-    
-    Supports 3 modes:
+
+    Supports 2 modes:
     - erpnext: Creates Sales Order on vendor's ERPNext via REST API
-    - razorpay: Creates Razorpay payment order
     - demo: Fake order for testing
     """
     plan = frappe.get_doc("Niv Credit Plan", plan_name)
@@ -113,8 +92,6 @@ def create_order(plan_name):
 
     if payment_mode == "erpnext":
         return _create_erpnext_order(plan, user, settings, currency)
-    elif payment_mode == "razorpay":
-        return _create_razorpay_order(plan, user, settings, currency, amount_paise)
     else:
         return _create_demo_order(plan, user, currency)
 
@@ -129,10 +106,8 @@ def _create_erpnext_order(plan, user, settings, currency):
     customer = getattr(settings, "billing_erp_customer", None) or "Niv AI Customer"
     item_code = getattr(settings, "billing_erp_item", None) or "Niv AI Token Recharge"
 
-    # Our site URL for webhook callback
     site_url = frappe.utils.get_url()
 
-    # Create Sales Order on vendor ERPNext
     so_data = {
         "doctype": "Sales Order",
         "customer": customer,
@@ -168,7 +143,6 @@ def _create_erpnext_order(plan, user, settings, currency):
         frappe.log_error(f"ERPNext Sales Order creation failed: {e}", "Niv Billing ERPNext")
         frappe.throw(_("Failed to create recharge order. Please try again."))
 
-    # Save pending recharge record locally
     recharge = frappe.get_doc({
         "doctype": "Niv Recharge",
         "user": user,
@@ -177,7 +151,7 @@ def _create_erpnext_order(plan, user, settings, currency):
         "plan": plan.name,
         "amount": plan.price,
         "currency": currency,
-        "razorpay_order_id": so_name,  # Reuse field for SO reference
+        "razorpay_order_id": so_name,
         "status": "Pending",
         "remarks": f"Recharge: {plan.plan_name} | SO: {so_name} (vendor ERPNext)",
     })
@@ -192,53 +166,6 @@ def _create_erpnext_order(plan, user, settings, currency):
         "tokens": plan.tokens,
         "amount": int(flt(plan.price) * 100),
         "currency": currency,
-    }
-
-
-def _create_razorpay_order(plan, user, settings, currency, amount_paise):
-    """Create Razorpay payment order."""
-    client, settings = _get_razorpay_client()
-    receipt = f"niv_{frappe.generate_hash(length=12)}"
-    try:
-        order = client.order.create({
-            "amount": amount_paise,
-            "currency": currency,
-            "receipt": receipt,
-            "notes": {
-                "user": user,
-                "plan": plan.name,
-                "tokens": str(plan.tokens),
-            }
-        })
-        order_id = order["id"]
-    except Exception as e:
-        frappe.log_error(f"Razorpay order creation failed: {e}", "Razorpay Error")
-        frappe.throw(_("Failed to create payment order. Please try again."))
-
-    frappe.get_doc({
-        "doctype": "Niv Recharge",
-        "user": user,
-        "tokens": int(plan.tokens),
-        "transaction_type": "razorpay",
-        "plan": plan.name,
-        "amount": plan.price,
-        "currency": currency,
-        "razorpay_order_id": order_id,
-        "status": "Pending",
-        "remarks": f"Recharge: {plan.plan_name}",
-    }).insert(ignore_permissions=True)
-    frappe.db.commit()
-
-    return {
-        "order_id": order_id,
-        "payment_mode": "razorpay",
-        "amount": amount_paise,
-        "currency": currency,
-        "plan_name": plan.plan_name,
-        "tokens": plan.tokens,
-        "razorpay_key": settings.razorpay_key_id,
-        "user_email": user,
-        "user_name": frappe.get_value("User", user, "full_name") or user,
     }
 
 
@@ -268,7 +195,6 @@ def _create_demo_order(plan, user, currency):
         "currency": currency,
         "plan_name": plan.plan_name,
         "tokens": plan.tokens,
-        "razorpay_key": "demo_key_not_real",
         "user_email": user,
         "user_name": frappe.get_value("User", user, "full_name") or user,
         "demo_mode": True,
@@ -278,17 +204,10 @@ def _create_demo_order(plan, user, currency):
 @frappe.whitelist(allow_guest=True)
 def erpnext_webhook(**kwargs):
     """Webhook callback from vendor's ERPNext when Sales Order is submitted.
-    
+
     Called via ERPNext Webhook (DocType: Sales Order, Event: on_submit).
     Verifies the request and credits tokens to the shared pool.
-    
-    Expected POST data (from ERPNext webhook body):
-        - name: Sales Order name (e.g., SO-00123)
-        - custom_niv_recharge_tokens: number of tokens to credit
-        - custom_niv_plan: plan name
-        - webhook_secret: shared secret for verification
     """
-    # Parse webhook data
     data = frappe.form_dict
     if not data:
         try:
@@ -315,7 +234,7 @@ def erpnext_webhook(**kwargs):
         frappe.log_error(f"ERPNext webhook secret mismatch for SO {so_name}", "Niv Billing Webhook")
         frappe.throw(_("Unauthorized webhook request"), frappe.AuthenticationError)
 
-    # Find the pending recharge record
+    # Find pending recharge
     recharge_name = frappe.db.get_value(
         "Niv Recharge",
         {"razorpay_order_id": so_name, "status": "Pending"},
@@ -323,8 +242,6 @@ def erpnext_webhook(**kwargs):
     )
 
     if not recharge_name:
-        # No pending record — might be a direct credit (admin initiated from vendor side)
-        # Create a new recharge record
         recharge = frappe.get_doc({
             "doctype": "Niv Recharge",
             "user": "Administrator",
@@ -337,13 +254,10 @@ def erpnext_webhook(**kwargs):
         })
         recharge.insert(ignore_permissions=True)
         recharge_name = recharge.name
-    
-    recharge = frappe.get_doc("Niv Recharge", recharge_name)
 
-    # Credit tokens
+    recharge = frappe.get_doc("Niv Recharge", recharge_name)
     result = _credit_tokens(recharge)
 
-    # Mark as completed
     recharge.status = "Completed"
     recharge.payment_id = f"erp_webhook_{so_name}"
     recharge.balance_after = result["new_balance"]
@@ -360,48 +274,41 @@ def erpnext_webhook(**kwargs):
 
 
 @frappe.whitelist(allow_guest=False)
-def verify_payment(razorpay_order_id, razorpay_payment_id, razorpay_signature):
-    """Verify payment signature.
-    Demo mode: auto-verify. Real mode: verify Razorpay signature."""
-    demo_mode = _is_demo_mode()
+def verify_payment(order_id, payment_id="", signature="", **kwargs):
+    """Verify payment and credit tokens.
 
-    # Find the pending recharge
+    Demo mode: auto-verify.
+    ERPNext mode: verified via webhook (this is fallback).
+
+    Also accepts legacy razorpay_order_id/razorpay_payment_id kwargs for backward compat.
+    """
+    # Backward compat: accept old razorpay_* param names
+    order_id = order_id or kwargs.get("razorpay_order_id", "")
+    payment_id = payment_id or kwargs.get("razorpay_payment_id", "")
+
+    # Find pending recharge
     recharge_name = frappe.db.get_value(
         "Niv Recharge",
-        {"razorpay_order_id": razorpay_order_id, "status": "Pending"},
+        {"razorpay_order_id": order_id, "status": "Pending"},
         "name"
     )
+    # Backward compat: also check razorpay_order_id field
+    if not recharge_name:
+        recharge_name = frappe.db.get_value(
+            "Niv Recharge",
+            {"razorpay_order_id": order_id, "status": "Pending"},
+            "name"
+        )
     if not recharge_name:
         frappe.throw(_("Order not found or already processed."))
 
     recharge = frappe.get_doc("Niv Recharge", recharge_name)
 
-    if demo_mode:
-        # Demo mode: auto-verify (always pass)
-        pass
-    else:
-        # Real Razorpay verification
-        client, settings = _get_razorpay_client()
-        try:
-            client.utility.verify_payment_signature({
-                "razorpay_order_id": razorpay_order_id,
-                "razorpay_payment_id": razorpay_payment_id,
-                "razorpay_signature": razorpay_signature,
-            })
-        except Exception:
-            recharge.status = "Failed"
-            recharge.razorpay_payment_id = razorpay_payment_id
-            recharge.save(ignore_permissions=True)
-            frappe.db.commit()
-            frappe.throw(_("Payment verification failed. If amount was deducted, it will be refunded."))
-
     # Credit tokens
     result = _credit_tokens(recharge)
 
-    # Update recharge record
     recharge.status = "Completed"
-    recharge.razorpay_payment_id = razorpay_payment_id
-    recharge.razorpay_signature = razorpay_signature
+    recharge.payment_id = payment_id
     recharge.balance_after = result["new_balance"]
     recharge.save(ignore_permissions=True)
     frappe.db.commit()
@@ -411,11 +318,11 @@ def verify_payment(razorpay_order_id, razorpay_payment_id, razorpay_signature):
         "tokens_added": recharge.tokens,
         "new_balance": result["new_balance"],
         "mode": result["mode"],
-        "demo_mode": demo_mode,
+        "demo_mode": _is_demo_mode(),
     }
 
 
-# Alias for backward compat
+# Backward compat aliases
 process_payment = verify_payment
 
 
@@ -467,5 +374,5 @@ def get_recharge_history(page=1, page_size=20):
     }
 
 
-# Keep backward compat alias
+# Backward compat alias
 get_payment_history = get_recharge_history
