@@ -39,13 +39,7 @@
     "token_cost_input",
     "token_cost_output",
     "column_break_billing",
-    "razorpay_enabled",
-    "payment_gateway_section",
-    "razorpay_key_id",
-    "razorpay_key_secret",
-    "column_break_payment",
     "payment_currency",
-    "razorpay_webhook_secret",
     "currency",
     "voice_section",
     "enable_voice",
@@ -291,43 +285,10 @@
       "fieldtype": "Column Break"
     },
     {
-      "fieldname": "razorpay_enabled",
-      "fieldtype": "Check",
-      "label": "Enable Razorpay Payments",
-      "default": "0"
-    },
-    {
-      "fieldname": "payment_gateway_section",
-      "fieldtype": "Section Break",
-      "label": "Payment Gateway",
-      "description": "Configure Razorpay keys for real payments. Leave empty for demo mode (fake payments for testing)."
-    },
-    {
-      "fieldname": "razorpay_key_id",
-      "fieldtype": "Data",
-      "label": "Razorpay Key ID",
-      "description": "Leave empty for demo mode"
-    },
-    {
-      "fieldname": "razorpay_key_secret",
-      "fieldtype": "Password",
-      "label": "Razorpay Key Secret",
-      "description": "Leave empty for demo mode"
-    },
-    {
-      "fieldname": "column_break_payment",
-      "fieldtype": "Column Break"
-    },
-    {
       "fieldname": "payment_currency",
       "fieldtype": "Data",
       "label": "Payment Currency",
       "default": "INR"
-    },
-    {
-      "fieldname": "razorpay_webhook_secret",
-      "fieldtype": "Password",
-      "label": "Razorpay Webhook Secret"
     },
     {
       "fieldname": "erp_billing_section",
