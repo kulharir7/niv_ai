@@ -15,8 +15,7 @@ import uuid
 import asyncio
 import hashlib
 import time
-from concurrent.futures import ThreadPoolExecutor
-from typing import Generator, Optional
+from typing import List, Optional
 
 import frappe
 from frappe import _
@@ -51,7 +50,8 @@ MAX_CHUNK_CHARS = 200
 SENTENCE_ENDS = frozenset({".", "?", "!", "।", "。"})
 
 # Clause-breaking punctuation (commas, semicolons, etc.)
-CLAUSE_BREAKS = frozenset({",", ";", ":", "—", "–", "।"})
+# Note: । (Devanagari danda) is in SENTENCE_ENDS only — it's a full stop in Hindi.
+CLAUSE_BREAKS = frozenset({",", ";", ":", "—", "–"})
 
 # Common filler phrases pre-cached for instant playback.
 # Maps language → list of (trigger_context, phrase) tuples.
@@ -65,9 +65,6 @@ FILLER_PHRASES = {
 # Redis key prefix for cached TTS audio
 CACHE_KEY_PREFIX = "niv_voice_cache:"
 CACHE_TTL_SECONDS = 3600  # 1 hour
-
-# Thread pool for parallel TTS generation
-_tts_executor = ThreadPoolExecutor(max_workers=3)
 
 
 # ─── Clause-level Smart Chunker ─────────────────────────────────────────
@@ -104,9 +101,9 @@ class ClauseChunker:
         self._in_code_block: bool = False
         self._backtick_count: int = 0
 
-    def feed(self, token: str) -> list[str]:
+    def feed(self, token: str) -> List[str]:
         """Feed a token, return list of ready clauses (0 or more)."""
-        clauses: list[str] = []
+        clauses: List[str] = []
 
         for char in token:
             # Track code block fences (``` ... ```)
@@ -152,9 +149,10 @@ class ClauseChunker:
         return clauses
 
     def flush(self) -> Optional[str]:
-        """Flush remaining buffer. Call when stream ends."""
+        """Flush remaining buffer. Call when stream ends.
+        Uses full TTS cleaning (from voice.py) for the final chunk."""
         if self._buffer.strip():
-            clause = self._clean(self._buffer)
+            clause = clean_text_for_tts(self._buffer)
             self._buffer = ""
             return clause if clause else None
         return None
@@ -231,10 +229,12 @@ def _detect_language(text: str) -> str:
     hindi_ratio = hindi_chars / total_alpha
 
     # Also check for Romanized Hindi keywords
+    # Note: "main" excluded — ambiguous (English "main" vs Hindi "I")
     hindi_words = {
-        "kya", "hai", "haan", "nahi", "aap", "main", "kaise", "mera",
+        "kya", "hai", "haan", "nahi", "aap", "kaise", "mera",
         "tera", "yeh", "woh", "kaisa", "kitna", "kaha", "kyun", "abhi",
         "acha", "theek", "bahut", "zyada", "kam", "bada", "chhota",
+        "mujhe", "humara", "tumhara", "bhai", "dost", "paisa",
     }
     words = set(text.lower().split())
     romanized_hindi = len(words & hindi_words)
@@ -305,12 +305,12 @@ def _generate_tts_chunk(text: str, voice: str) -> Optional[dict]:
         frappe.logger().warning("edge_tts not installed — cannot generate streaming TTS")
         return None
 
-    try:
-        output_path = os.path.join(
-            frappe.get_site_path("private", "files"),
-            f"niv_stream_tts_{uuid.uuid4().hex[:12]}.mp3",
-        )
+    output_path = os.path.join(
+        frappe.get_site_path("private", "files"),
+        f"niv_stream_tts_{uuid.uuid4().hex[:12]}.mp3",
+    )
 
+    try:
         # Run Edge TTS (async → sync bridge)
         async def _gen():
             communicate = edge_tts.Communicate(text, voice)
@@ -370,12 +370,11 @@ def _generate_tts_chunk(text: str, voice: str) -> Optional[dict]:
 def _ensure_filler_cache():
     """Pre-generate and cache filler phrases on first use."""
     for key, phrase in FILLER_PHRASES.items():
-        lang = "hi" if key.endswith("_en") is False and any(
-            "\u0900" <= c <= "\u097F" for c in phrase
-        ) else "en"
-        # Use romanized Hindi detection for filler phrases
-        if "kar raha" in phrase or "Sochta" in phrase or "kijiye" in phrase:
-            lang = "hi"
+        # Explicit language mapping — _en suffix = English, otherwise detect
+        if key.endswith("_en"):
+            lang = "en"
+        else:
+            lang = _detect_language(phrase)
         voice = _get_edge_voice(lang)
         cache_key = _compute_cache_key(phrase, voice)
         if not _get_cached_audio(cache_key):
@@ -479,7 +478,6 @@ def stream_voice_chat(**kwargs):
 
             # Initialize chunker
             chunker = ClauseChunker()
-            pending_tts_futures = []  # For prefetch: (future, text, voice)
             last_db_check = time.time()
 
             def ensure_db():

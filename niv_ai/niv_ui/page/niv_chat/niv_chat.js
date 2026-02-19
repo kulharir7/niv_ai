@@ -3168,13 +3168,24 @@ ${htmlCode}
     }
 
     _browserTTSChunk(text) {
-        /* Fallback: speak a single chunk via browser speechSynthesis. */
-        if (!text || !("speechSynthesis" in window)) return;
+        /* Fallback: speak a single chunk via browser speechSynthesis.
+           Sets _audioPlaying to prevent concurrent playback. */
+        if (!text || !("speechSynthesis" in window)) {
+            // Can't speak — skip and continue queue
+            this._playNextChunk();
+            return;
+        }
+        this._audioPlaying = true; // Block queue from double-playing
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = "en-IN";
         utterance.rate = 1.0;
         utterance.onend = () => {
+            this._audioPlaying = false;
             // Continue queue after browser TTS finishes
+            this._playNextChunk();
+        };
+        utterance.onerror = () => {
+            this._audioPlaying = false;
             this._playNextChunk();
         };
         window.speechSynthesis.speak(utterance);
