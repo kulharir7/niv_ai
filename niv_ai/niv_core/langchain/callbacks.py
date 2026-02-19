@@ -84,10 +84,11 @@ class NivBillingCallback(BaseCallbackHandler):
     commits once at the end via finalize().
     """
 
-    def __init__(self, user: str, conversation_id: str, prompt_text: str = None):
+    def __init__(self, user: str, conversation_id: str, prompt_text: str = None, model: str = None):
         self.user = user
         self.conversation_id = conversation_id
         self.prompt_text = prompt_text
+        self.model = model
         self.total_prompt_tokens = 0
         self.total_completion_tokens = 0
         self._finalized = False
@@ -158,6 +159,7 @@ class NivBillingCallback(BaseCallbackHandler):
                 input_tokens=self.total_prompt_tokens,
                 output_tokens=self.total_completion_tokens,
                 conversation=self.conversation_id,
+                model=self.model,
             )
         except Exception as e:
             try:

@@ -158,9 +158,13 @@ def create_niv_agent(
 
     user = user or frappe.session.user
 
+    # Resolve actual model name for billing
+    settings = get_niv_settings()
+    resolved_model = model or settings.default_model or "unknown"
+
     # Callbacks
     stream_cb = NivStreamingCallback(conversation_id or "")
-    billing_cb = NivBillingCallback(user, conversation_id or "", prompt_text=prompt_text)
+    billing_cb = NivBillingCallback(user, conversation_id or "", prompt_text=prompt_text, model=resolved_model)
     logging_cb = NivLoggingCallback(user, conversation_id or "")
     all_callbacks = [stream_cb, billing_cb, logging_cb]
 
