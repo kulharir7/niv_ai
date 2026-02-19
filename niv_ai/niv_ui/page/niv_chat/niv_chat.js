@@ -2381,6 +2381,18 @@ ${htmlCode}
                                 if ($msgEl && fullContent) {
                                     this.add_export_buttons($msgEl, fullContent);
                                 }
+                                // Auto-update pending artifact with streamed content
+                                if (this._pendingArtifactId && fullContent) {
+                                    let htmlContent = fullContent;
+                                    const htmlMatch = fullContent.match(/```(?:html)?\s*([\s\S]*?)```/);
+                                    if (htmlMatch && htmlMatch[1]) {
+                                        htmlContent = htmlMatch[1].trim();
+                                    }
+                                    if (htmlContent.includes("<") || htmlContent.includes("{")) {
+                                        this.update_artifact_with_code(this._pendingArtifactId, htmlContent);
+                                    }
+                                    this._pendingArtifactId = null;
+                                }
                                 this.load_messages(conv_id); // Refresh to get final saved state
                             }
                             resolve();
