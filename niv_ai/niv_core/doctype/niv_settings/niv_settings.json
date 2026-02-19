@@ -321,13 +321,15 @@
       "fieldname": "billing_erp_customer",
       "fieldtype": "Data",
       "label": "Customer Name",
-      "description": "Customer name on vendor ERPNext (e.g. MDFC Financiers)"
+      "default": "Niv AI Customer",
+      "description": "Customer name on Growth ERPNext (must exist there)"
     },
     {
       "fieldname": "billing_erp_item",
       "fieldtype": "Data",
       "label": "Item Code",
-      "description": "Item code for token recharge on vendor ERPNext"
+      "default": "Niv AI Token Recharge",
+      "description": "Item code on Growth ERPNext (must exist there)"
     },
     {
       "fieldname": "billing_erp_webhook_secret",
