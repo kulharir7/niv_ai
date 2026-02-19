@@ -29,6 +29,15 @@ _QUESTION_WORDS = frozenset({
 })
 
 
+def _check_rate_limit(user=None):
+    """Rate limit check - uses settings if configured."""
+    try:
+        from niv_ai.niv_core.utils.rate_limiter import check_rate_limit
+        check_rate_limit(user)
+    except ImportError:
+        pass
+
+
 def _is_simple_query(message: str) -> bool:
     """Detect simple queries that don't need a powerful model."""
     msg = (message or "").strip().lower()
