@@ -484,9 +484,13 @@ def stream_voice_chat(**kwargs):
             """TTS worker thread — consumes clauses, generates audio, pushes to output.
 
             Runs in background. Generates Edge TTS for each clause independently.
-            Uses prefetch: starts generating next chunk while current is being sent.
+            IMPORTANT: Must init its own Frappe context — threads don't inherit it.
             """
             try:
+                # Each thread needs its own Frappe context for DB/cache access
+                frappe.init(site=_site_name)
+                frappe.connect()
+
                 while True:
                     item = tts_queue.get(timeout=60)
                     if item is None:  # Poison pill — shutdown signal
@@ -498,6 +502,16 @@ def stream_voice_chat(**kwargs):
                         clause_text = item["text"]
                         idx = item["index"]
                         chunk_voice = item["voice"]
+
+                        # Ensure DB alive for cache access
+                        try:
+                            frappe.db.sql("SELECT 1")
+                        except Exception:
+                            try:
+                                frappe.db.connect()
+                            except Exception:
+                                frappe.init(site=_site_name)
+                                frappe.connect()
 
                         tts_result = _generate_tts_chunk(clause_text, chunk_voice)
 
@@ -546,6 +560,11 @@ def stream_voice_chat(**kwargs):
                 }))
             finally:
                 tts_thread_done.set()
+                # Clean up thread's DB connection
+                try:
+                    frappe.db.close()
+                except Exception:
+                    pass
 
         try:
             # Re-init Frappe context inside generator
@@ -580,7 +599,7 @@ def stream_voice_chat(**kwargs):
 
             def ensure_db():
                 nonlocal last_db_check
-                if time.time() - last_db_check > 30:
+                if time.time() - last_db_check > 10:  # Check every 10s (streaming is fast)
                     try:
                         frappe.db.sql("SELECT 1")
                     except Exception:
