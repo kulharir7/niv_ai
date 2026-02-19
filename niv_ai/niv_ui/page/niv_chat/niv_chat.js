@@ -3489,7 +3489,7 @@ ${htmlCode}
             // Start SSE stream to streaming voice endpoint
             await this._startVoiceStream(transcript);
         } catch (err) {
-            console.error("Voice stream error:", err);
+            console.error("Voice stream error — falling back to sequential:", err?.message || err);
 
             // Fallback to old sequential method
             await this._fallbackVoiceChat(transcript);
@@ -3511,13 +3511,12 @@ ${htmlCode}
                 "Content-Type": "application/json",
                 "Accept": "text/event-stream",
                 "X-Frappe-CSRF-Token": frappe.csrf_token,
-                "X-Requested-With": "XMLHttpRequest",
             },
             body: JSON.stringify({
                 text: transcript,
                 conversation_id: conversationId,
             }),
-            credentials: "same-origin",
+            credentials: "include",
         });
 
         if (!response.ok) {
