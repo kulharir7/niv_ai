@@ -220,9 +220,117 @@ EOF
 
 log "Roles configured"
 
-# ─── Step 7: Nginx SSE config hint ──────────────────────
+# ─── Step 7: Nginx SSE config ────────────────────────────
 
-step "Step 7/7: Final setup"
+step "Step 7/8: Configuring Nginx for SSE streaming"
+
+# Find nginx config for this site
+NGINX_CONF=""
+for f in /etc/nginx/conf.d/*.conf /etc/nginx/sites-enabled/*; do
+    if [ -f "$f" ] && grep -q "$SITE" "$f" 2>/dev/null; then
+        NGINX_CONF="$f"
+        break
+    fi
+done
+
+# Also check bench-generated config
+if [ -z "$NGINX_CONF" ] && [ -f "$BENCH_PATH/config/nginx.conf" ]; then
+    NGINX_CONF="$BENCH_PATH/config/nginx.conf"
+fi
+
+NIV_SSE_BLOCK='
+	# Niv AI SSE streaming — auto-configured by setup.sh
+	location /api/method/niv_ai.niv_core.api.stream.stream_chat {
+		proxy_pass http://frappe-bench-frappe;
+		proxy_buffering off;
+		proxy_cache off;
+		proxy_read_timeout 300s;
+		proxy_connect_timeout 75s;
+		proxy_set_header X-Accel-Buffering no;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_http_version 1.1;
+		proxy_set_header Connection "";
+	}
+
+	location /api/method/niv_ai.niv_core.api.voice_stream.stream_voice {
+		proxy_pass http://frappe-bench-frappe;
+		proxy_buffering off;
+		proxy_cache off;
+		proxy_read_timeout 300s;
+		proxy_set_header X-Accel-Buffering no;
+		proxy_set_header Host $host;
+		proxy_set_header X-Real-IP $remote_addr;
+		proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+		proxy_set_header X-Forwarded-Proto $scheme;
+		proxy_http_version 1.1;
+		proxy_set_header Connection "";
+	}
+'
+
+NGINX_CONFIGURED=false
+
+if [ -n "$NGINX_CONF" ]; then
+    # Check if already configured
+    if grep -q "niv_ai.*stream" "$NGINX_CONF" 2>/dev/null; then
+        log "Nginx SSE already configured in $NGINX_CONF"
+        NGINX_CONFIGURED=true
+    else
+        # Try to inject before the last closing brace of the server block
+        # We need sudo for nginx config
+        if [ -w "$NGINX_CONF" ] || command -v sudo &>/dev/null; then
+            # Create a temp file with the SSE block injected
+            # Find the line with "location /api" (first Frappe API location) and inject before it
+            INJECT_LINE=$(grep -n "location /api {" "$NGINX_CONF" 2>/dev/null | head -1 | cut -d: -f1)
+            
+            if [ -n "$INJECT_LINE" ]; then
+                # Backup original
+                sudo cp "$NGINX_CONF" "${NGINX_CONF}.bak.niv" 2>/dev/null || cp "$NGINX_CONF" "${NGINX_CONF}.bak.niv" 2>/dev/null
+                
+                # Inject SSE block before the generic /api location
+                sudo sed -i "${INJECT_LINE}i\\${NIV_SSE_BLOCK}" "$NGINX_CONF" 2>/dev/null || \
+                    sed -i "${INJECT_LINE}i\\${NIV_SSE_BLOCK}" "$NGINX_CONF" 2>/dev/null
+                
+                # Test nginx config
+                if sudo nginx -t 2>/dev/null; then
+                    sudo nginx -s reload 2>/dev/null
+                    log "Nginx SSE configured and reloaded"
+                    NGINX_CONFIGURED=true
+                else
+                    # Restore backup
+                    sudo cp "${NGINX_CONF}.bak.niv" "$NGINX_CONF" 2>/dev/null
+                    sudo nginx -s reload 2>/dev/null
+                    warn "Nginx config injection failed — restored backup"
+                fi
+            else
+                warn "Could not find injection point in $NGINX_CONF"
+            fi
+        else
+            warn "No write access to $NGINX_CONF — need sudo"
+        fi
+    fi
+else
+    # No nginx conf found — try bench setup nginx
+    if command -v bench &>/dev/null; then
+        bench setup nginx --yes 2>/dev/null && {
+            # Now find the generated config and patch it
+            if [ -f "$BENCH_PATH/config/nginx.conf" ]; then
+                NGINX_CONF="$BENCH_PATH/config/nginx.conf"
+                # Append SSE block to the config
+                echo "$NIV_SSE_BLOCK" | sudo tee -a /etc/nginx/conf.d/frappe-bench.conf >/dev/null 2>&1
+                sudo nginx -t 2>/dev/null && sudo nginx -s reload 2>/dev/null
+                log "Nginx generated and SSE configured"
+                NGINX_CONFIGURED=true
+            fi
+        } || warn "bench setup nginx failed"
+    fi
+fi
+
+# ─── Step 8: Final ──────────────────────────────────────
+
+step "Step 8/8: Final setup"
 
 # Clear cache
 bench --site "$SITE" clear-cache 2>/dev/null || true
@@ -230,7 +338,7 @@ log "Cache cleared"
 
 # Restart
 bench restart 2>/dev/null || {
-    warn "bench restart failed (may need sudo). Try: sudo supervisorctl restart all"
+    sudo supervisorctl restart all 2>/dev/null || warn "Restart failed — run: sudo supervisorctl restart all"
 }
 
 echo ""
@@ -238,28 +346,35 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}  ✅ Niv AI v1.0.0 installed successfully!${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "  Open:  https://$SITE/app/niv-chat"
+echo "  Chat:     https://$SITE/app/niv-chat"
 echo "  Settings: https://$SITE/app/niv-settings"
 echo ""
 
 if [ -n "$API_KEY" ]; then
-    echo "  Provider: configured ✓"
-    echo "  Model: $MODEL"
+    echo "  Provider:   configured ✓"
+    echo "  Model:      $MODEL"
     echo "  Fast Model: $FAST_MODEL"
-    echo "  Billing: Demo mode (10M tokens)"
+    echo "  Billing:    Demo mode (10M free tokens)"
 else
     echo -e "  ${YELLOW}⚠ Configure AI Provider at /app/niv-settings${NC}"
 fi
 
+if [ "$NGINX_CONFIGURED" = true ]; then
+    echo "  Nginx SSE:  configured ✓"
+else
+    echo ""
+    echo -e "  ${YELLOW}⚠ Nginx SSE not auto-configured. Add manually:${NC}"
+    echo ""
+    echo "  location /api/method/niv_ai.niv_core.api.stream.stream_chat {"
+    echo "      proxy_buffering off;"
+    echo "      proxy_cache off;"
+    echo "      proxy_read_timeout 300s;"
+    echo "      add_header X-Accel-Buffering no;"
+    echo "  }"
+    echo ""
+    echo "  Then: sudo nginx -t && sudo nginx -s reload"
+fi
+
 echo ""
-echo -e "  ${YELLOW}⚠ IMPORTANT: Add this to your nginx config for streaming:${NC}"
-echo ""
-echo "  location /api/method/niv_ai.niv_core.api.stream.stream_chat {"
-echo "      proxy_buffering off;"
-echo "      proxy_cache off;"
-echo "      proxy_read_timeout 300s;"
-echo "      add_header X-Accel-Buffering no;"
-echo "  }"
-echo ""
-echo "  Then: sudo nginx -t && sudo nginx -s reload"
+echo "  Ready to use! Open /app/niv-chat and start chatting."
 echo ""
