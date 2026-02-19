@@ -1,6 +1,5 @@
 # Core LLM
 openai>=1.0.0
-litellm>=1.40.0
 tiktoken>=0.7.0
 
 # LangChain Stack
@@ -10,21 +9,20 @@ langchain-openai>=0.3.0
 langchain-community>=0.3.0
 langgraph>=0.3.0
 
-# Google ADK (Agent Development Kit)
-google-adk>=1.25.0
-google-genai>=1.63.0
+# Optional: Anthropic/Google providers (install manually if needed)
+# langchain-anthropic>=1.0.0
+# langchain-google-genai>=2.0.0
 
-# MCP (Model Context Protocol)
-mcp>=1.26.0
+# MCP (Model Context Protocol) - for remote MCP servers only
+# Same-server (FAC) uses direct Python calls, no SDK needed
 langchain-mcp-adapters>=0.1.0
 
-# Vector Store
+# Vector Store (for RAG/knowledge base)
 faiss-cpu>=1.7.0
 
 # Document Processing
 pdfplumber>=0.10.0
 python-docx>=1.0.0
-pytesseract>=0.3.10
 Pillow>=10.0.0
 
 # Data Processing
@@ -32,14 +30,9 @@ pandas>=2.0.0
 openpyxl>=3.1.0
 numpy>=1.24.0
 
-# Payments
-razorpay>=1.4.0
-
-# TTS
+# TTS (Voice mode)
 edge-tts>=6.1.0
 
 # Utils
 pydantic>=2.0.0
 httpx>=0.27.0
-aiohttp>=3.9.0
-python-dotenv>=1.0.0

@@ -1,3 +1,36 @@
+## [0.9.2] - 2026-02-19
+
+### ⚡ Performance & Reliability
+
+#### Two-Model Tool Optimization
+- **Fast model** (mistral-small) for tool selection (~1-2s) + **big model** for final answer streaming
+- **~50% faster** tool-calling queries (7-10s vs 15-20s)
+- Automatic fallback to single-model if fast model fails or not configured
+
+#### Streaming Token Fix
+- **Fixed missing spaces** between words — `_strip_thinking()` was stripping whitespace from each streaming token
+- Words like "TheLoan", "ShouldI" now render correctly with proper spacing
+
+#### DB Connection Resilience
+- **Auto-retry** on FAC tool call DB errors — FAC has no internal reconnect, now retried once automatically
+- System prompt instruction to never output tool calls as raw text
+
+#### Voice Streaming (Producer-Consumer)
+- Background TTS thread decouples LLM streaming from Edge TTS generation
+- LLM continues producing clauses while TTS generates audio in parallel
+
+#### UI Improvements
+- **Close button** added to chat header (rightmost, after delete)
+- **Softer widget background** — `#f5f6f8` instead of pure white
+- Widget mode less harsh on eyes
+
+#### Cleanup
+- Removed unused dependencies: `litellm`, `google-adk`, `google-genai`, `aiohttp`, `python-dotenv`, `razorpay`, `pytesseract`
+- Synced versions across `__init__.py`, `hooks.py`, `setup.py`, `pyproject.toml`
+- Requirements.txt trimmed to actual dependencies only
+
+---
+
 ## [0.9.0] - 2026-02-18
 
 ### 🔧 MCP Tools Optimization & UI Overhaul
