@@ -290,6 +290,14 @@ class NivChat {
         // Artifact panel resize handle
         this.init_artifact_resize();
 
+        this.wrapper.find(".btn-close-chat").on("click", () => {
+            // Go back to previous page or home
+            if (window.history.length > 1) {
+                window.history.back();
+            } else {
+                frappe.set_route("");
+            }
+        });
         this.wrapper.find(".btn-share-chat").on("click", () => this.share_conversation());
         this.wrapper.find(".btn-delete-chat").on("click", () => this.delete_conversation());
         this.wrapper.find(".btn-rename-chat").on("click", () => this.rename_conversation());
