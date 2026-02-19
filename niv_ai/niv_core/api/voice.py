@@ -26,13 +26,23 @@ def clean_text_for_tts(text):
 
     t = text
 
+    # Remove thinking/reasoning blocks (all formats)
+    t = re.sub(r'<think>[\s\S]*?</think>', '', t)
+    t = re.sub(r'<reasoning>[\s\S]*?</reasoning>', '', t)
+    t = re.sub(r'\[\[THOUGHT\]\][\s\S]*?\[\[/THOUGHT\]\]', '', t)
+    t = re.sub(r'\[\[THINKING\]\][\s\S]*?\[\[/THINKING\]\]', '', t)
+    t = re.sub(r'(?m)^Thought:.*$', '', t)
+    t = re.sub(r'(?m)^Action:.*$', '', t)
+    t = re.sub(r'(?m)^Action Input:.*$', '', t)
+    t = re.sub(r'(?m)^Observation:.*$', '', t)
+
     # Remove code blocks entirely (``` ... ```) — replace with "code block"
     t = re.sub(r'```[\s\S]*?```', ' code block ', t)
 
-    # Remove inline code
-    t = re.sub(r'`[^`]+`', '', t)
+    # Inline code: keep the text inside backticks
+    t = re.sub(r'`([^`]+)`', r'\1', t)
 
-    # Detect error stack traces (lines starting with "Traceback", "  File ", "Error:", etc.)
+    # Detect error stack traces
     t = re.sub(
         r'(?:Traceback \(most recent call last\):[\s\S]*?(?:\n\S|\Z))',
         ' There was an error. ',
@@ -52,9 +62,17 @@ def clean_text_for_tts(text):
     # Remove markdown images ![alt](url)
     t = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'\1', t)
 
-    # Remove markdown tables (lines that are mostly pipes/dashes)
-    t = re.sub(r'(?m)^\|.*\|$', '', t)
-    t = re.sub(r'(?m)^[\s|:-]+$', '', t)
+    # Convert markdown tables to spoken format
+    # Remove separator rows (|---|---|)
+    t = re.sub(r'(?m)^\|[-:\s|]+\|$', '', t)
+    # Convert table rows: | col1 | col2 | → col1, col2.
+    def _table_row_to_speech(m):
+        cells = [c.strip() for c in m.group(0).strip('|').split('|') if c.strip()]
+        # Skip if all cells are just dashes (separator)
+        if all(re.match(r'^[-:]+$', c) for c in cells):
+            return ''
+        return ', '.join(cells) + '.'
+    t = re.sub(r'(?m)^\|.+\|$', _table_row_to_speech, t)
 
     # Headings: # Title → Title.
     t = re.sub(r'(?m)^#{1,6}\s+(.*)', r'\1.', t)
@@ -80,15 +98,235 @@ def clean_text_for_tts(text):
     # Emoji shortcodes :emoji_name:
     t = re.sub(r':([a-zA-Z0-9_+-]+):', r'\1', t)
 
+    # Remove Unicode emoji (flags, symbols, faces, etc.)
+    t = re.sub(
+        r'[\U0001F600-\U0001F64F'   # emoticons
+        r'\U0001F300-\U0001F5FF'    # symbols & pictographs
+        r'\U0001F680-\U0001F6FF'    # transport & map
+        r'\U0001F1E0-\U0001F1FF'    # flags
+        r'\U0001F900-\U0001F9FF'    # supplemental symbols
+        r'\U0001FA00-\U0001FA6F'    # chess symbols
+        r'\U0001FA70-\U0001FAFF'    # symbols extended-A
+        r'\U00002702-\U000027B0'    # dingbats
+        r'\U0000FE00-\U0000FE0F'    # variation selectors
+        r'\U0000200D'               # zero width joiner
+        r'\U000020E3'               # combining enclosing keycap
+        r'\U00002600-\U000026FF'    # misc symbols
+        r'\U00002300-\U000023FF'    # misc technical
+        r'\U0000200B-\U0000200F'    # zero-width chars
+        r'\U000025A0-\U000025FF'    # geometric shapes
+        r']+', '', t
+    )
+
+    # Remove remaining special characters that TTS reads aloud
+    t = re.sub(r'@{2,}', '', t)  # @@@@
+    t = re.sub(r'"{2,}', '', t)  # """"
+    t = re.sub(r'#{2,}', '', t)  # ####
+    t = re.sub(r'\*{2,}', '', t)  # ****
+    t = re.sub(r'_{2,}', '', t)  # ____
+    t = re.sub(r'={2,}', '', t)  # ====
+    t = re.sub(r'~{2,}', '', t)  # ~~~~
+    t = re.sub(r'\|', '', t)  # pipe characters from tables
+    t = re.sub(r'[{}\[\]<>\\]', '', t)  # braces, brackets, backslash
+    t = re.sub(r'&(?:amp|lt|gt|quot|apos);', '', t)  # HTML entities
+
+    # Clean punctuation that TTS reads aloud
+    t = re.sub(r'/{2,}', ' ', t)      # // or ///
+    t = re.sub(r'/(?=\s)', ' ', t)    # trailing slash
+    t = re.sub(r'-{2,}', ', ', t)     # -- or --- → pause
+    t = re.sub(r',{2,}', ',', t)      # ,,,, → single comma
+    t = re.sub(r'!{2,}', '!', t)      # !!!! → single !
+    t = re.sub(r'\?{2,}', '?', t)     # ???? → single ?
+    t = re.sub(r'\.{3,}', '.', t)     # ... → single .
+    t = re.sub(r'[""„"]+', '', t)     # fancy quotes
+    t = re.sub(r"[''‚']+", '', t)     # fancy single quotes
+    t = re.sub(r'[→←↑↓•·►▶▸‣⁃]', '', t)  # arrows, bullets
+    t = re.sub(r'[─━═│┃┌┐└┘├┤┬┴┼╔╗╚╝╠╣╦╩╬]', '', t)  # box drawing chars
+    t = re.sub(r'[\U0001F300-\U0001F9FF]', '', t)  # emoji
+
     # Collapse whitespace
     t = re.sub(r'\n{2,}', '. ', t)
     t = re.sub(r'\n', ' ', t)
     t = re.sub(r'\s{2,}', ' ', t)
 
-    # Clean up punctuation artifacts like ". ." or ".. "
+    # Clean up punctuation artifacts
     t = re.sub(r'\.(\s*\.)+', '.', t)
+    t = re.sub(r',(\s*,)+', ',', t)
+    t = re.sub(r'^\s*[,.:;!?]\s*', '', t)  # leading punctuation
 
     return t.strip()
+
+
+# ─── SSML Generation (Phase 2) ──────────────────────────────────────────
+
+def _escape_ssml(text):
+    """Escape special XML characters for SSML"""
+    text = text.replace("&", "&amp;")
+    text = text.replace("<", "&lt;")
+    text = text.replace(">", "&gt;")
+    text = text.replace('"', "&quot;")
+    text = text.replace("'", "&apos;")
+    return text
+
+
+def _detect_sentiment(text):
+    """Simple rule-based sentiment detection for prosody adjustment.
+    Returns: 'happy', 'sad', 'error', 'question', 'data', 'neutral'
+    """
+    text_lower = text.lower()
+
+    # Error/apology patterns
+    error_words = ["sorry", "unfortunately", "error", "failed", "issue", "problem",
+                   "apologize", "couldn't", "can't", "unable", "mistake", "wrong",
+                   "maaf", "galat", "samasya"]
+    if any(w in text_lower for w in error_words):
+        return "error"
+
+    # Question detection
+    if text.rstrip().endswith("?"):
+        return "question"
+
+    # Data/numbers heavy text
+    number_count = len(re.findall(r'\d+', text))
+    word_count = max(len(text.split()), 1)
+    if number_count / word_count > 0.3:
+        return "data"
+
+    # Happy/excited patterns
+    happy_words = ["great", "excellent", "awesome", "wonderful", "fantastic",
+                   "congratulations", "perfect", "amazing", "success", "happy",
+                   "bahut accha", "badhai", "shaandar", "zabardast"]
+    if any(w in text_lower for w in happy_words) or text.count("!") >= 2:
+        return "happy"
+
+    # Sad/negative
+    sad_words = ["sad", "disappointed", "loss", "difficult", "hard time",
+                 "dukh", "mushkil"]
+    if any(w in text_lower for w in sad_words):
+        return "sad"
+
+    return "neutral"
+
+
+def _get_prosody_params(sentiment):
+    """Return SSML prosody rate and pitch based on sentiment."""
+    params = {
+        "happy": {"rate": "+8%", "pitch": "+5%"},
+        "sad": {"rate": "-8%", "pitch": "-5%"},
+        "error": {"rate": "-10%", "pitch": "-8%"},
+        "question": {"rate": "+0%", "pitch": "+3%"},
+        "data": {"rate": "-5%", "pitch": "+0%"},
+        "neutral": {"rate": "+0%", "pitch": "+0%"},
+    }
+    return params.get(sentiment, params["neutral"])
+
+
+def _add_ssml_breaks_and_emphasis(text):
+    """Add SSML breaks between sentences/paragraphs and emphasis markup.
+    Input is already clean text (no markdown). Output is SSML fragment (no outer tags).
+    """
+    # Split into paragraphs first
+    paragraphs = re.split(r'\n\s*\n|\.\s+(?=[A-Z])', text)
+    if len(paragraphs) <= 1:
+        paragraphs = [text]
+
+    ssml_parts = []
+
+    for para_idx, para in enumerate(paragraphs):
+        para = para.strip()
+        if not para:
+            continue
+
+        # Split into sentences
+        sentences = re.split(r'(?<=[.!?])\s+', para)
+
+        for sent_idx, sentence in enumerate(sentences):
+            sentence = sentence.strip()
+            if not sentence:
+                continue
+
+            escaped = _escape_ssml(sentence)
+
+            # Handle numbers with say-as for currency
+            escaped = re.sub(
+                r'(?:₹|Rs\.?|INR)\s*(\d[\d,]*\.?\d*)',
+                r'<say-as interpret-as="currency" language="en-IN">\1 INR</say-as>',
+                escaped
+            )
+            # Large numbers
+            escaped = re.sub(
+                r'(\d{1,3}(?:,\d{3})+)',
+                r'<say-as interpret-as="cardinal">\1</say-as>',
+                escaped
+            )
+            # Dates like 2024-01-15
+            escaped = re.sub(
+                r'(\d{4})-(\d{2})-(\d{2})',
+                r'<say-as interpret-as="date" format="ymd">\1\2\3</say-as>',
+                escaped
+            )
+
+            # Exclamation → emphasis
+            if sentence.rstrip().endswith("!"):
+                escaped = '<emphasis level="moderate">' + escaped + '</emphasis>'
+
+            ssml_parts.append(escaped)
+
+            # Add break between sentences
+            if sent_idx < len(sentences) - 1:
+                ssml_parts.append('<break time="300ms"/>')
+
+        # Add longer break between paragraphs
+        if para_idx < len(paragraphs) - 1:
+            ssml_parts.append('<break time="600ms"/>')
+
+    return " ".join(ssml_parts)
+
+
+def _text_to_ssml(text, voice):
+    """Convert plain text to full SSML with prosody, breaks, emphasis.
+
+    Args:
+        text: Clean text (already stripped of markdown)
+        voice: Edge TTS voice name (e.g. en-IN-NeerjaExpressiveNeural)
+
+    Returns:
+        SSML string ready for edge_tts.Communicate()
+    """
+    if not text or not text.strip():
+        return None
+
+    # Detect sentiment for prosody
+    sentiment = _detect_sentiment(text)
+    prosody = _get_prosody_params(sentiment)
+
+    # Determine language from voice name
+    if voice and voice.startswith("hi-"):
+        lang = "hi-IN"
+    else:
+        lang = "en-IN"
+
+    # Build SSML body with breaks and emphasis
+    ssml_body = _add_ssml_breaks_and_emphasis(text)
+
+    ssml = (
+        '<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" '
+        'xmlns:mstts="https://www.w3.org/2001/mstts" xml:lang="{lang}">'
+        '<voice name="{voice}">'
+        '<prosody rate="{rate}" pitch="{pitch}">'
+        '{body}'
+        '</prosody>'
+        '</voice>'
+        '</speak>'
+    ).format(
+        lang=lang,
+        voice=voice,
+        rate=prosody["rate"],
+        pitch=prosody["pitch"],
+        body=ssml_body,
+    )
+
+    return ssml
 
 
 # ─── Config ──────────────────────────────────────────────────────────────
@@ -101,7 +339,6 @@ def _get_voice_config():
     default_voice = settings.default_voice or "hi_IN-priyamvada-medium"
     tts_model = settings.tts_model or "tts-1"
 
-    # Read additional voice settings safely (fields may not exist yet)
     stt_engine = getattr(settings, "stt_engine", "") or "auto"
     tts_engine = getattr(settings, "tts_engine", "") or "auto"
     tts_language = getattr(settings, "tts_language", "") or "en"
@@ -119,12 +356,22 @@ def _get_voice_config():
             except Exception:
                 pass
 
-    # Detect provider type from base_url
-    provider_type = "openai"  # default
+    provider_type = "openai"
     if base_url and "mistral" in base_url.lower():
         provider_type = "mistral"
     elif base_url and "anthropic" in base_url.lower():
         provider_type = "anthropic"
+
+    # ElevenLabs config
+    elevenlabs_api_key = None
+    elevenlabs_voice_en = ""
+    elevenlabs_voice_hi = ""
+    try:
+        elevenlabs_api_key = settings.get_password("elevenlabs_api_key") if getattr(settings, "elevenlabs_api_key", None) else None
+        elevenlabs_voice_en = getattr(settings, "elevenlabs_voice_en", "") or ""
+        elevenlabs_voice_hi = getattr(settings, "elevenlabs_voice_hi", "") or ""
+    except Exception:
+        pass
 
     return {
         "api_key": api_key,
@@ -137,6 +384,9 @@ def _get_voice_config():
         "tts_language": tts_language,
         "tts_voice": tts_voice,
         "enable_voice": enable_voice,
+        "elevenlabs_api_key": elevenlabs_api_key,
+        "elevenlabs_voice_en": elevenlabs_voice_en,
+        "elevenlabs_voice_hi": elevenlabs_voice_hi,
     }
 
 
@@ -162,15 +412,13 @@ def _get_piper_model_path(voice_name):
     if os.path.exists(model_path) and os.path.exists(config_path):
         return model_path, config_path
 
-    # Download from Hugging Face
     base_url = "https://huggingface.co/rhasspy/piper-voices/resolve/main"
-    # Parse voice name: lang_REGION-name-quality
     parts = voice_name.split("-")
     if len(parts) >= 3:
-        lang_region = parts[0]  # e.g. en_US or hi_IN
-        name = "-".join(parts[1:-1])  # e.g. lessac
-        quality = parts[-1]  # e.g. medium
-        lang = lang_region.split("_")[0]  # e.g. en or hi
+        lang_region = parts[0]
+        name = "-".join(parts[1:-1])
+        quality = parts[-1]
+        lang = lang_region.split("_")[0]
     else:
         frappe.throw(f"Invalid voice name format: {voice_name}. Expected: lang_REGION-name-quality")
         return None, None
@@ -179,7 +427,6 @@ def _get_piper_model_path(voice_name):
     config_url = f"{base_url}/{lang}/{lang_region}/{name}/{quality}/{voice_name}.onnx.json"
 
     try:
-        # Download model
         frappe.logger().info(f"Downloading Piper voice model: {voice_name}")
         resp = requests.get(model_url, stream=True, timeout=120)
         resp.raise_for_status()
@@ -187,7 +434,6 @@ def _get_piper_model_path(voice_name):
             for chunk in resp.iter_content(chunk_size=8192):
                 f.write(chunk)
 
-        # Download config
         resp = requests.get(config_url, timeout=30)
         resp.raise_for_status()
         with open(config_path, "wb") as f:
@@ -197,7 +443,6 @@ def _get_piper_model_path(voice_name):
         return model_path, config_path
 
     except Exception as e:
-        # Cleanup partial downloads
         for p in [model_path, config_path]:
             if os.path.exists(p):
                 os.unlink(p)
@@ -206,10 +451,9 @@ def _get_piper_model_path(voice_name):
 
 
 def _is_piper_voice_name(name):
-    """Check if a voice name looks like a Piper voice (e.g. en_US-lessac-medium)"""
+    """Check if a voice name looks like a Piper voice"""
     if not name:
         return False
-    # Piper voices have format: lang_REGION-name-quality
     return bool(re.match(r'^[a-z]{2}_[A-Z]{2}-\w+-\w+$', name))
 
 
@@ -220,7 +464,6 @@ def _tts_piper(text, voice_name=None):
     except ImportError:
         return None
 
-    # Always use Piper-format voice name, fallback to default
     if not voice_name or not _is_piper_voice_name(voice_name):
         voice_name = "en_US-lessac-medium"
 
@@ -233,7 +476,6 @@ def _tts_piper(text, voice_name=None):
 
         voice = PiperVoice.load(model_path, config_path=config_path)
 
-        # Generate audio — use synthesize_wav which handles wave params
         out_path = os.path.join(tempfile.gettempdir(), f"niv_tts_{uuid.uuid4().hex[:8]}.wav")
 
         with wave.open(out_path, "wb") as wav_file:
@@ -265,11 +507,78 @@ def _tts_piper(text, voice_name=None):
         return None
 
 
+# ─── ElevenLabs TTS ──────────────────────────────────────────────────────
+
+def _tts_elevenlabs(text, voice_id=None, config=None):
+    """Generate speech using ElevenLabs API (human-like, multilingual, Hindi+English).
+    
+    Requires elevenlabs_api_key in Niv Settings.
+    Default voice: Rachel (21m00Tcm4TlvDq8ikWAM) — natural female English.
+    For Hindi: use a multilingual voice or Hindi-specific voice.
+    """
+    if not config:
+        config = _get_voice_config()
+    
+    api_key = config.get("elevenlabs_api_key")
+    if not api_key:
+        return None
+    
+    # Default voices
+    if not voice_id:
+        lang = _detect_language(text)
+        if lang == "hi":
+            voice_id = config.get("elevenlabs_voice_hi") or "21m00Tcm4TlvDq8ikWAM"
+        else:
+            voice_id = config.get("elevenlabs_voice_en") or "21m00Tcm4TlvDq8ikWAM"
+    
+    try:
+        resp = requests.post(
+            f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
+            headers={
+                "xi-api-key": api_key,
+                "Content-Type": "application/json",
+                "Accept": "audio/mpeg",
+            },
+            json={
+                "text": text,
+                "model_id": "eleven_multilingual_v2",
+                "voice_settings": {
+                    "stability": 0.5,
+                    "similarity_boost": 0.75,
+                    "style": 0.0,
+                    "use_speaker_boost": True,
+                },
+            },
+            timeout=30,
+        )
+        
+        if resp.status_code != 200:
+            frappe.logger().warning(f"ElevenLabs TTS failed ({resp.status_code}): {resp.text[:200]}")
+            return None
+        
+        output_dir = frappe.get_site_path("public", "files")
+        filename = "tts_11labs_{0}.mp3".format(uuid.uuid4().hex[:12])
+        output_path = os.path.join(output_dir, filename)
+        
+        with open(output_path, "wb") as f:
+            f.write(resp.content)
+        
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            return {
+                "audio_url": "/files/{0}".format(filename),
+                "engine": "elevenlabs",
+                "voice": voice_id,
+            }
+    except Exception as e:
+        frappe.logger().warning(f"ElevenLabs TTS error: {e}")
+    
+    return None
+
+
 # ─── OpenAI TTS ──────────────────────────────────────────────────────────
 
 def _tts_openai(text, voice, model, response_format, config):
     """Generate speech using OpenAI-compatible API"""
-    # Don't pass Piper-format voice names to OpenAI
     if _is_piper_voice_name(voice):
         voice = "alloy"
 
@@ -305,38 +614,75 @@ def _tts_openai(text, voice, model, response_format, config):
     return {"audio_url": file_doc.file_url, "engine": "openai"}
 
 
-# ─── Public APIs ─────────────────────────────────────────────────────────
+# ─── Language Detection ──────────────────────────────────────────────────
 
-def _tts_edge(text, voice=None):
-    """Edge TTS — Microsoft Azure neural voices, free, unlimited, human-like."""
+def _detect_language(text):
+    """Detect if text is Hindi or English"""
+    has_devanagari = any(ord(c) >= 0x0900 and ord(c) <= 0x097F for c in text)
+    if has_devanagari:
+        return "hi"
+
+    hindi_words = [
+        "kya", "hai", "haan", "nahi", "aap", "main", "kaise", "mera", "tera",
+        "kitna", "kitne", "kab", "kahan", "kaun", "kyun", "karo", "karna",
+        "dikhao", "batao", "bolo", "suno", "dekho", "jao", "aao", "lo", "do",
+        "accha", "theek", "bahut", "abhi", "yahan", "wahan", "isko", "usko",
+        "mujhe", "tumhe", "humko", "unko", "sabhi", "koi", "kuch", "sab"
+    ]
+    text_lower = text.lower()
+    hindi_count = sum(1 for w in hindi_words if w in text_lower.split())
+    if hindi_count >= 2:
+        return "hi"
+
+    return "en"
+
+
+# ─── Edge TTS (with SSML support) ───────────────────────────────────────
+
+def _tts_edge(text, voice=None, use_ssml=False):
+    """Edge TTS — Microsoft Azure neural voices, free, unlimited, human-like.
+    
+    Phase 2: Now supports SSML with natural pauses, prosody, emphasis.
+    Falls back to plain text if SSML fails.
+    """
     try:
         import edge_tts
         import asyncio
     except ImportError:
         return None
 
-    # Default voices based on language detection
-    if not voice:
-        # Simple Hindi detection
-        has_hindi = any(ord(c) > 0x0900 and ord(c) < 0x097F for c in text)
-        has_hindi_words = any(w in text.lower() for w in ["kya", "hai", "haan", "nahi", "aap", "main", "kaise", "mera", "tera"])
-        if has_hindi or has_hindi_words:
-            voice = "hi-IN-SwaraNeural"  # Female Hindi
+    # Handle "auto" or no voice - detect language
+    if not voice or voice == "auto":
+        lang = _detect_language(text)
+        if lang == "hi":
+            voice = "hi-IN-SwaraNeural"
         else:
-            voice = "en-US-JennyNeural"  # Female English — natural, warm
+            voice = "en-IN-NeerjaExpressiveNeural"
 
     try:
-        # Generate audio
         output_dir = frappe.get_site_path("public", "files")
         filename = "tts_edge_{0}.mp3".format(uuid.uuid4().hex[:12])
         output_path = os.path.join(output_dir, filename)
 
-        # Run async edge-tts
+        # Build SSML or use plain text
+        ssml_text = None
+        if use_ssml:
+            try:
+                ssml_text = _text_to_ssml(text, voice)
+            except Exception as e:
+                frappe.logger().warning("SSML generation failed, using plain text: {0}".format(e))
+                ssml_text = None
+
         async def _generate():
-            communicate = edge_tts.Communicate(text, voice)
+            if ssml_text:
+                # When using SSML, pass it as the text parameter
+                # Edge TTS handles SSML when text starts with <speak>
+                communicate = edge_tts.Communicate(ssml_text, voice)
+            else:
+                communicate = edge_tts.Communicate(text, voice)
             await communicate.save(output_path)
 
-        # Get or create event loop
+        # Run async
         try:
             loop = asyncio.get_event_loop()
             if loop.is_running():
@@ -350,26 +696,42 @@ def _tts_edge(text, voice=None):
 
         if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
             audio_url = "/files/{0}".format(filename)
-            frappe.logger().info("Edge TTS: generated {0} with voice {1}".format(filename, voice))
+            frappe.logger().info("Edge TTS: generated {0} with voice {1} (ssml={2})".format(
+                filename, voice, bool(ssml_text)))
             return {
                 "audio_url": audio_url,
                 "engine": "edge",
                 "voice": voice,
                 "text": text,
             }
+
+        # If SSML failed to produce output, retry without SSML
+        if ssml_text and use_ssml:
+            frappe.logger().warning("Edge TTS SSML produced empty file, retrying plain text")
+            return _tts_edge(text, voice, use_ssml=False)
+
     except Exception as e:
         frappe.logger().warning("Edge TTS failed: {0}".format(str(e)))
+        # If SSML caused the error, retry without it
+        if ssml_text and use_ssml:
+            frappe.logger().info("Retrying Edge TTS without SSML")
+            try:
+                return _tts_edge(text, voice, use_ssml=False)
+            except Exception:
+                pass
 
     return None
 
+
+# ─── Public APIs ─────────────────────────────────────────────────────────
 
 @frappe.whitelist(allow_guest=False)
 def text_to_speech(text, voice=None, model=None, response_format="wav", engine=None):
     """
     Convert text to speech. Tries engines in order:
-    1. Edge TTS (free, human-like, Microsoft Azure neural voices)
+    1. Edge TTS (free, human-like, Microsoft Azure neural voices) — now with SSML
     2. Piper TTS (free, local, offline fallback)
-    3. OpenAI-compatible API — if API key configured AND provider supports TTS
+    3. OpenAI-compatible API
     4. Returns engine='browser' signal for client-side fallback
     """
     check_rate_limit()
@@ -385,7 +747,13 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
 
     config = _get_voice_config()
 
-    # ── Try Edge TTS first (free, human-like, best quality) ──
+    # ── Try ElevenLabs first (most human-like, multilingual, Hindi+English) ──
+    if engine in (None, "auto", "elevenlabs") and config.get("elevenlabs_api_key"):
+        result = _tts_elevenlabs(text, config=config)
+        if result:
+            return result
+
+    # ── Try Edge TTS (free, human-like) ──
     if engine in (None, "auto", "edge"):
         edge_voice = voice if (voice and "Neural" in str(voice)) else None
         result = _tts_edge(text, edge_voice)
@@ -399,9 +767,8 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
         if result:
             return result
 
-    # ── Try OpenAI-compatible API (only if provider supports TTS) ──
+    # ── Try OpenAI-compatible API ──
     if engine in (None, "auto", "openai") and config.get("api_key"):
-        # Skip OpenAI TTS for providers that don't have /audio/speech (e.g. Mistral)
         if config.get("provider_type") == "mistral":
             frappe.logger().info("Skipping OpenAI TTS: Mistral does not support /audio/speech")
         else:
@@ -413,11 +780,148 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
 
 
 @frappe.whitelist(allow_guest=False)
-def speech_to_text(audio_file):
+def stream_tts(text, voice=None):
+    """Generate TTS for a single sentence/chunk. Used by streaming voice mode.
+    
+    This is optimized for low latency — short text segments get fast audio.
+    Returns audio_url immediately.
     """
-    Transcribe audio using OpenAI-compatible or Mistral STT API.
-    audio_file: URL of uploaded file
-    """
+    check_rate_limit()
+
+    if not text or not text.strip():
+        return {"audio_url": None}
+
+    # Full cleaning — same as text_to_speech for consistency
+    text = clean_text_for_tts(text)
+
+    if not text.strip():
+        return {"audio_url": None}
+
+    # Resolve voice based on language parameter or text detection
+    stt_language = frappe.form_dict.get("language", "")
+    
+    if not voice or voice == "auto":
+        # Use STT-detected language if available, otherwise detect from text
+        lang = stt_language or _detect_language(text)
+        if lang in ("hi", "hindi"):
+            voice = "hi-IN-SwaraNeural"  # Edge TTS for Hindi (Piper has no Hindi)
+        else:
+            voice = "en-IN-NeerjaExpressiveNeural"
+
+    # Check configured TTS engine
+    settings = frappe.get_single("Niv Settings")
+    tts_engine = getattr(settings, "tts_engine", "") or "auto"
+    config = _get_voice_config()
+
+    # ── Try ElevenLabs first (most human-like) ──
+    if tts_engine in ("auto", "elevenlabs") and config.get("elevenlabs_api_key"):
+        result = _tts_elevenlabs(text, config=config)
+        if result:
+            return result
+
+    # ── Try Piper first if configured (English only - no Hindi model) ──
+    detected_lang = stt_language or _detect_language(text)
+    if tts_engine == "piper" and detected_lang not in ("hi", "hindi"):
+        piper_voice = "en_US-lessac-medium"
+        result = _tts_piper(text, piper_voice)
+        if result:
+            return result
+
+    # ── Edge TTS (free, human-like) ──
+    if tts_engine in ("auto", "edge"):
+        try:
+            import edge_tts
+            import asyncio
+        except ImportError:
+            return {"audio_url": None, "engine": "browser", "text": text}
+
+        try:
+            output_dir = frappe.get_site_path("public", "files")
+            filename = "tts_stream_{0}.mp3".format(uuid.uuid4().hex[:12])
+            output_path = os.path.join(output_dir, filename)
+
+            # Build simple SSML for just this sentence
+            ssml = None
+            try:
+                ssml = _text_to_ssml(text, voice)
+            except Exception:
+                ssml = None
+
+            async def _generate():
+                if ssml:
+                    communicate = edge_tts.Communicate(ssml, voice)
+                else:
+                    communicate = edge_tts.Communicate(text, voice)
+                await communicate.save(output_path)
+
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as pool:
+                        pool.submit(asyncio.run, _generate()).result(timeout=15)
+                else:
+                    loop.run_until_complete(_generate())
+            except RuntimeError:
+                asyncio.run(_generate())
+
+            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                return {
+                    "audio_url": "/files/{0}".format(filename),
+                    "engine": "edge",
+                    "voice": voice,
+                }
+        except Exception as e:
+            frappe.logger().warning("stream_tts Edge failed: {0}".format(str(e)))
+
+    # ── Piper fallback (if not tried yet) ──
+    if tts_engine not in ("piper",):
+        piper_voice = "en_US-lessac-medium"
+        result = _tts_piper(text, piper_voice)
+        if result:
+            return result
+
+    # Fallback
+    return {"audio_url": None, "engine": "browser", "text": text}
+
+
+# ─── Faster-Whisper STT (Free, Local) ────────────────────────────────────
+
+_whisper_model = None
+
+def _get_whisper_model():
+    """Get or load Whisper model (lazy loading, cached)"""
+    global _whisper_model
+    if _whisper_model is None:
+        try:
+            from faster_whisper import WhisperModel
+            _whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+            frappe.logger().info("Faster-Whisper model loaded: base")
+        except Exception as e:
+            frappe.logger().warning(f"Failed to load Whisper model: {e}")
+            return None
+    return _whisper_model
+
+
+def _stt_whisper(audio_path):
+    """Transcribe audio using Faster-Whisper (local, free, offline)"""
+    model = _get_whisper_model()
+    if not model:
+        return None
+
+    try:
+        segments, info = model.transcribe(audio_path, beam_size=5)
+        text = " ".join([segment.text for segment in segments])
+        frappe.logger().info(f"Whisper STT: {info.language} ({info.language_probability:.0%}) - {len(text)} chars")
+        return {"text": text.strip(), "language": info.language, "engine": "whisper-local"}
+    except Exception as e:
+        frappe.logger().warning(f"Whisper STT failed: {e}")
+        return None
+
+
+@frappe.whitelist(allow_guest=False)
+def speech_to_text(audio_file, engine=None):
+    """Transcribe audio. Tries Faster-Whisper first, then API."""
     check_rate_limit()
     log_api_call("speech_to_text")
 
@@ -425,8 +929,7 @@ def speech_to_text(audio_file):
         frappe.throw("No audio file provided")
 
     config = _get_voice_config()
-    if not config.get("api_key"):
-        frappe.throw("No API key configured for STT. Use browser speech recognition instead.")
+    stt_engine = engine or config.get("stt_engine", "auto")
 
     file_path = frappe.get_site_path("private" if "/private/" in audio_file else "public",
                                       "files", os.path.basename(audio_file))
@@ -435,42 +938,136 @@ def speech_to_text(audio_file):
     if not os.path.exists(file_path):
         frappe.throw(f"Audio file not found: {audio_file}")
 
-    # Auto-detect STT model based on provider
-    provider_type = config.get("provider_type", "openai")
-    if provider_type == "mistral":
-        stt_model = "mistral-stt-latest"
-    else:
-        stt_model = "whisper-1"
+    # ── Try Mistral Voxtral STT first (fast, multilingual, Hindi+English) ──
+    if stt_engine in ("auto", "voxtral", "mistral", "api") and config.get("api_key"):
+        provider_type = config.get("provider_type", "openai")
+        if provider_type == "mistral":
+            stt_model = "voxtral-mini-latest"
+        else:
+            stt_model = "whisper-1"
 
-    # Build request data
-    data = {"model": stt_model}
+        data = {"model": stt_model}
+        lang = config.get("tts_language", "")
+        if lang:
+            data["language"] = lang
 
-    # Add language parameter if configured
-    lang = config.get("tts_language", "")
-    if lang:
-        data["language"] = lang
+        try:
+            with open(file_path, "rb") as f:
+                resp = requests.post(
+                    f"{config['base_url']}/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {config['api_key']}"},
+                    files={"file": (os.path.basename(audio_file), f, "audio/webm")},
+                    data=data,
+                    timeout=60,
+                )
 
-    with open(file_path, "rb") as f:
-        resp = requests.post(
-            f"{config['base_url']}/audio/transcriptions",
-            headers={"Authorization": f"Bearer {config['api_key']}"},
-            files={"file": (os.path.basename(audio_file), f, "audio/webm")},
-            data=data,
-            timeout=60,
-        )
+            if resp.status_code == 200:
+                result = resp.json()
+                text = result.get("text", "")
+                if text.strip():
+                    return {"text": text, "engine": f"voxtral ({stt_model})", "language": result.get("language", "")}
+            else:
+                frappe.logger().warning(f"Voxtral STT failed ({resp.status_code}): {resp.text[:200]}")
+        except Exception as e:
+            frappe.logger().warning(f"Voxtral STT error: {e}")
 
-    if resp.status_code != 200:
-        frappe.throw(f"STT API error ({resp.status_code}): {resp.text[:300]}")
+    # ── Fallback: Local Faster-Whisper ──
+    if stt_engine in ("auto", "whisper", "whisper-local"):
+        result = _stt_whisper(file_path)
+        if result:
+            return result
 
-    result = resp.json()
-    return {"text": result.get("text", "")}
+    frappe.throw("No STT available. Configure Mistral API key or install faster-whisper.")
+
+
+
+
+@frappe.whitelist(allow_guest=False)
+def stt_from_base64(**kwargs):
+    """Server-side STT from base64 audio. Returns transcript text.
+    
+    Phase 3: Primary STT endpoint - replaces browser Web Speech API.
+    Uses Faster-Whisper locally (free, accurate, multilingual).
+    """
+    import base64
+    
+    check_rate_limit()
+    
+    audio_base64 = frappe.form_dict.get("audio_base64", "")
+    if not audio_base64:
+        return {"text": "", "error": "No audio data"}
+    
+    try:
+        audio_bytes = base64.b64decode(audio_base64)
+        
+        # Save to temp file for Whisper
+        tmp = tempfile.NamedTemporaryFile(suffix=".webm", delete=False)
+        tmp.write(audio_bytes)
+        tmp.close()
+        
+        # Try Voxtral/API STT first (fast, accurate, Hindi+English)
+        config = _get_voice_config()
+        if config.get("api_key"):
+            provider_type = config.get("provider_type", "openai")
+            stt_model = "voxtral-mini-latest" if provider_type == "mistral" else "whisper-1"
+            
+            try:
+                with open(tmp.name, "rb") as f:
+                    resp = requests.post(
+                        f"{config['base_url']}/audio/transcriptions",
+                        headers={"Authorization": f"Bearer {config['api_key']}"},
+                        files={"file": ("audio.webm", f, "audio/webm")},
+                        data={"model": stt_model},
+                        timeout=30,
+                    )
+                
+                if resp.status_code == 200:
+                    api_result = resp.json()
+                    text = api_result.get("text", "")
+                    if text.strip():
+                        try:
+                            os.unlink(tmp.name)
+                        except Exception:
+                            pass
+                        return {
+                            "text": text,
+                            "language": api_result.get("language", ""),
+                            "engine": f"voxtral ({stt_model})",
+                        }
+                else:
+                    frappe.logger().warning(f"Voxtral STT failed ({resp.status_code}): {resp.text[:200]}")
+            except Exception as e:
+                frappe.logger().warning(f"Voxtral STT error: {e}")
+        
+        # Fallback: Local Faster-Whisper
+        result = _stt_whisper(tmp.name)
+        
+        if result and result.get("text"):
+            try:
+                os.unlink(tmp.name)
+            except Exception:
+                pass
+            return {
+                "text": result["text"],
+                "language": result.get("language", ""),
+                "engine": "whisper-local",
+            }
+        
+        try:
+            os.unlink(tmp.name)
+        except Exception:
+            pass
+        
+        return {"text": "", "error": "STT failed - no engine available"}
+        
+    except Exception as e:
+        frappe.logger().warning(f"stt_from_base64 error: {e}")
+        return {"text": "", "error": str(e)}
 
 
 @frappe.whitelist(allow_guest=False)
 def voice_chat(conversation_id, audio_file, voice=None):
-    """
-    Combined voice chat: STT → Chat → TTS in one call.
-    """
+    """Combined voice chat: STT → Chat → TTS in one call."""
     check_rate_limit()
     log_api_call("voice_chat", conversation_id=conversation_id)
 
@@ -482,7 +1079,6 @@ def voice_chat(conversation_id, audio_file, voice=None):
     config = _get_voice_config()
     voice = voice or config["default_voice"]
 
-    # Step 1: Speech to Text
     stt_result = speech_to_text(audio_file)
     user_text = stt_result.get("text", "").strip()
 
@@ -493,12 +1089,10 @@ def voice_chat(conversation_id, audio_file, voice=None):
             "audio_url": None,
         }
 
-    # Step 2: Send to chat
     from niv_ai.niv_core.api.chat import send_message
     chat_result = send_message(conversation_id=conversation_id, message=user_text)
     response_text = chat_result.get("response", "") or chat_result.get("message", "")
 
-    # Step 3: TTS on response (text_to_speech already cleans)
     audio_url = None
     if response_text:
         tts_result = text_to_speech(text=response_text, voice=voice)
@@ -524,58 +1118,46 @@ def voice_chat(conversation_id, audio_file, voice=None):
 
 @frappe.whitelist(allow_guest=False)
 def voice_chat_base64(**kwargs):
-    """Voice chat using base64-encoded audio — bypasses upload_file API.
-    
-    Args:
-        audio_base64: base64 encoded audio data
-        conversation_id: optional, auto-creates if empty
-        browser_transcript: optional, browser STT result
-    """
-    import base64, tempfile, os
-    
+    """Voice chat using base64-encoded audio — bypasses upload_file API."""
+    import base64
+
     audio_base64 = frappe.form_dict.get("audio_base64", "")
     conversation_id = frappe.form_dict.get("conversation_id", "")
     browser_transcript = frappe.form_dict.get("browser_transcript", "")
-    
-    # Auto-create conversation if not provided
+
     if not conversation_id:
         try:
             conv = frappe.get_doc({
                 "doctype": "Niv Conversation",
                 "user": frappe.session.user,
                 "title": "Voice Chat",
-                "channel": "voice",
+                "channel": "webchat",
             })
             conv.insert(ignore_permissions=True)
             frappe.db.commit()
             conversation_id = conv.name
         except Exception as e:
             frappe.throw("Failed to create conversation: " + str(e))
-    
+
     user_text = browser_transcript
-    
-    # If we have audio, try server-side STT
+
     if audio_base64 and not user_text:
         try:
             audio_bytes = base64.b64decode(audio_base64)
-            # Write to temp file
             tmp = tempfile.NamedTemporaryFile(suffix=".webm", delete=False)
             tmp.write(audio_bytes)
             tmp.close()
-            
-            # Save as Frappe file
+
             from frappe.utils.file_manager import save_file
             file_doc = save_file(
                 "voice_input.webm", audio_bytes, "Niv Conversation",
                 conversation_id, folder="Home/Niv AI", is_private=1
             )
             file_url = file_doc.file_url
-            
-            # Run STT
+
             stt_result = speech_to_text(file_url)
             user_text = stt_result.get("text", "")
-            
-            # Cleanup temp file
+
             os.unlink(tmp.name)
             try:
                 _cleanup_file(file_url)
@@ -585,7 +1167,7 @@ def voice_chat_base64(**kwargs):
             frappe.log_error("voice_chat_base64 STT error: " + str(e))
             if not user_text:
                 user_text = browser_transcript or ""
-    
+
     if not user_text:
         return {
             "text": "",
@@ -594,13 +1176,11 @@ def voice_chat_base64(**kwargs):
             "conversation_id": conversation_id,
             "tokens": {"input": 0, "output": 0, "total": 0},
         }
-    
-    # Send to chat
+
     from niv_ai.niv_core.api.chat import send_message
     chat_result = send_message(conversation_id=conversation_id, message=user_text)
     response_text = chat_result.get("response", "") or chat_result.get("message", "") or chat_result.get("content", "")
-    
-    # Generate TTS
+
     audio_url = None
     if response_text:
         try:
@@ -608,7 +1188,7 @@ def voice_chat_base64(**kwargs):
             audio_url = tts_result.get("audio_url")
         except Exception:
             pass
-    
+
     return {
         "text": user_text,
         "response": response_text,
@@ -627,19 +1207,21 @@ def voice_chat_base64(**kwargs):
 def get_tts_status():
     """Check which TTS engines are available"""
     config = _get_voice_config()
-    # OpenAI TTS only available if provider supports it (not Mistral)
     openai_available = bool(config.get("api_key")) and config.get("provider_type") != "mistral"
     return {
+        "elevenlabs": bool(config.get("elevenlabs_api_key")),
         "piper": _is_piper_available(),
         "openai": openai_available,
+        "edge": True,
         "browser": True,
+        "ssml_enabled": True,
         "provider_type": config.get("provider_type", "unknown"),
     }
 
 
 @frappe.whitelist(allow_guest=False)
 def get_available_voices():
-    """List popular Piper voices"""
+    """List popular voices"""
     return [
         {"id": "en_US-lessac-medium", "name": "Lessac (English US)", "lang": "en"},
         {"id": "en_US-amy-medium", "name": "Amy (English US)", "lang": "en"},
@@ -664,6 +1246,13 @@ def cleanup_voice_file(file_url):
 def _cleanup_file(file_url):
     """Delete a file by URL"""
     try:
+        # Try to delete the physical file directly for /files/ paths (public)
+        if file_url and file_url.startswith("/files/"):
+            physical_path = frappe.get_site_path("public", "files", os.path.basename(file_url))
+            if os.path.exists(physical_path):
+                os.unlink(physical_path)
+                return
+
         files = frappe.get_all("File", filters={"file_url": file_url}, fields=["name"])
         for f in files:
             frappe.delete_doc("File", f["name"], ignore_permissions=True, force=True)

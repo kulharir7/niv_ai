@@ -27,8 +27,7 @@ def get_user_api_key(user: str = None) -> str:
         return None
 
     try:
-        # BUG-018: use for_update to prevent race condition in concurrent requests
-        user_doc = frappe.get_doc("User", user, for_update=True)
+        user_doc = frappe.get_doc("User", user)
         
         # Auto-generate API key if missing
         if not user_doc.api_key:
@@ -97,15 +96,22 @@ def save_user_message(conversation_id: str, message: str, dedup: bool = False):
     frappe.db.commit()
 
 
-def save_assistant_message(conversation_id: str, content: str, tool_calls: list = None):
-    """Save assistant response to Niv Message."""
+def save_assistant_message(conversation_id: str, content: str, tool_calls: list = None,
+                          input_tokens: int = 0, output_tokens: int = 0, total_tokens: int = 0,
+                          model: str = None):
+    """Save assistant response to Niv Message with token usage."""
     try:
         msg_data = {
             "doctype": "Niv Message",
             "conversation": conversation_id,
             "role": "assistant",
             "content": content or "",
+            "input_tokens": input_tokens or 0,
+            "output_tokens": output_tokens or 0,
+            "total_tokens": total_tokens or 0,
         }
+        if model:
+            msg_data["model"] = model
         if tool_calls:
             msg_data["tool_calls_json"] = json.dumps(tool_calls, default=str)
 
