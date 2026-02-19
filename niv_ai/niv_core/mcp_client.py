@@ -189,7 +189,18 @@ def _get_fac_server():
     return _fac_mcp_server
 
 
-def _direct_call(method, params):
+def _ensure_db_alive():
+    """Ensure DB connection is alive. Reconnect if dead."""
+    try:
+        frappe.db.sql("SELECT 1")
+    except Exception:
+        try:
+            frappe.db.connect()
+        except Exception:
+            pass
+
+
+def _direct_call(method, params, _retry=True):
     """Call FAC MCP server directly via Python — NO HTTP, NO auth headers.
 
     Bypasses handle_mcp() entirely. Calls _handle_tools_list / _handle_tools_call
@@ -197,27 +208,37 @@ def _direct_call(method, params):
 
     Returns the MCP result dict, or raises MCPError on failure.
     NEVER returns None silently.
+    
+    Auto-retries once on DB connection errors (InterfaceError, OperationalError)
+    since FAC tools don't handle reconnection internally.
     """
-    # Reconnect DB if connection was lost (gthread workers drop connections during long streams)
-    try:
-        frappe.db.sql("SELECT 1")
-    except Exception:
-        frappe.db.connect()
+    _ensure_db_alive()
 
     server = _get_fac_server()
 
-    if method == "tools/list":
-        return server._handle_tools_list(params)
-    elif method == "tools/call":
-        result = server._handle_tools_call(params)
-        # Check if tool returned an error
-        if result.get("isError"):
-            contents = result.get("content", [])
-            error_text = contents[0].get("text", "Unknown error") if contents else "Unknown error"
-            raise MCPError(error_text)
-        return result
-    else:
-        raise MCPError(f"Unknown MCP method: {method}")
+    try:
+        if method == "tools/list":
+            return server._handle_tools_list(params)
+        elif method == "tools/call":
+            result = server._handle_tools_call(params)
+            # Check if tool returned an error
+            if result.get("isError"):
+                contents = result.get("content", [])
+                error_text = contents[0].get("text", "Unknown error") if contents else "Unknown error"
+                raise MCPError(error_text)
+            return result
+        else:
+            raise MCPError(f"Unknown MCP method: {method}")
+    except (MCPError, ValueError, KeyError):
+        raise  # Don't retry application errors
+    except Exception as e:
+        err_str = str(e).lower()
+        is_db_error = any(k in err_str for k in ("interfaceerror", "operationalerror", "connection", "gone away", "lost connection", "cursor closed"))
+        if is_db_error and _retry:
+            frappe.logger().warning(f"Niv MCP: DB error in FAC tool call, retrying once: {e}")
+            _ensure_db_alive()
+            return _direct_call(method, params, _retry=False)
+        raise
 
 
 def _direct_list_tools():
