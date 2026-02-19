@@ -99,21 +99,29 @@ def _strip_thinking(text, final=False):
 
 
 def _has_incomplete_tag(text):
-    """Check if text has an incomplete opening tag that might close later.
+    """Check if text has an incomplete thinking tag that might close later.
     Returns True if we should hold the buffer (don't yield yet)."""
     if not text:
         return False
-    # Check for incomplete <think>, <reasoning>, [[THOUGHT]], [[THINKING]]
-    openers = ['<think>', '<reasoning>', '[[THOUGHT]]', '[[THINKING]]']
-    for opener in openers:
-        # Check for partial opener at end: "<thi", "<think", "[[THOU" etc.
-        for i in range(1, len(opener) + 1):
-            if text.endswith(opener[:i]) and opener[:i] not in text[:-i]:
-                return True
-        # Check for complete opener without closer
-        closer = opener.replace('<', '</').replace('[[', '[[/')
+    # Check for complete opener without closer (buffering until close tag arrives)
+    _TAG_PAIRS = [
+        ('<think>', '</think>'),
+        ('<reasoning>', '</reasoning>'),
+        ('[[THOUGHT]]', '[[/THOUGHT]]'),
+        ('[[THINKING]]', '[[/THINKING]]'),
+    ]
+    for opener, closer in _TAG_PAIRS:
         if opener in text and closer not in text:
             return True
+    # Check for partial opener at END of text only (min 3 chars to avoid false positives)
+    # e.g. "<thi", "<think", "<reas", "[[THO"
+    tail = text[-15:]  # Only check last 15 chars
+    _PARTIAL_OPENERS = ['<think>', '<reasoning>', '[[THOUGHT]]', '[[THINKING]]']
+    for opener in _PARTIAL_OPENERS:
+        for i in range(3, len(opener)):  # Start from 3 chars to avoid "<" false positive
+            partial = opener[:i]
+            if tail.endswith(partial):
+                return True
     return False
 
 
