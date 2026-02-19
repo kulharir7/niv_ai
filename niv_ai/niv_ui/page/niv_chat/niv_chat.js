@@ -2772,14 +2772,20 @@ ${htmlCode}
                 const label = data.mode === "shared_pool" ? "pool" : "credits";
                 this.$credits.text(this.format_credits(data.balance));
                 this.wrapper.find(".credit-label").text(label);
-                // Show daily usage for shared pool
-                if (data.mode === "shared_pool" && data.daily_limit) {
-                    this.$credits.attr("title", `Daily: ${data.daily_used || 0}/${data.daily_limit} tokens`);
-                }
                 this.current_balance = data.balance;
 
-                // Update Token Ring
-                this.update_token_ring(data.balance, data.daily_limit || 100000);
+                // Token Usage ring: show pool used/total for shared pool, balance for per-user
+                if (data.mode === "shared_pool") {
+                    const poolTotal = (data.total_used || 0) + (data.balance || 0);
+                    this.update_token_ring(data.total_used || 0, poolTotal);
+                    let tip = `Pool: ${(data.balance || 0).toLocaleString()} remaining`;
+                    if (data.daily_limit) {
+                        tip += ` | Today: ${(data.daily_used || 0).toLocaleString()}/${data.daily_limit.toLocaleString()}`;
+                    }
+                    this.$credits.attr("title", tip);
+                } else {
+                    this.update_token_ring(data.total_used || 0, (data.total_used || 0) + data.balance);
+                }
 
                 // Low balance warning
                 if (data.balance < 500 && data.balance > 0) {
