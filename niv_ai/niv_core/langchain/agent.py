@@ -82,13 +82,20 @@ _THINKING_PATTERNS = [
     (r'(?m)^Observation:.*$', ''),
 ]
 
-def _strip_thinking(text):
-    """Remove thinking/reasoning tags from response."""
+def _strip_thinking(text, final=False):
+    """Remove thinking/reasoning tags from response.
+    
+    Args:
+        text: Text to clean
+        final: If True, also strip leading/trailing whitespace (for saved responses).
+               If False (streaming), preserve spaces so token concatenation works.
+    """
     if not text:
         return text
     for pattern, repl in _THINKING_PATTERNS:
         text = re.sub(pattern, repl, text)
-    return re.sub(r'\n{3,}', '\n\n', text).strip()
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip() if final else text
 
 
 # ─── API Key Isolation ──────────────────────────────────────────────
@@ -195,9 +202,9 @@ def run_agent(
 
         for msg in reversed(result.get("messages", [])):
             if hasattr(msg, "type") and msg.type == "ai" and msg.content:
-                return _strip_thinking(msg.content)
+                return _strip_thinking(msg.content, final=True)
 
-        return _strip_thinking(cbs["stream"].get_full_response() or "I could not generate a response.")
+        return _strip_thinking(cbs["stream"].get_full_response() or "I could not generate a response.", final=True)
 
     except Exception as e:
         frappe.log_error(f"Agent error: {e}", "Niv AI Agent")
