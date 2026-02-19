@@ -3045,6 +3045,7 @@ ${htmlCode}
         this._streamEventSource = null;   // Active SSE connection
         this._streamFullResponse = "";    // Accumulated response text
         this._streamAborted = false;      // Whether user interrupted
+        this._instantFillerActive = false; // Whether instant filler is speaking
 
         // Voice monitor (interrupt detection during playback)
         this.voiceMonitorStream = null;
@@ -3485,6 +3486,9 @@ ${htmlCode}
         this._streamAborted = false;
         this._flushAudioQueue();
 
+        // ── Instant filler: speak immediately while server processes ──
+        this._playInstantFiller(transcript);
+
         try {
             // Start SSE stream to streaming voice endpoint
             await this._startVoiceStream(transcript);
@@ -3580,6 +3584,7 @@ ${htmlCode}
 
             case "audio_chunk":
                 // Core: decode and enqueue audio for gapless playback
+                this._cancelInstantFiller();
                 this.set_voice_state("speaking");
                 this._streamFullResponse += (this._streamFullResponse ? " " : "") + (event.text || "");
                 this._enqueueAudioChunk(event.audio_base64, event.format, event.text);
@@ -3587,13 +3592,15 @@ ${htmlCode}
 
             case "text_chunk":
                 // TTS failed for this chunk — use browser TTS
+                this._cancelInstantFiller();
                 this.set_voice_state("speaking");
                 this._streamFullResponse += (this._streamFullResponse ? " " : "") + (event.text || "");
                 this._browserTTSChunk(event.text);
                 break;
 
             case "filler":
-                // Filler audio during tool execution
+                // Filler audio during tool execution — server filler replaces instant filler
+                this._cancelInstantFiller();
                 this.set_voice_state("speaking");
                 this._enqueueAudioChunk(event.audio_base64, event.format, "");
                 break;
@@ -3641,9 +3648,51 @@ ${htmlCode}
         }
     }
 
+    // ─── Instant Filler (Browser TTS while server processes) ──────
+
+    _playInstantFiller(transcript) {
+        /* Play a short filler phrase instantly via browser speechSynthesis.
+           Gives immediate audio feedback while SSE connects + LLM processes.
+           Auto-cancelled when first real server audio/text arrives. */
+        if (!("speechSynthesis" in window)) return;
+
+        // Cancel any previous filler
+        this._cancelInstantFiller();
+
+        // Detect language from transcript
+        const hindiPattern = /[\u0900-\u097F]/;
+        const hindiWords = /\b(kya|hai|dikhao|batao|kitna|kitne|kab|kahan|mera|sabhi|sab|list)\b/i;
+        const isHindi = hindiPattern.test(transcript) || hindiWords.test(transcript);
+
+        const phrase = isHindi
+            ? "Ek second, check kar raha hoon"
+            : "Let me check that for you";
+
+        const utterance = new SpeechSynthesisUtterance(phrase);
+        utterance.lang = isHindi ? "hi-IN" : "en-IN";
+        utterance.rate = 1.1;  // Slightly faster — it's just a filler
+        utterance.volume = 0.8;
+
+        // Track so we can cancel when real audio arrives
+        this._instantFillerActive = true;
+        utterance.onend = () => { this._instantFillerActive = false; };
+        utterance.onerror = () => { this._instantFillerActive = false; };
+
+        window.speechSynthesis.speak(utterance);
+    }
+
+    _cancelInstantFiller() {
+        /* Cancel the instant filler if still speaking. */
+        if (this._instantFillerActive && "speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+        }
+        this._instantFillerActive = false;
+    }
+
     _abortVoiceStream() {
         /* Abort the active voice stream and flush the audio queue. */
         this._streamAborted = true;
+        this._cancelInstantFiller();
         if (this._streamEventSource) {
             try {
                 this._streamEventSource.cancel();
@@ -3657,6 +3706,7 @@ ${htmlCode}
 
     async _fallbackVoiceChat(transcript) {
         /* Fallback to old sequential voice_chat_base64 when streaming fails. */
+        this._cancelInstantFiller();
         try {
             // Build audio blob if we have recorded chunks
             let base64Data = "";
@@ -3871,6 +3921,7 @@ ${htmlCode}
     stop_voice_playback() {
         this.stop_voice_monitor();
         this._flushAudioQueue();
+        this._cancelInstantFiller();
         // Stop fallback Audio element if playing
         if (this._fallbackAudio) {
             try { this._fallbackAudio.pause(); this._fallbackAudio.src = ""; } catch(e) {}
