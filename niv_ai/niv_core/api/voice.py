@@ -895,7 +895,7 @@ def _get_whisper_model():
     if _whisper_model is None:
         try:
             from faster_whisper import WhisperModel
-            _whisper_model = WhisperModel("base", device="cpu", compute_type="int8")
+            _whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
             frappe.logger().info("Faster-Whisper model loaded: base")
         except Exception as e:
             frappe.logger().warning(f"Failed to load Whisper model: {e}")
@@ -958,7 +958,7 @@ def speech_to_text(audio_file, engine=None):
                     headers={"Authorization": f"Bearer {config['api_key']}"},
                     files={"file": (os.path.basename(audio_file), f, "audio/webm")},
                     data=data,
-                    timeout=60,
+                    timeout=15,
                 )
 
             if resp.status_code == 200:
@@ -1018,7 +1018,7 @@ def stt_from_base64(**kwargs):
                         headers={"Authorization": f"Bearer {config['api_key']}"},
                         files={"file": ("audio.webm", f, "audio/webm")},
                         data={"model": stt_model},
-                        timeout=30,
+                        timeout=15,
                     )
                 
                 if resp.status_code == 200:

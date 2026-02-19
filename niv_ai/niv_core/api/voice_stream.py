@@ -102,6 +102,7 @@ class ClauseChunker:
         self._buffer: str = ""
         self._in_code_block: bool = False
         self._backtick_count: int = 0
+        self._first_chunk: bool = True
 
     def feed(self, token: str) -> List[str]:
         """Feed a token, return list of ready clauses (0 or more)."""
@@ -184,10 +185,13 @@ class ClauseChunker:
         return len(self._buffer.split())
 
     def _try_yield(self) -> Optional[str]:
-        """Try to yield the buffer as a clause."""
+        """Try to yield the buffer as a clause.
+        First chunk uses lower threshold (1 word) for faster first audio."""
         clause = self._clean(self._buffer)
         self._buffer = ""
-        if clause and len(clause.split()) >= MIN_CLAUSE_WORDS:
+        min_words = 1 if self._first_chunk else MIN_CLAUSE_WORDS
+        if clause and len(clause.split()) >= min_words:
+            self._first_chunk = False
             return clause
         elif clause:
             # Too short — put it back
@@ -318,17 +322,18 @@ def _generate_tts_chunk(text: str, voice: str) -> Optional[dict]:
             communicate = edge_tts.Communicate(text, voice)
             await communicate.save(output_path)
 
-        # Safe async execution — handle existing event loops gracefully
+        # Safe async execution — reuse thread-local loop if available
+        _loop = getattr(_generate_tts_chunk, "_loop", None)
+        if _loop is None or _loop.is_closed():
+            _loop = asyncio.new_event_loop()
+            _generate_tts_chunk._loop = _loop
         try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                import concurrent.futures
-                with concurrent.futures.ThreadPoolExecutor() as pool:
-                    pool.submit(asyncio.run, _gen()).result(timeout=15)
-            else:
-                loop.run_until_complete(_gen())
+            _loop.run_until_complete(_gen())
         except RuntimeError:
-            asyncio.run(_gen())
+            # Fallback: create fresh loop
+            _loop = asyncio.new_event_loop()
+            _generate_tts_chunk._loop = _loop
+            _loop.run_until_complete(_gen())
 
         if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
             return None
