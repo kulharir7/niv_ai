@@ -436,6 +436,14 @@ def _stream_two_model(
             "result": result_str,
         })
 
+    # ── Check if all tools failed — fall back to single-model for retry capability ──
+    all_failed = all("error" in (tr["result"] or "").lower() for tr in tool_results)
+    if all_failed:
+        # Tool errors → big model will try to call tools again but we don't give it tools
+        # Fall back to single-model ReAct agent which can retry with corrected args
+        yield {"type": "_fallback"}
+        return
+
     # ── Step 3: Big model streams final answer with tool results (~5-8s) ──
     # Build messages with tool results appended
     answer_messages = list(messages)  # Copy original messages
