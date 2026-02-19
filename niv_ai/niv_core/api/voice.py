@@ -942,7 +942,7 @@ def speech_to_text(audio_file, engine=None):
     if stt_engine in ("auto", "voxtral", "mistral", "api") and config.get("api_key"):
         provider_type = config.get("provider_type", "openai")
         if provider_type == "mistral":
-            stt_model = "voxtral-mini-latest"
+            stt_model = "voxtral-mini-transcribe-realtime-2602"
         else:
             stt_model = "whisper-1"
 
@@ -1009,7 +1009,7 @@ def stt_from_base64(**kwargs):
         config = _get_voice_config()
         if config.get("api_key"):
             provider_type = config.get("provider_type", "openai")
-            stt_model = "voxtral-mini-latest" if provider_type == "mistral" else "whisper-1"
+            stt_model = "voxtral-mini-transcribe-realtime-2602" if provider_type == "mistral" else "whisper-1"
             
             try:
                 with open(tmp.name, "rb") as f:
