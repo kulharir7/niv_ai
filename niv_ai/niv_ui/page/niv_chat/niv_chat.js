@@ -3722,7 +3722,12 @@ ${htmlCode}
     _playFallbackAudio(audioUrl) {
         /* Play a single audio URL (old-style sequential playback). */
         this.set_voice_state("speaking");
+        // Stop any previous fallback audio
+        if (this._fallbackAudio) {
+            try { this._fallbackAudio.pause(); this._fallbackAudio.src = ""; } catch(e) {}
+        }
         const audio = new Audio(audioUrl);
+        this._fallbackAudio = audio; // Store reference so stop_voice_playback can kill it
 
         audio.onended = () => {
             frappe.call({
@@ -3866,6 +3871,11 @@ ${htmlCode}
     stop_voice_playback() {
         this.stop_voice_monitor();
         this._flushAudioQueue();
+        // Stop fallback Audio element if playing
+        if (this._fallbackAudio) {
+            try { this._fallbackAudio.pause(); this._fallbackAudio.src = ""; } catch(e) {}
+            this._fallbackAudio = null;
+        }
         // Also stop browser speechSynthesis if playing
         if ("speechSynthesis" in window) {
             window.speechSynthesis.cancel();
