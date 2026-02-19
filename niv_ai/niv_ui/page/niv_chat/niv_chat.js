@@ -3125,6 +3125,11 @@ ${htmlCode}
             this.stop_voice_playback();
             this._abortVoiceStream();
             this.start_voice_recording();
+        } else if (this.voiceState === "processing") {
+            // Cancel ongoing request → back to idle
+            this._abortVoiceStream();
+            this.stop_voice_playback();
+            this.set_voice_state("idle");
         }
     }
 
