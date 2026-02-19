@@ -3392,19 +3392,24 @@ ${htmlCode}
         /* Open SSE connection to stream_voice_chat and process audio chunks. */
         const conversationId = this.current_conversation || "";
 
-        // Build SSE URL with fetch (POST SSE)
+        // Use XMLHttpRequest-style fetch with Frappe's expected headers.
+        // Frappe rejects raw fetch POST with 417 (Expectation Failed) unless
+        // we include X-Frappe-CSRF-Token AND set Accept to application/json.
         const url = "/api/method/niv_ai.niv_core.api.voice_stream.stream_voice_chat";
 
         const response = await fetch(url, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
+                "Accept": "text/event-stream",
                 "X-Frappe-CSRF-Token": frappe.csrf_token,
+                "X-Requested-With": "XMLHttpRequest",
             },
             body: JSON.stringify({
                 text: transcript,
                 conversation_id: conversationId,
             }),
+            credentials: "same-origin",
         });
 
         if (!response.ok) {
