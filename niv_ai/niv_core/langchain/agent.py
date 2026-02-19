@@ -6,7 +6,7 @@ import json
 import re
 import frappe
 from niv_ai.niv_core.utils import get_niv_settings
-from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 
 from .llm import get_llm
 from .tools import get_langchain_tools
@@ -218,6 +218,207 @@ def run_agent(
 
 # ─── Stream ─────────────────────────────────────────────────────────
 
+def _get_fast_model():
+    """Get fast model name from settings, or None if not configured."""
+    try:
+        settings = get_niv_settings()
+        return getattr(settings, "fast_model", None) or None
+    except Exception:
+        return None
+
+
+def _build_system_prompt(conversation_id, dev_mode=False, page_context=None):
+    """Build complete system prompt with context."""
+    if dev_mode:
+        from .memory import get_dev_system_prompt
+        return get_dev_system_prompt()
+
+    system_prompt = get_system_prompt(conversation_id)
+    prompt_suffix = get_agent_prompt_suffix("general")
+    if prompt_suffix:
+        system_prompt = f"{system_prompt}\n\n{prompt_suffix}"
+
+    if page_context:
+        from .memory import format_page_context
+        ctx_text = format_page_context(page_context)
+        if ctx_text:
+            system_prompt += "\n\n" + ctx_text
+
+    return system_prompt
+
+
+def _stream_single_model(agent, messages, config, cbs, dev_mode=False, max_tool_calls=12):
+    """Original single-model streaming via LangGraph ReAct agent."""
+    pending_tool_calls = {}
+    tool_call_count = 0
+    start_ts = frappe.utils.now_datetime()
+    buffer = ""
+
+    for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
+        elapsed = (frappe.utils.now_datetime() - start_ts).total_seconds()
+        if elapsed > (180 if dev_mode else 120):
+            yield {"type": "error", "content": "Request took too long."}
+            break
+
+        msg = event[0] if isinstance(event, tuple) else event
+        if not hasattr(msg, "type"):
+            continue
+
+        if msg.type == "ai" or msg.type == "AIMessageChunk":
+            tool_calls = getattr(msg, "tool_calls", None) or []
+            tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
+
+            if msg.content:
+                buffer += msg.content
+                clean = _strip_thinking(buffer)
+                if clean:
+                    yield {"type": "token", "content": clean}
+                    buffer = ""
+
+            if tool_calls or tool_call_chunks:
+                if buffer:
+                    clean = _strip_thinking(buffer)
+                    if clean:
+                        yield {"type": "token", "content": clean}
+                    buffer = ""
+
+                if tool_calls:
+                    for tc in tool_calls:
+                        yield {"type": "tool_call", "tool": tc.get("name", ""), "arguments": tc.get("args", {})}
+                else:
+                    for tc in tool_call_chunks:
+                        idx = tc.get("index", 0)
+                        if idx not in pending_tool_calls:
+                            pending_tool_calls[idx] = {"name": "", "args": ""}
+                        if tc.get("name"):
+                            pending_tool_calls[idx]["name"] = tc["name"]
+                        if tc.get("args"):
+                            pending_tool_calls[idx]["args"] += tc["args"]
+
+        elif msg.type == "tool":
+            tool_call_count += 1
+            for idx in list(pending_tool_calls.keys()):
+                tc_data = pending_tool_calls[idx]
+                if tc_data["name"]:
+                    yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
+            pending_tool_calls.clear()
+
+            yield {
+                "type": "tool_result",
+                "tool": getattr(msg, "name", "unknown"),
+                "result": (str(msg.content) or "")[:2000],
+            }
+            if tool_call_count >= max_tool_calls:
+                yield {"type": "error", "content": "Tool call limit reached."}
+                break
+
+
+def _stream_two_model(
+    message, messages, system_prompt, conversation_id, user,
+    provider_name, model, cbs, dev_mode=False, max_tool_calls=12,
+):
+    """Two-model optimization: fast model for tool selection, big model for final answer.
+    
+    Flow:
+    1. Fast LLM (non-streaming) with tools → decides tool call or direct answer
+    2. If tool call → execute tool → get result
+    3. Big LLM (streaming) with original question + tool result → stream final answer
+    
+    Falls back to single-model if fast model fails or isn't configured.
+    
+    Yields a special {"type": "_fallback"} event if fast model fails,
+    signaling the caller to use single-model instead.
+    """
+    from .tools import get_langchain_tools
+
+    fast_model_name = _get_fast_model()
+    tools = get_langchain_tools()
+
+    # ── Step 1: Fast model decides tool call (non-streaming, ~1-2s) ──
+    fast_llm = get_llm(provider_name, fast_model_name, streaming=False, callbacks=[])
+    fast_llm_with_tools = fast_llm.bind_tools(tools)
+
+    try:
+        fast_response = fast_llm_with_tools.invoke(messages)
+    except Exception as e:
+        frappe.logger().warning(f"Niv AI: Fast model failed, falling back to single-model: {e}")
+        yield {"type": "_fallback"}
+        return
+
+    fast_tool_calls = getattr(fast_response, "tool_calls", None) or []
+
+    # ── No tool call needed → stream answer with big model directly ──
+    if not fast_tool_calls:
+        # Fast model answered directly — but we want the big model's quality
+        # Stream with big model (no tools needed, pure text generation)
+        big_llm = get_llm(provider_name, model, streaming=True, callbacks=list(cbs.values()))
+        buffer = ""
+        for chunk in big_llm.stream(messages):
+            if chunk.content:
+                buffer += chunk.content
+                clean = _strip_thinking(buffer)
+                if clean:
+                    yield {"type": "token", "content": clean}
+                    buffer = ""
+        return
+
+    # ── Step 2: Execute tool calls (~0.5-1s) ──
+    tool_map = {t.name: t for t in tools}
+    tool_results = []
+
+    for tc in fast_tool_calls[:max_tool_calls]:
+        tool_name = tc.get("name", "")
+        tool_args = tc.get("args", {})
+        tool_call_id = tc.get("id", f"call_{tool_name}")
+
+        yield {"type": "tool_call", "tool": tool_name, "arguments": tool_args}
+
+        if tool_name in tool_map:
+            try:
+                result = tool_map[tool_name].invoke(tool_args)
+                result_str = str(result) if not isinstance(result, str) else result
+            except Exception as e:
+                result_str = f"Error: {e}"
+        else:
+            result_str = f"Tool '{tool_name}' not found."
+
+        yield {
+            "type": "tool_result",
+            "tool": tool_name,
+            "result": result_str[:2000],
+        }
+        tool_results.append({
+            "tool_call_id": tool_call_id,
+            "tool_name": tool_name,
+            "result": result_str,
+        })
+
+    # ── Step 3: Big model streams final answer with tool results (~5-8s) ──
+    # Build messages with tool results appended
+    answer_messages = list(messages)  # Copy original messages
+
+    # Add the fast model's AI message with tool calls
+    answer_messages.append(fast_response)
+
+    # Add tool results as ToolMessages
+    for tr in tool_results:
+        answer_messages.append(ToolMessage(
+            content=tr["result"],
+            tool_call_id=tr["tool_call_id"],
+            name=tr["tool_name"],
+        ))
+
+    big_llm = get_llm(provider_name, model, streaming=True, callbacks=list(cbs.values()))
+    buffer = ""
+    for chunk in big_llm.stream(answer_messages):
+        if chunk.content:
+            buffer += chunk.content
+            clean = _strip_thinking(buffer)
+            if clean:
+                yield {"type": "token", "content": clean}
+                buffer = ""
+
+
 def stream_agent(
     message: str,
     conversation_id: str = None,
@@ -227,7 +428,18 @@ def stream_agent(
     dev_mode: bool = False,
     page_context: dict = None,
 ):
-    """Stream agent — yields SSE event dicts."""
+    """Stream agent — yields SSE event dicts.
+    
+    Uses two-model optimization when fast_model is configured:
+      - Fast model (small) for tool selection (~1-2s)
+      - Big model for final answer streaming (~5-8s)
+      - Total: ~7-10s vs ~15-20s with single model
+    
+    Falls back to single-model LangGraph ReAct agent if:
+      - fast_model not configured
+      - fast model call fails
+      - dev_mode enabled (needs full agent loop)
+    """
     user = user or frappe.session.user
 
     agent, config, system_prompt, cbs = create_niv_agent(
@@ -239,92 +451,37 @@ def stream_agent(
         prompt_text=message,
     )
 
-    # Developer mode: use dev system prompt
-    if dev_mode:
-        from .memory import get_dev_system_prompt
-        system_prompt = get_dev_system_prompt()
-
-    # Inject page context into system prompt
-    if page_context:
-        from .memory import format_page_context
-        ctx_text = format_page_context(page_context)
-        if ctx_text:
-            system_prompt += "\n\n" + ctx_text
-
+    system_prompt = _build_system_prompt(conversation_id, dev_mode, page_context)
     messages = _build_messages(message, conversation_id, system_prompt)
 
     _setup_user_api_key(user)
-    pending_tool_calls = {}
-    tool_call_count = 0
     MAX_TOOL_CALLS = 40 if dev_mode else 12
-    start_ts = frappe.utils.now_datetime()
-    
-    # Thought tag stripping state
-    buffer = ""
+    use_two_model = not dev_mode and _get_fast_model()
 
     try:
-        for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
-            # Timeout guard
-            elapsed = (frappe.utils.now_datetime() - start_ts).total_seconds()
-            if elapsed > (180 if dev_mode else 120):
-                yield {"type": "error", "content": "Request took too long."}
-                break
-
-            msg = event[0] if isinstance(event, tuple) else event
-            if not hasattr(msg, "type"):
-                continue
-
-            if msg.type == "ai" or msg.type == "AIMessageChunk":
-                tool_calls = getattr(msg, "tool_calls", None) or []
-                tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
-                
-                # Stream text content (strip thinking tags inline)
-                if msg.content:
-                    buffer += msg.content
-                    # Check for thinking tags
-                    clean = _strip_thinking(buffer)
-                    if clean:
-                        yield {"type": "token", "content": clean}
-                        buffer = ""
-                
-                # Tool calls
-                if tool_calls or tool_call_chunks:
-                    if buffer:
-                        clean = _strip_thinking(buffer)
-                        if clean:
-                            yield {"type": "token", "content": clean}
-                        buffer = ""
-                        
-                    if tool_calls:
-                        for tc in tool_calls:
-                            yield {"type": "tool_call", "tool": tc.get("name", ""), "arguments": tc.get("args", {})}
-                    else:
-                        for tc in tool_call_chunks:
-                            idx = tc.get("index", 0)
-                            if idx not in pending_tool_calls:
-                                pending_tool_calls[idx] = {"name": "", "args": ""}
-                            if tc.get("name"):
-                                pending_tool_calls[idx]["name"] = tc["name"]
-                            if tc.get("args"):
-                                pending_tool_calls[idx]["args"] += tc["args"]
-
-            elif msg.type == "tool":
-                tool_call_count += 1
-                # Flush pending tool call chunks
-                for idx in list(pending_tool_calls.keys()):
-                    tc_data = pending_tool_calls[idx]
-                    if tc_data["name"]:
-                        yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
-                pending_tool_calls.clear()
-                
-                yield {
-                    "type": "tool_result",
-                    "tool": getattr(msg, "name", "unknown"),
-                    "result": (str(msg.content) or "")[:2000],
-                }
-                if tool_call_count >= MAX_TOOL_CALLS:
-                    yield {"type": "error", "content": "Tool call limit reached."}
+        if use_two_model:
+            # Try two-model optimization
+            fell_back = False
+            for event in _stream_two_model(
+                message=message,
+                messages=messages,
+                system_prompt=system_prompt,
+                conversation_id=conversation_id,
+                user=user,
+                provider_name=provider_name,
+                model=model,
+                cbs={"stream": cbs["stream"], "billing": cbs["billing"], "logging": cbs["logging"]},
+                dev_mode=dev_mode,
+                max_tool_calls=MAX_TOOL_CALLS,
+            ):
+                if event.get("type") == "_fallback":
+                    fell_back = True
                     break
+                yield event
+            if fell_back:
+                yield from _stream_single_model(agent, messages, config, cbs, dev_mode, MAX_TOOL_CALLS)
+        else:
+            yield from _stream_single_model(agent, messages, config, cbs, dev_mode, MAX_TOOL_CALLS)
 
     except Exception as e:
         frappe.log_error(f"Stream agent error: {e}", "Niv AI Agent")
