@@ -1,3 +1,38 @@
+## [1.0.0] - 2026-02-19 — Stable Release 🎉
+
+### 🚀 Production-Ready
+
+#### Reliable Streaming (Complete Rewrite)
+- **agent.py rewritten** — centralized buffer logic into `_flush_buffer()` and `_stream_llm_tokens()`
+- **No more lost responses** — thinking tag buffer capped at 1500 chars, force flush prevents infinite hold
+- **Garbled tool text detection** — `_is_garbled_tool_text()` catches fast model outputting tool calls as plain text
+- **Empty response fallback** — if agent produces no text, user gets helpful fallback message instead of blank
+- **stream.py rewritten** — always saves assistant message to DB, even on errors
+
+#### Two-Model Speed Fix
+- **Tool errors no longer fallback to single-model** — saves ~12s on tool failures
+- Big model now handles tool error results directly (explains error or answers from context)
+- **Tool description field hints** — `posting_date` vs `transaction_date` per DocType prevents wrong field errors
+- Expected timing: **~8s** for tool queries (was 24s on error path)
+
+#### UI Fixes
+- **Excel/CSV/PDF export buttons restored** — were lost during voice streaming rewrite, now back on all table responses
+- Buttons appear on both loaded messages and streaming completions
+
+#### Billing & Payment
+- **Razorpay completely removed** — only Demo + Growth Billing modes
+- **Growth Billing** (renamed from ERPNext Billing) with default customer/item
+- **Atomic pool deduction** — SQL `UPDATE...WHERE balance >= tokens` prevents negative balance
+- **Model name tracked** in usage logs for cost analysis
+- **Accurate token estimation** — uses full prompt text (system + history + message)
+
+#### Cleanup
+- Removed unused deps: `litellm`, `google-adk`, `razorpay`, `pytesseract`, etc.
+- Pre-compiled regex patterns for thinking tag stripping
+- Frozenset lookups for simple query detection
+
+---
+
 ## [0.9.2] - 2026-02-19
 
 ### ⚡ Performance & Reliability
