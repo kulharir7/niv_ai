@@ -341,6 +341,12 @@ def _stream_single_model(agent, messages, config, cbs, dev_mode=False, max_tool_
                 yield {"type": "error", "content": "Tool call limit reached."}
                 break
 
+    # Flush remaining buffer after stream ends
+    if buffer:
+        clean = _strip_thinking(buffer, final=True)
+        if clean:
+            yield {"type": "token", "content": clean}
+
 
 def _stream_two_model(
     message, messages, system_prompt, conversation_id, user,
@@ -392,6 +398,11 @@ def _stream_two_model(
                     if clean:
                         yield {"type": "token", "content": clean}
                         buffer = ""
+        # Flush remaining buffer
+        if buffer:
+            clean = _strip_thinking(buffer, final=True)
+            if clean:
+                yield {"type": "token", "content": clean}
         return
 
     # ── Step 2: Execute tool calls (~0.5-1s) ──
@@ -450,6 +461,11 @@ def _stream_two_model(
                 if clean:
                     yield {"type": "token", "content": clean}
                     buffer = ""
+    # Flush remaining buffer
+    if buffer:
+        clean = _strip_thinking(buffer, final=True)
+        if clean:
+            yield {"type": "token", "content": clean}
 
 
 def stream_agent(
