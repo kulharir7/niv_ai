@@ -113,11 +113,22 @@ cd /path/to/frappe-bench
 # Get niv_ai first (setup.sh is inside)
 bench get-app https://github.com/kulharir7/niv_ai.git
 
-# Run setup — installs everything, configures provider, enables billing
-bash apps/niv_ai/setup.sh yoursite.com https://api.mistral.ai/v1 YOUR_API_KEY
+# Run setup — pick your AI provider:
+
+# Mistral (recommended)
+bash apps/niv_ai/setup.sh yoursite.com https://api.mistral.ai/v1 YOUR_KEY
+
+# OpenAI
+bash apps/niv_ai/setup.sh yoursite.com https://api.openai.com/v1 YOUR_KEY gpt-4o gpt-4o-mini
+
+# Ollama (free, local)
+bash apps/niv_ai/setup.sh yoursite.com http://localhost:11434/v1 ollama llama3.1
+
+# DeepSeek
+bash apps/niv_ai/setup.sh yoursite.com https://api.deepseek.com/v1 YOUR_KEY deepseek-chat
 ```
 
-That's it. Open `/app/niv-chat` and start chatting.
+That's it. Open `/app/niv-chat` and start chatting. Provider auto-detected from URL.
 
 ### Manual Install
 
