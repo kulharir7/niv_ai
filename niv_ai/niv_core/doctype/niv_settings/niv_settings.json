@@ -330,6 +330,51 @@
       "label": "Razorpay Webhook Secret"
     },
     {
+      "fieldname": "erp_billing_section",
+      "fieldtype": "Section Break",
+      "label": "ERPNext Billing",
+      "description": "Connect to a remote ERPNext for billing. Recharge creates Sales Order on vendor's ERPNext. Tokens credited on SO submit via webhook.",
+      "collapsible": 1
+    },
+    {
+      "fieldname": "billing_erp_url",
+      "fieldtype": "Data",
+      "label": "Vendor ERPNext URL",
+      "description": "e.g. https://erp.yourcompany.com"
+    },
+    {
+      "fieldname": "billing_erp_api_key",
+      "fieldtype": "Data",
+      "label": "API Key"
+    },
+    {
+      "fieldname": "billing_erp_api_secret",
+      "fieldtype": "Password",
+      "label": "API Secret"
+    },
+    {
+      "fieldname": "column_break_erp_billing",
+      "fieldtype": "Column Break"
+    },
+    {
+      "fieldname": "billing_erp_customer",
+      "fieldtype": "Data",
+      "label": "Customer Name",
+      "description": "Customer name on vendor ERPNext (e.g. MDFC Financiers)"
+    },
+    {
+      "fieldname": "billing_erp_item",
+      "fieldtype": "Data",
+      "label": "Item Code",
+      "description": "Item code for token recharge on vendor ERPNext"
+    },
+    {
+      "fieldname": "billing_erp_webhook_secret",
+      "fieldtype": "Password",
+      "label": "Webhook Secret",
+      "description": "Shared secret for verifying webhook callbacks from vendor ERPNext"
+    },
+    {
       "fieldname": "currency",
       "fieldtype": "Data",
       "label": "Currency (Legacy)",
