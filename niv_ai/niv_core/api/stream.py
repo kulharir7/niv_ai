@@ -200,6 +200,11 @@ def stream_chat(**kwargs):
             yield _sse({"type": "error", "content": error_msg})
 
         finally:
+            # If tools ran but no text response, provide a fallback message
+            if not full_response.strip() and tool_calls_data:
+                full_response = "I looked up the information but couldn't generate a complete response. Please try again."
+                yield _sse({"type": "token", "content": full_response})
+
             # Save response - ensure DB connection is alive
             if full_response.strip():
                 _ensure_db(_site_name)

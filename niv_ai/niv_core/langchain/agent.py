@@ -100,8 +100,12 @@ def _strip_thinking(text, final=False):
 
 def _has_incomplete_tag(text):
     """Check if text has an incomplete thinking tag that might close later.
-    Returns True if we should hold the buffer (don't yield yet)."""
+    Returns True if we should hold the buffer (don't yield yet).
+    Safety: never hold more than 2000 chars — force flush to avoid lost output."""
     if not text:
+        return False
+    # Safety cap: if buffer is huge, the close tag isn't coming — force flush
+    if len(text) > 2000:
         return False
     # Check for complete opener without closer (buffering until close tag arrives)
     _TAG_PAIRS = [
@@ -114,14 +118,28 @@ def _has_incomplete_tag(text):
         if opener in text and closer not in text:
             return True
     # Check for partial opener at END of text only (min 3 chars to avoid false positives)
-    # e.g. "<thi", "<think", "<reas", "[[THO"
-    tail = text[-15:]  # Only check last 15 chars
+    tail = text[-15:]
     _PARTIAL_OPENERS = ['<think>', '<reasoning>', '[[THOUGHT]]', '[[THINKING]]']
     for opener in _PARTIAL_OPENERS:
-        for i in range(3, len(opener)):  # Start from 3 chars to avoid "<" false positive
+        for i in range(3, len(opener)):
             partial = opener[:i]
             if tail.endswith(partial):
                 return True
+    return False
+
+
+def _is_tool_call_text(text):
+    """Detect if text is a raw tool call that the LLM output as plain text
+    instead of using the function calling API. Returns True if it looks like
+    a tool call, not a real response."""
+    if not text or len(text) > 500:
+        return False  # Real responses are usually longer
+    stripped = text.strip()
+    # Pattern: starts with a function-like name and has JSON args
+    import re
+    if re.match(r'^[a-z_]+\s*[\w\W]*\{.*\}\s*$', stripped, re.DOTALL):
+        # Looks like: "list_documents {\"doctype\": ...}" or "get_report {...}"
+        return True
     return False
 
 
@@ -383,6 +401,13 @@ def _stream_two_model(
         return
 
     fast_tool_calls = getattr(fast_response, "tool_calls", None) or []
+
+    # Detect fast model outputting tool calls as plain text (broken function calling)
+    fast_content = getattr(fast_response, "content", "") or ""
+    if not fast_tool_calls and _is_tool_call_text(fast_content):
+        frappe.logger().warning(f"Niv AI: Fast model output tool call as text, falling back: {fast_content[:100]}")
+        yield {"type": "_fallback"}
+        return
 
     # ── No tool call needed → stream answer with big model directly ──
     if not fast_tool_calls:
