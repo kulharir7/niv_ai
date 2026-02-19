@@ -83,7 +83,7 @@ def deduct_tokens(user=None, input_tokens=0, output_tokens=0,
     cost_per_1k_output = flt(getattr(settings, 'cost_per_1k_output', 0) or 0)
     token_cost = (input_tokens / 1000 * cost_per_1k_input) + (output_tokens / 1000 * cost_per_1k_output)
 
-    # Log usage (always, both modes)
+    # Log usage (always, both modes) — log errors instead of silently swallowing
     try:
         frappe.get_doc({
             "doctype": "Niv Usage Log",
@@ -97,8 +97,8 @@ def deduct_tokens(user=None, input_tokens=0, output_tokens=0,
             "token_cost": token_cost,
             "cost": token_cost,
         }).insert(ignore_permissions=True)
-    except Exception:
-        pass
+    except Exception as e:
+        frappe.log_error(f"Failed to insert Niv Usage Log: {e}", "Niv AI Billing")
 
     frappe.db.commit()
     return {

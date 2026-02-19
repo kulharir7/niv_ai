@@ -498,7 +498,11 @@ def stream_agent(
                 frappe.db.connect()
             except Exception:
                 pass
-        cbs["billing"].finalize(stream_cb=cbs["stream"])
+        # Build full prompt text for accurate token estimation
+        full_prompt = "\n".join(
+            getattr(m, "content", str(m)) for m in messages if hasattr(m, "content")
+        )
+        cbs["billing"].finalize(stream_cb=cbs["stream"], full_prompt_text=full_prompt)
         cbs["logging"].finalize()
         
         # Yield token usage for stream.py to save with the message

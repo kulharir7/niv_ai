@@ -104,33 +104,38 @@ class NivBillingCallback(BaseCallbackHandler):
         except Exception as e:
             frappe.log_error(f"Billing callback accumulate error: {e}", "Niv AI Billing")
 
-    def finalize(self, stream_cb=None):
+    def finalize(self, stream_cb=None, full_prompt_text=None):
         """Commit all accumulated token usage. Call once after agent completes.
         
-        If provider didn't report usage (common in streaming), estimate from collected tokens.
+        If provider didn't report usage (common in streaming with Ollama/Mistral),
+        estimate from the actual texts used.
+        
+        Args:
+            stream_cb: NivStreamingCallback with collected response tokens
+            full_prompt_text: Full text sent to LLM (system prompt + history + user message)
+                             More accurate than just the user's message.
         """
         if self._finalized:
             return
         self._finalized = True
 
-        # If no usage reported by provider, estimate from stream tokens
+        # If no usage reported by provider, estimate from actual texts
         if self.total_prompt_tokens == 0 and self.total_completion_tokens == 0:
-            # Estimate completion from stream_cb
+            # Estimate completion from stream_cb (actual LLM response)
             if stream_cb:
                 response_text = stream_cb.get_full_response()
                 if response_text:
-                    estimated_completion = _estimate_token_count(response_text)
-                    self.total_completion_tokens = max(1, estimated_completion)
+                    self.total_completion_tokens = max(1, _estimate_token_count(response_text))
                 else:
                     self.total_completion_tokens = 1
             
-            # Estimate prompt from prompt_text (BUG-011: estimate from chars/4)
-            if self.prompt_text:
-                estimated_prompt = _estimate_token_count(self.prompt_text)
-                self.total_prompt_tokens = max(1, estimated_prompt)
+            # Estimate prompt from full prompt text (system + history + user message)
+            prompt_source = full_prompt_text or self.prompt_text
+            if prompt_source:
+                self.total_prompt_tokens = max(1, _estimate_token_count(prompt_source))
             else:
-                # Fallback if no prompt_text provided
-                self.total_prompt_tokens = max(1, self.total_completion_tokens)
+                # Absolute minimum fallback — at least match completion
+                self.total_prompt_tokens = max(500, self.total_completion_tokens)
 
         total = self.total_prompt_tokens + self.total_completion_tokens
         if total <= 0:
