@@ -47,17 +47,27 @@ if [ -z "$SITE" ]; then
     echo "  bash setup.sh <site> <base-url> <api-key> [model] [fast-model]"
     echo ""
     echo "Examples:"
+    echo ""
     echo "  # Mistral (recommended)"
-    echo "  bash setup.sh mysite.localhost https://api.mistral.ai/v1 sk-xxx mistral-large-latest mistral-small-latest"
+    echo "  bash setup.sh mysite.com https://api.mistral.ai/v1 sk-xxx mistral-large-latest mistral-small-latest"
     echo ""
     echo "  # OpenAI"
-    echo "  bash setup.sh mysite.localhost https://api.openai.com/v1 sk-xxx gpt-4o gpt-4o-mini"
+    echo "  bash setup.sh mysite.com https://api.openai.com/v1 sk-xxx gpt-4o gpt-4o-mini"
     echo ""
-    echo "  # Ollama (local, free)"
-    echo "  bash setup.sh mysite.localhost http://localhost:11434/v1 ollama llama3.1 llama3.1"
+    echo "  # Anthropic (Claude)"
+    echo "  bash setup.sh mysite.com https://api.anthropic.com sk-xxx claude-sonnet-4-20250514 claude-haiku-4-20250414"
     echo ""
-    echo "  # Minimal (configure later in UI)"
-    echo "  bash setup.sh mysite.localhost"
+    echo "  # DeepSeek"
+    echo "  bash setup.sh mysite.com https://api.deepseek.com/v1 sk-xxx deepseek-chat deepseek-chat"
+    echo ""
+    echo "  # Groq (fast inference)"
+    echo "  bash setup.sh mysite.com https://api.groq.com/openai/v1 gsk-xxx llama-3.3-70b-versatile llama-3.1-8b-instant"
+    echo ""
+    echo "  # Ollama (local, free, no API key needed)"
+    echo "  bash setup.sh mysite.com http://localhost:11434/v1 ollama llama3.1 llama3.1"
+    echo ""
+    echo "  # Minimal (configure provider later in UI)"
+    echo "  bash setup.sh mysite.com"
     echo ""
     exit 0
 fi
@@ -123,31 +133,49 @@ log "Frontend build complete"
 
 step "Step 5/7: Configuring AI Provider"
 
-if [ -n "$API_KEY" ] && [ "$API_KEY" != "ollama" ]; then
-    bench --site "$SITE" execute niv_ai.install.setup_provider --kwargs "{
-        \"base_url\": \"$BASE_URL\",
-        \"api_key\": \"$API_KEY\",
-        \"model\": \"$MODEL\",
-        \"fast_model\": \"$FAST_MODEL\"
-    }" 2>/dev/null || {
-        # Fallback: create via console
-        bench --site "$SITE" console <<EOF
-provider_name = "AI Provider"
+# Auto-detect provider name from base URL
+_detect_provider_name() {
+    local url="$1"
+    case "$url" in
+        *mistral*)    echo "Mistral" ;;
+        *openai.com*) echo "OpenAI" ;;
+        *anthropic*)  echo "Anthropic" ;;
+        *groq*)       echo "Groq" ;;
+        *together*)   echo "Together AI" ;;
+        *ollama*|*localhost*|*127.0.0.1*) echo "Ollama" ;;
+        *deepseek*)   echo "DeepSeek" ;;
+        *fireworks*)  echo "Fireworks" ;;
+        *perplexity*) echo "Perplexity" ;;
+        *)            echo "AI Provider" ;;
+    esac
+}
+
+if [ -n "$BASE_URL" ]; then
+    PROVIDER_NAME=$(_detect_provider_name "$BASE_URL")
+    _API_KEY="${API_KEY:-ollama}"  # Default to "ollama" for local providers
+
+    bench --site "$SITE" console <<EOF
+provider_name = "$PROVIDER_NAME"
 if not frappe.db.exists("Niv AI Provider", provider_name):
     doc = frappe.get_doc({
         "doctype": "Niv AI Provider",
         "provider_name": provider_name,
         "base_url": "$BASE_URL",
-        "api_key": "$API_KEY",
+        "api_key": "$_API_KEY",
         "default_model": "$MODEL",
     })
     doc.insert(ignore_permissions=True)
     frappe.db.commit()
     print(f"Created provider: {provider_name}")
 else:
-    print(f"Provider already exists: {provider_name}")
+    doc = frappe.get_doc("Niv AI Provider", provider_name)
+    doc.base_url = "$BASE_URL"
+    doc.api_key = "$_API_KEY"
+    doc.default_model = "$MODEL"
+    doc.save(ignore_permissions=True)
+    frappe.db.commit()
+    print(f"Updated provider: {provider_name}")
 
-# Update Niv Settings
 settings = frappe.get_single("Niv Settings")
 settings.default_provider = provider_name
 settings.default_model = "$MODEL"
@@ -162,38 +190,9 @@ settings.save(ignore_permissions=True)
 frappe.db.commit()
 print("Niv Settings configured!")
 EOF
-    }
-    log "AI Provider configured (model: $MODEL, fast: $FAST_MODEL)"
+    log "Provider '$PROVIDER_NAME' configured (model: $MODEL, fast: $FAST_MODEL)"
 else
-    if [ "$API_KEY" = "ollama" ]; then
-        bench --site "$SITE" console <<EOF
-provider_name = "Ollama"
-if not frappe.db.exists("Niv AI Provider", provider_name):
-    doc = frappe.get_doc({
-        "doctype": "Niv AI Provider",
-        "provider_name": provider_name,
-        "base_url": "$BASE_URL",
-        "api_key": "ollama",
-        "default_model": "$MODEL",
-    })
-    doc.insert(ignore_permissions=True)
-    frappe.db.commit()
-settings = frappe.get_single("Niv Settings")
-settings.default_provider = provider_name
-settings.default_model = "$MODEL"
-settings.fast_model = "$FAST_MODEL"
-settings.enable_widget = 1
-settings.enable_billing = 1
-settings.billing_mode = "Shared Pool"
-settings.shared_pool_balance = 99999999
-settings.save(ignore_permissions=True)
-frappe.db.commit()
-print("Ollama provider configured!")
-EOF
-        log "Ollama provider configured (free, local)"
-    else
-        warn "No API key provided — configure manually at /app/niv-settings"
-    fi
+    warn "No base URL provided — configure AI Provider manually at /app/niv-settings"
 fi
 
 # ─── Step 6: Add Assistant role to Administrator ────────
@@ -350,8 +349,8 @@ echo "  Chat:     https://$SITE/app/niv-chat"
 echo "  Settings: https://$SITE/app/niv-settings"
 echo ""
 
-if [ -n "$API_KEY" ]; then
-    echo "  Provider:   configured ✓"
+if [ -n "$BASE_URL" ]; then
+    echo "  Provider:   $PROVIDER_NAME ✓"
     echo "  Model:      $MODEL"
     echo "  Fast Model: $FAST_MODEL"
     echo "  Billing:    Demo mode (10M free tokens)"
