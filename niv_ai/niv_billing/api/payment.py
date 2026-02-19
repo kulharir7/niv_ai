@@ -8,14 +8,14 @@ from niv_ai.niv_core.compat import db_set_single_value
 
 
 def _get_payment_mode():
-    """Detect payment mode: 'erpnext' | 'demo'"""
+    """Detect payment mode: 'growth' | 'demo'"""
     settings = frappe.get_single("Niv Settings")
 
-    # ERPNext billing if configured
+    # Growth Billing if configured
     erp_url = getattr(settings, "billing_erp_url", None)
     erp_key = getattr(settings, "billing_erp_api_key", None)
     if erp_url and erp_key:
-        return "erpnext"
+        return "growth"
 
     return "demo"
 
@@ -50,7 +50,7 @@ def create_order(plan_name):
     """Create a payment order for a credit plan.
 
     Supports 2 modes:
-    - erpnext: Creates Sales Order on vendor's ERPNext via REST API
+    - growth: Creates Sales Order on vendor's ERPNext via Growth Billing
     - demo: Fake order for testing
     """
     plan = frappe.get_doc("Niv Credit Plan", plan_name)
@@ -90,14 +90,14 @@ def create_order(plan_name):
 
     payment_mode = _get_payment_mode()
 
-    if payment_mode == "erpnext":
-        return _create_erpnext_order(plan, user, settings, currency)
+    if payment_mode == "growth":
+        return _create_growth_order(plan, user, settings, currency)
     else:
         return _create_demo_order(plan, user, currency)
 
 
-def _create_erpnext_order(plan, user, settings, currency):
-    """Create Sales Order on vendor's ERPNext via REST API."""
+def _create_growth_order(plan, user, settings, currency):
+    """Create Sales Order on vendor's ERPNext via Growth Billing."""
     import requests as req
 
     erp_url = settings.billing_erp_url.rstrip("/")
@@ -140,7 +140,7 @@ def _create_erpnext_order(plan, user, settings, currency):
         so_result = resp.json()
         so_name = so_result.get("data", {}).get("name", "")
     except Exception as e:
-        frappe.log_error(f"ERPNext Sales Order creation failed: {e}", "Niv Billing ERPNext")
+        frappe.log_error(f"Growth Billing order creation failed: {e}", "Niv Growth Billing")
         frappe.throw(_("Failed to create recharge order. Please try again."))
 
     recharge = frappe.get_doc({
@@ -153,14 +153,14 @@ def _create_erpnext_order(plan, user, settings, currency):
         "currency": currency,
         "razorpay_order_id": so_name,
         "status": "Pending",
-        "remarks": f"Recharge: {plan.plan_name} | SO: {so_name} (vendor ERPNext)",
+        "remarks": f"Recharge: {plan.plan_name} | SO: {so_name} (Growth Billing)",
     })
     recharge.insert(ignore_permissions=True)
     frappe.db.commit()
 
     return {
         "order_id": so_name,
-        "payment_mode": "erpnext",
+        "payment_mode": "growth",
         "message": f"Recharge request sent! Order {so_name} created. Tokens will be credited after payment confirmation.",
         "plan_name": plan.plan_name,
         "tokens": plan.tokens,
@@ -203,7 +203,7 @@ def _create_demo_order(plan, user, currency):
 
 @frappe.whitelist(allow_guest=True)
 def erpnext_webhook(**kwargs):
-    """Webhook callback from vendor's ERPNext when Sales Order is submitted.
+    """Webhook callback from vendor's ERPNext (Growth Billing) when Sales Order is submitted.
 
     Called via ERPNext Webhook (DocType: Sales Order, Event: on_submit).
     Verifies the request and credits tokens to the shared pool.
@@ -231,7 +231,7 @@ def erpnext_webhook(**kwargs):
         pass
 
     if expected_secret and webhook_secret != expected_secret:
-        frappe.log_error(f"ERPNext webhook secret mismatch for SO {so_name}", "Niv Billing Webhook")
+        frappe.log_error(f"Growth Billing webhook secret mismatch for SO {so_name}", "Niv Billing Webhook")
         frappe.throw(_("Unauthorized webhook request"), frappe.AuthenticationError)
 
     # Find pending recharge
@@ -278,7 +278,7 @@ def verify_payment(order_id, payment_id="", signature="", **kwargs):
     """Verify payment and credit tokens.
 
     Demo mode: auto-verify.
-    ERPNext mode: verified via webhook (this is fallback).
+    Growth mode: verified via webhook (this is fallback).
 
     Also accepts legacy razorpay_order_id/razorpay_payment_id kwargs for backward compat.
     """
