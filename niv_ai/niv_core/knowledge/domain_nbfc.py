@@ -427,3 +427,181 @@ FOR NPA TRACKING:
 - npa_date (Date) — when it became NPA
 - provisioning_amount (Currency, read_only)
 """
+"""
+NBFC CALCULATIONS KNOWLEDGE - Add to domain_nbfc.py
+
+This section teaches agents NBFC-specific calculations and formulas.
+"""
+
+NBFC_CALCULATIONS_KNOWLEDGE = """
+
+--- NBFC PORTFOLIO CALCULATIONS ---
+
+1. WRR (WEIGHTED RISK RATING)
+   Purpose: Measures overall portfolio risk weighted by loan exposure
+   
+   Formula:
+   WRR = Σ(Loan Amount × Risk Score) / Σ(Loan Amount)
+   
+   Where Risk Score can be:
+   - CIBIL Score based: Map 300-900 to 1-5 scale
+     * 750-900 → 1 (Lowest Risk)
+     * 700-749 → 2 (Low Risk)
+     * 650-699 → 3 (Medium Risk)
+     * 600-649 → 4 (High Risk)
+     * Below 600 → 5 (Very High Risk)
+   
+   - NPA Status based:
+     * Standard → 1
+     * SMA-0 → 2
+     * SMA-1 → 3
+     * SMA-2 → 4
+     * Substandard/Doubtful/Loss → 5
+   
+   SQL Example:
+   ```sql
+   SELECT 
+       SUM(loan_amount * CASE 
+           WHEN cibil_score >= 750 THEN 1
+           WHEN cibil_score >= 700 THEN 2
+           WHEN cibil_score >= 650 THEN 3
+           WHEN cibil_score >= 600 THEN 4
+           ELSE 5 
+       END) / SUM(loan_amount) AS wrr
+   FROM `tabLoan`
+   WHERE docstatus = 1 AND status = 'Disbursed'
+   ```
+   
+   Interpretation:
+   - WRR < 2.0 → Excellent portfolio
+   - WRR 2.0-2.5 → Good portfolio
+   - WRR 2.5-3.0 → Average portfolio
+   - WRR 3.0-3.5 → Risky portfolio
+   - WRR > 3.5 → Very risky, needs attention
+
+2. PAR (PORTFOLIO AT RISK)
+   Purpose: Percentage of portfolio that has overdue payments
+   
+   Formula:
+   PAR(X) = (Outstanding of loans with DPD > X days) / (Total Outstanding) × 100
+   
+   Common variants:
+   - PAR-0: Any overdue (DPD > 0)
+   - PAR-30: 30+ days overdue
+   - PAR-60: 60+ days overdue
+   - PAR-90: 90+ days overdue (NPA threshold)
+   
+   SQL Example:
+   ```sql
+   SELECT 
+       SUM(CASE WHEN dpd > 30 THEN outstanding_amount ELSE 0 END) * 100.0 / 
+       SUM(outstanding_amount) AS par_30
+   FROM `tabLoan`
+   WHERE docstatus = 1 AND status IN ('Disbursed', 'Active')
+   ```
+   
+   Interpretation:
+   - PAR-30 < 3% → Excellent
+   - PAR-30 3-5% → Good
+   - PAR-30 5-10% → Needs attention
+   - PAR-30 > 10% → Critical
+
+3. COLLECTION EFFICIENCY
+   Purpose: How much of expected amount was actually collected
+   
+   Formula:
+   Collection Efficiency = (Amount Collected in Period) / (Amount Due in Period) × 100
+   
+   SQL Example:
+   ```sql
+   SELECT 
+       SUM(paid_amount) * 100.0 / SUM(emi_amount) AS collection_efficiency
+   FROM `tabRepayment Schedule`
+   WHERE payment_date BETWEEN '2024-01-01' AND '2024-01-31'
+   ```
+   
+   Interpretation:
+   - > 95% → Excellent
+   - 90-95% → Good
+   - 85-90% → Needs improvement
+   - < 85% → Critical
+
+4. NPA RATIO
+   Purpose: Percentage of total loans classified as NPA
+   
+   Formula:
+   NPA Ratio = (Gross NPA Amount) / (Gross Advances) × 100
+   
+   Gross NPA = Sum of all loans with DPD > 90 days
+   Gross Advances = Total outstanding of all loans
+   
+   SQL Example:
+   ```sql
+   SELECT 
+       SUM(CASE WHEN dpd > 90 THEN outstanding_amount ELSE 0 END) * 100.0 / 
+       SUM(outstanding_amount) AS npa_ratio
+   FROM `tabLoan`
+   WHERE docstatus = 1
+   ```
+
+5. PROVISION COVERAGE RATIO (PCR)
+   Purpose: How much provision is kept against NPAs
+   
+   Formula:
+   PCR = (Total Provisions) / (Gross NPA) × 100
+   
+   RBI Provisioning Norms:
+   - Standard Assets: 0.40%
+   - SMA-1, SMA-2: 5%
+   - Substandard: 15%
+   - Doubtful (up to 1 year): 25%
+   - Doubtful (1-3 years): 40%
+   - Doubtful (> 3 years): 100%
+   - Loss: 100%
+
+6. YIELD ON ADVANCES
+   Purpose: Average interest rate earned on loan portfolio
+   
+   Formula:
+   Yield = (Interest Income for Period) / (Average Loan Outstanding) × 100
+   
+7. LOAN-TO-VALUE (LTV) RATIO
+   Purpose: Loan amount vs collateral value (for secured loans)
+   
+   Formula:
+   LTV = (Loan Amount / Collateral Value) × 100
+   
+   Typical limits:
+   - Gold Loan: Max 75% LTV
+   - Vehicle Loan: Max 85-90% LTV
+   - Home Loan: Max 75-80% LTV
+   - LAP (Loan Against Property): Max 60-70% LTV
+
+8. EMI TO INCOME RATIO (FOIR)
+   Purpose: Check if borrower can afford the EMI
+   
+   Formula:
+   FOIR = (Total Monthly EMI including new loan) / (Monthly Income) × 100
+   
+   Typically:
+   - FOIR < 40% → Eligible
+   - FOIR 40-50% → Marginal
+   - FOIR > 50% → Reject
+
+--- USAGE INSTRUCTIONS FOR AGENTS ---
+
+When asked about WRR, PAR, or other NBFC calculations:
+1. First identify which fields exist in the system (loan_amount, cibil_score, dpd, outstanding_amount, etc.)
+2. Use run_database_query with the appropriate SQL
+3. Apply the formula
+4. Interpret the result with benchmarks
+
+Example prompt handling:
+User: "Calculate WRR for top 10 loans"
+Agent should:
+1. Get top 10 loans by loan_amount: list_documents or run_database_query
+2. Get their risk scores (cibil_score) or NPA status (dpd/npa_status)
+3. Apply WRR formula: SUM(amount × risk_weight) / SUM(amount)
+4. Return result with interpretation
+
+"""

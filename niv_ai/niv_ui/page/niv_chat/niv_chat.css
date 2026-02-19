@@ -3657,3 +3657,114 @@ body.niv-widget-mode .niv-message.user .msg-content { max-width: 90% !important;
     border-radius: 4px;
     font-style: normal;
 }
+
+
+/* Voice Settings Panel */
+.voice-settings-panel {
+    position: absolute;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(20, 20, 30, 0.95);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 20px;
+    min-width: 300px;
+    max-width: 90vw;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    z-index: 10;
+    animation: voiceSettingsSlideUp 0.3s ease;
+}
+@keyframes voiceSettingsSlideUp {
+    from { opacity: 0; transform: translateX(-50%) translateY(20px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.voice-settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.voice-settings-header h3 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+}
+.voice-settings-close {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.6);
+    font-size: 24px;
+    cursor: pointer;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+.voice-settings-close:hover {
+    background: rgba(255,255,255,0.1);
+    color: #fff;
+}
+.voice-setting-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+.voice-setting-row:last-child { margin-bottom: 0; }
+.voice-setting-row label {
+    color: rgba(255,255,255,0.8);
+    font-size: 14px;
+}
+.voice-select-tts {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px;
+    color: #fff;
+    padding: 8px 12px;
+    font-size: 13px;
+    min-width: 160px;
+    cursor: pointer;
+}
+.voice-select-tts option {
+    background: #1a1a2e;
+    color: #fff;
+}
+.voice-continuous-toggle {
+    width: 44px;
+    height: 24px;
+    appearance: none;
+    background: rgba(255,255,255,0.15);
+    border-radius: 12px;
+    position: relative;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+.voice-continuous-toggle::before {
+    content: "";
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    top: 2px;
+    left: 2px;
+    transition: transform 0.2s;
+}
+.voice-continuous-toggle:checked {
+    background: #7C3AED;
+}
+.voice-continuous-toggle:checked::before {
+    transform: translateX(20px);
+}
+.voice-settings-btn {
+    order: -1;
+}

@@ -1,4 +1,158 @@
+## [0.9.0] - 2026-02-18
+
+### 🔧 MCP Tools Optimization & UI Overhaul
+
+#### Tool Selection Revolution
+- **Removed keyword routing entirely** — LLM freely selects from all 34 tools (no filtering)
+- **576 lines removed** from `agent_router.py` (dead routing code)
+- **Few-shot examples** retained as hints, not routing rules
+- **Proven improvement**: WRR query fixed (was 0%, now correctly returns IRR from data)
+
+#### System Prompt Optimization
+- **82% reduction**: 23,472 → 4,146 chars
+- **Slim NBFC knowledge** (`domain_nbfc_slim.py`) — 1.2K chars for production, full 23K only in dev mode
+- **Current date injected** into system prompt — LLM now knows today's date
+- **Tool usage guidelines** trimmed from 10 lines to 4
+
+#### Result Processing
+- **4KB result cap** — large tool results intelligently summarized
+- **Single document summarization** — 32KB+ responses reduced to ~3KB (child tables trimmed)
+- **Result caching** — 2min TTL for read-only tools (e.g., `get_doctype_info`)
+- **Consecutive failure cap** — after 2 identical failures, suggests different approach
+
+#### Enhanced Tool Descriptions
+- **20+ tools** enhanced with USE/DON'T USE guidance in `tool_descriptions.py`
+- **Override at client layer** — FAC untouched, descriptions enhanced at Niv AI layer
+
+#### WRR Definition Fix
+- **Corrected**: WRR = Weighted Risk Rate (IRR on reducing balance), not "Weighted Risk Rating"
+- **LLM now reads** `irr`/`rate_of_interest` fields from Loan documents instead of calculating
+
+#### UI Improvements
+- **Markdown table fix** — broken tables from LLM (missing newlines) auto-repaired in JS
+- **Table wrapper** — horizontal scroll for wide tables
+- **Table CSS** — dark theme with purple headers, hover effects, proper borders
+
+#### Safety & Limits
+- **Rate limiting** — 50 tool calls/min/user
+- **Error sanitization** — internal errors cleaned before showing to user
+
+---
+
+## [0.7.0] - 2026-02-17
+
+### 🚀 Major Release: Smart Tool Calling + Advanced Memory
+
+#### Tool Calling Improvements
+- **Model upgraded**: `gpt-oss:120b` → `mistral-large-3:675b` for better tool calling
+- **Agent routing**: Queries automatically routed to specialized agents (NBFC, Accounts, HR)
+- **Tool reduction**: 34 tools → 16-20 per agent (less confusion for LLM)
+- **Few-shot examples**: Tool descriptions include exact JSON examples
+- **Enhanced descriptions**: Short MCP tool descriptions replaced with detailed ones
+
+#### System Discovery (Auto-Scan)
+- **Unified discovery**: Single source of truth for system knowledge
+- **Auto-scan**: Automatically discovers DocTypes, fields, workflows on any ERPNext
+- **585 DocTypes, 31 workflows** discovered and injected into agent context
+- **Zero tool calls** for system info queries - agent already knows!
+
+#### Advanced Memory System
+- **6 memory categories**: Preference, Correction, Entity, Fact, Summary, Habit
+- **Auto-extraction**: Automatically detects language, format preferences from conversations
+- **Correction tracking**: User corrections saved with HIGH importance (don't repeat mistakes!)
+- **Entity tracking**: Frequently accessed records remembered
+- **Memory decay**: Old unused memories automatically cleaned up
+- **Semantic search**: Query-based memory retrieval
+- **remember_user_preference tool**: Agent can explicitly save memories
+
+#### Architecture
+- **A2A deprecated**: Multi-agent system moved to `_a2a_deprecated/`
+- **LangChain agent**: Single agent with LangGraph ReAct pattern
+- **MCP tools**: All tools loaded from `frappe_assistant_core`
+
+### Files Changed
+- `niv_core/knowledge/memory_service.py` - Advanced Memory System (350+ lines)
+- `niv_core/knowledge/unified_discovery.py` - System auto-scan
+- `niv_core/langchain/agent_router.py` - Query routing + tool filtering
+- `niv_core/langchain/tools.py` - Enhanced descriptions + memory tool
+- `niv_core/langchain/memory.py` - Memory context injection
+- `niv_core/langchain/agent.py` - Auto-extraction hook
+
+### Performance
+- Tool calls reduced from 7+ to 1-2 for simple queries
+- System queries answered without any tool calls
+- Memory persists across conversations
+
+
 # Changelog
+
+## v0.6.1 (2026-02-17)
+### Fixed
+- **Simple Mode reverted** — caused errors, removed for stability
+- A2A brain-first calculation rule in prompts
+- LLM brain for calculations instead of tools
+- Table overflow with scrollable container
+- Removed disclaimer text from UI
+
+---
+
+## v0.6.0 (2026-02-16)
+### Added
+- **A2A Multi-Agent System** — Google ADK powered agent-to-agent orchestration
+  - Specialist agents for different domains
+  - Agent transfer badges in UI
+  - Thinking/critique signals filtering
+  - Robust streaming with deduplication
+- **Artifact Panel** — Code preview and visualization
+  - Split view with better tabs
+  - Syntax highlighting (Phase 3)
+  - Mobile responsive design
+  - Frappe CSS injection for preview
+  - "Apply to System" button
+- **Knowledge Graph Visualizer** — Full-screen premium visualization
+- **Multi-Conversation Concurrency** — Parallel streaming and background progress
+- **Dev Mode Confirmation** — Safety confirmation for all write tools
+- Premium Thought Block UI with subtle styling
+
+### Fixed
+- A2A confirmation flow with Redis flag
+- Force immediate tool calls (no AI confirmation)
+- Streaming duplicates and blob memory leak
+- Empty tool results handling
+- Billing cost calculation
+- MCPFunctionTool ADK argument filtering
+- Tool name extraction and frontend rendering
+
+---
+
+## v0.5.0 (2026-02-14)
+### Added
+- **Auto-Discovery Engine** — Scans ERPNext on install, builds knowledge
+- **Niv Health System** — Self-healing and auto-setup
+- Router + Dev-mode safety improvements
+- NBFC domain knowledge injection
+
+### Fixed
+- Frappe v14 SSE streaming context issues
+- Document cache AttributeError in SSE
+- Safe_eval fallback and automation hook recursion
+- Recursion limit tuning (prevent infinite tool loops)
+- Tool result truncation (save tokens for response)
+- RAG embeddings prefer Mistral provider
+
+---
+
+## v0.4.0 (2026-02-12)
+### Added
+- English as primary response language setting
+- Knowledge Graph rendering for Artifact Preview
+- Robust preview_html prioritization
+
+### Fixed
+- Various streaming and tool calling improvements
+- Better error handling in agent flows
+
+---
 
 ## v0.3.1 (2026-02-11)
 ### Added
@@ -50,18 +204,7 @@
 - Duplicate user messages: 30-second dedup check before saving
 - Nginx SSE endpoint name: `stream_message` → `stream_chat`
 
-### Testing Results (v0.3.0)
-- ✅ Login + Auth
-- ✅ Create/List/Rename/Delete Conversations
-- ✅ Non-streaming chat (send_message)
-- ✅ SSE streaming (stream_chat) — token-by-token + tool_call + tool_result events
-- ✅ MCP tool calling (list_documents, count, search — 23 tools via FAC)
-- ✅ MCP Server management (list, toggle)
-- ✅ Voice/TTS (Piper engine — returns wav URL)
-- ✅ Rate limiting (configurable per-hour/per-day)
-- ✅ Billing (Shared Pool mode — balance deduction working)
-- ✅ 17/17 module imports pass
-- ✅ 20 DocTypes, 153 files, 25 critical paths verified
+---
 
 ## v0.2.0 (2026-02-10)
 ### Added
@@ -69,6 +212,8 @@
 - Conversational voice mode
 - Frappe v14 compatibility fixes
 - 85 features catalogued
+
+---
 
 ## v0.1.1 (2026-02-10)
 ### Fixed
@@ -87,6 +232,8 @@
 - Table CSS: rounded corners, uppercase headers, hover effects, dark mode
 - Markdown: blockquote styling, HR lines, link colors, heading borders, better spacing
 - Output formatting: improved line-height, nested list support
+
+---
 
 ## v0.1.0 (2026-02-09)
 ### Initial Release

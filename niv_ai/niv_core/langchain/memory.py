@@ -5,8 +5,16 @@ Token-aware truncation to prevent context window overflow.
 import json
 import frappe
 from niv_ai.niv_core.utils import get_niv_settings
+from niv_ai.niv_core.knowledge.memory_service import get_user_context, extract_memories
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 
+
+TOOL_USAGE_GUIDELINES = """
+RULES:
+- 1-2 tool calls per question. Minimal.
+- Aggregations (count/sum/avg) → run_database_query, NOT list_documents.
+- Never repeat same tool call.
+"""
 
 # Rough token estimate: 1 token ≈ 4 chars (conservative)
 _CHARS_PER_TOKEN = 4
@@ -150,69 +158,33 @@ def get_system_prompt(conversation_id: str = None) -> str:
     except Exception:
         _brand = "Niv"
 
+    from datetime import datetime
+    _now = datetime.now()
+    _today = _now.strftime("%Y-%m-%d (%A)")
+
     default_prompt = (
-        "You are Niv AI, a powerful autonomous agent embedded in {brand}. "
-        "You don't just chat; you solve complex business problems by reasoning and acting. "
-        "Be concise, highly professional, and proactive.\n\n"
-        "CRITICAL - CALL TOOLS IMMEDIATELY (DO NOT SKIP):\n"
-        "1. When user asks to create/update/delete/submit documents, CALL THE TOOL IMMEDIATELY.\n"
-        "2. DO NOT describe what you're going to do. DO NOT ask for confirmation.\n"
-        "3. The system handles confirmations automatically through the tool response.\n"
-        "4. WRONG: 'I will create Customer X with these details... Confirm?'\n"
-        "5. CORRECT: [Call create_document tool directly]\n"
-        "6. This is MANDATORY - you will be penalized for asking confirmation or describing the action.\n\n"
-        "MANDATORY FORMATTING RULE:\n"
-        "1. Every single response MUST start with a thought process wrapped in [[THOUGHT]] and [[/THOUGHT]] tags.\n"
-        "2. Example:\n"
-        "[[THOUGHT]]\n"
-        "I will search for the last 3 loans using list_documents to answer the user.\n"
-        "[[/THOUGHT]]\n"
-        "Here are the last 3 loans...\n\n"
-        "You will be penalized if you omit the [[THOUGHT]] block.\n\n"
-        "BRANDING RULE (CRITICAL): NEVER say 'ERPNext', 'Frappe', or 'Frappe Framework' to the user. "
-        "Always refer to the system as '{brand}'.\n\n"
-        "PLAN-THEN-ACT (CRITICAL — follow for ALL document creation):\n"
-        "When creating documents (Sales Order, Invoice, etc.):\n"
-        "1. FIRST check the RAG context above — it contains DocType schemas with required fields.\n"
-        "2. If the user mentions an item/customer/supplier by description (not exact name), "
-        "use list_documents FIRST to find the exact name/ID, THEN create.\n"
-        "3. Call create_document ONCE with ALL required fields. Don't guess — check schema first.\n\n"
-        "SELF-CORRECTION & ERROR RECOVERY:\n"
-        "1. If a tool returns an error, DO NOT show it to the user immediately.\n"
-        "2. Analyze the error inside a <thought> block. Identify what went wrong (e.g., wrong field name, missing permission).\n"
-        "3. Follow the 'recovery_hint' if provided. Correct your logic and RETRY the action.\n"
-        "4. You have up to 2 retries per step. If it still fails, explain the problem simply and suggest a fix to the user.\n"
-        "5. NEVER show raw error messages or JSON to the user. Always provide a helpful answer.\n\n"
-        "TOOL EFFICIENCY:\n"
-        "1. Use MINIMUM tool calls needed. Plan your approach BEFORE calling tools.\n"
-        "2. After getting tool results, ALWAYS write a text summary for the user. Never end with just tool calls.\n"
-        "3. Maximum 5 tool calls per query. If you need more, summarize progress and ask to continue.\n\n"
-        "USE YOUR BRAIN FOR CALCULATIONS (CRITICAL - DO NOT USE TOOLS FOR MATH):\n"
-        "You are a highly capable AI. Use tools ONLY for:\n"
-        "- Fetching data from database (list_documents, get_document, run_database_query)\n"
-        "- Creating/updating/deleting documents (create_document, update_document, delete_document)\n"
-        "- Getting schema info (get_doctype_info)\n\n"
-        "DO NOT use tools for calculations or analysis. Use YOUR OWN KNOWLEDGE for:\n"
-        "- EMI calculation: EMI = P × r × (1+r)^n / ((1+r)^n - 1)\n"
-        "- WRR (Weighted Risk Rating): WRR = Σ(Loan Amount × Risk Weight) / Σ(Loan Amount)\n"
-        "  Risk Weights: Standard=0%, SMA-0=5%, SMA-1=10%, SMA-2=15%, Substandard=25%, Doubtful=50%, Loss=100%\n"
-        "- NPA Classification: >90 days overdue = NPA\n"
-        "- IRR, XIRR, NPV calculations\n"
-        "- Interest calculations (simple, compound, reducing balance)\n"
-        "- DPD (Days Past Due) calculation\n"
-        "- Percentage calculations, averages, totals\n"
-        "- Any standard financial/business formula\n\n"
-        "CORRECT APPROACH:\n"
-        "1. Use tool to FETCH data (e.g., list of loans with amounts and risk categories)\n"
-        "2. Use YOUR BRAIN to CALCULATE (apply WRR formula to the fetched data)\n"
-        "3. Present results in a nice table\n\n"
-        "WRONG: Looking for a 'calculate_wrr' tool or 'run_python_code' for simple math.\n"
-        "RIGHT: Fetch loan data with list_documents, then calculate WRR yourself using the formula above.\n\n"
-        "STRICT TRUTH (CRITICAL):\n"
-        "1. NEVER fabricate results or pretend a tool succeeded when it failed.\n"
-        "2. If a tool returns an error, hamesha sach bolo aur error user ko dikhao (in a simplified way).\n"
-        "3. Don't make up data that doesn't exist in the system. If you can't find it, say you can't find it.\n"
-    ).format(brand=_brand)
+        "You are Niv AI, a business assistant for {brand}. Be concise.\n"
+        "Today's date: {today}\n\n"
+        "RULES:\n"
+        "1. Never fabricate data. Always use tools to get real data.\n"
+        "2. For financial metrics (WRR, interest rates), read from document fields — never guess.\n"
+        "3. After tool results, write a clear summary for the user.\n"
+        "4. Never say 'ERPNext' or 'Frappe' — say '{brand}'.\n"
+        "5. If a tool fails, try a different approach once. Then tell the user.\n"
+        "6. FORMATTING: Use proper markdown tables with header separator row for structured data. "
+        "Example:\n"
+        "| Name | Amount | Status |\n"
+        "|------|--------|--------|\n"
+        "| John | 1000   | Active |\n"
+        "The |---| separator row is REQUIRED for tables to render. Use bullet lists for simple items.\n"
+        "7. GREETINGS: Keep greetings short (1-2 lines). Never list your capabilities or features.\n"
+        "8. VOICE MODE: When responding to voice input, be conversational and brief. Avoid long lists.\n"
+        "9. Never use emoji in responses. No smiley faces, no icons. Plain text only.\n"
+        "10. ARTIFACTS: When the user asks to build a visual tool, calculator, interactive chart, or HTML app, "
+        "generate a COMPLETE working HTML page with inline CSS and JavaScript in a ```html code block. "
+        "Do NOT just describe it — write the actual runnable code. "
+        "This does NOT apply to creating documents/records — for that, use tools as normal.\n"
+    ).format(brand=_brand, today=_today)
 
     # Try conversation-level prompt
     if conversation_id:
@@ -228,21 +200,20 @@ def get_system_prompt(conversation_id: str = None) -> str:
 
     # Append auto-discovery context if available
     try:
-        from niv_ai.niv_core.discovery import get_discovery_context
-        discovery_ctx = get_discovery_context()
+        from niv_ai.niv_core.knowledge.unified_discovery import get_discovery_for_agent
+        discovery_ctx = get_discovery_for_agent()
     except Exception:
         discovery_ctx = ""
 
-    # Append NBFC domain knowledge for lending/NBFC systems
+    # Append NBFC domain knowledge (slim version — full version is dev mode only)
     try:
-        from ..knowledge.domain_nbfc import NBFC_DOMAIN_KNOWLEDGE
+        from ..knowledge.domain_nbfc_slim import NBFC_DOMAIN_KNOWLEDGE_SLIM
         if discovery_ctx and ("nbfc" in discovery_ctx.lower() or "lending" in discovery_ctx.lower()):
-            discovery_ctx += "\n\n" + NBFC_DOMAIN_KNOWLEDGE
+            discovery_ctx += "\n\n" + NBFC_DOMAIN_KNOWLEDGE_SLIM
         elif not discovery_ctx:
-            # No discovery context — check if nbfc app is installed
             import frappe
             if "nbfc" in frappe.get_installed_apps():
-                discovery_ctx = NBFC_DOMAIN_KNOWLEDGE
+                discovery_ctx = NBFC_DOMAIN_KNOWLEDGE_SLIM
     except Exception:
         pass
 
@@ -267,9 +238,25 @@ def get_system_prompt(conversation_id: str = None) -> str:
     except Exception:
         pass
 
+    # Add user long-term memory
+    user_memory = ""
+    try:
+        import frappe
+        if frappe.session and frappe.session.user:
+            user_memory = get_user_context(frappe.session.user)
+            if user_memory and "No prior" not in user_memory:
+                user_memory = "\n\n" + user_memory
+            else:
+                user_memory = ""
+    except Exception:
+        user_memory = ""
+
+    # Always append tool usage guidelines
+    full_prompt = default_prompt + "\n\n" + TOOL_USAGE_GUIDELINES
     if discovery_ctx:
-        return default_prompt + "\n\n" + discovery_ctx
-    return default_prompt
+        full_prompt += "\n\n" + discovery_ctx
+    full_prompt += user_memory
+    return full_prompt
 
 
 def get_dev_system_prompt() -> str:
@@ -359,8 +346,65 @@ def get_dev_system_prompt() -> str:
         "---\n\n"
         "ONLY skip confirmation for READ operations (get_document, list_documents, get_doctype_info, run_database_query).\n"
         "ALWAYS confirm for: create_document, update_document, delete_document, submit_document.\n\n"
+        "IMPACT ANALYSIS (MANDATORY before any field/DocType modification):\n"
+        "Before modifying or deleting any DocType or field, you MUST check dependencies:\n"
+        "1. Find all Link fields pointing TO this DocType:\n"
+        "   run_database_query(query=\"SELECT parent, fieldname, label FROM `tabDocField` WHERE fieldtype='Link' AND options='TARGET_DOCTYPE'\")\n"
+        "2. Find all Child Tables referencing this DocType:\n"
+        "   run_database_query(query=\"SELECT parent, fieldname FROM `tabDocField` WHERE fieldtype='Table' AND options='TARGET_DOCTYPE'\")\n"
+        "3. Find Custom Fields on this DocType:\n"
+        "   list_documents(doctype='Custom Field', filters={'dt': 'TARGET_DOCTYPE'})\n"
+        "4. Find Server Scripts on this DocType:\n"
+        "   list_documents(doctype='Server Script', filters={'reference_doctype': 'TARGET_DOCTYPE', 'disabled': 0})\n"
+        "5. Find Client Scripts on this DocType:\n"
+        "   list_documents(doctype='Client Script', filters={'dt': 'TARGET_DOCTYPE', 'enabled': 1})\n"
+        "6. Show the user: 'This DocType is linked from X places, has Y scripts, Z custom fields.'\n"
+        "7. If high-impact (>5 dependencies), WARN the user before proceeding.\n\n"
         "FORMAT after execution:\n"
         "1. ✅ Result summary\n"
         "2. Document name/link\n"
         "3. Any next steps (bench migrate, clear cache, etc.)\n"
     ) + quick_ref
+
+
+def format_page_context(ctx: dict) -> str:
+    """Format page context dict into a concise system prompt section.
+
+    The user's browser sends context about which page they're currently viewing.
+    This helps the LLM understand what the user is looking at and give relevant answers.
+    """
+    if not ctx or not isinstance(ctx, dict):
+        return ""
+
+    route = ctx.get("route") or []
+    doctype = ctx.get("doctype", "")
+    docname = ctx.get("docname", "")
+    list_doctype = ctx.get("list_doctype", "")
+    report_name = ctx.get("report_name", "")
+    dashboard = ctx.get("dashboard", "")
+    workspace = ctx.get("workspace", "")
+    query_report = ctx.get("query_report", "")
+
+    parts = []
+
+    if doctype and docname:
+        parts.append(f"The user is currently viewing: {doctype} '{docname}'")
+        parts.append(f"Use get_document tool with doctype='{doctype}' and name='{docname}' if they ask about 'this' record.")
+    elif list_doctype:
+        parts.append(f"The user is viewing the list of: {list_doctype}")
+        parts.append(f"If they say 'these' or 'this list', they mean {list_doctype} records.")
+    elif query_report:
+        parts.append(f"The user is viewing report: {query_report}")
+    elif report_name:
+        parts.append(f"The user is viewing report: {report_name}")
+    elif dashboard:
+        parts.append(f"The user is on the dashboard: {dashboard}")
+    elif workspace:
+        parts.append(f"The user is on workspace: {workspace}")
+    elif route and len(route) > 0:
+        parts.append(f"User's current page: {'/'.join(str(r) for r in route)}")
+
+    if not parts:
+        return ""
+
+    return "PAGE CONTEXT:\n" + "\n".join(parts)

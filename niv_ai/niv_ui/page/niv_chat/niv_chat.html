@@ -130,7 +130,7 @@
                             <div class="niv-settings-section niv-settings-row">
                                 <div class="niv-settings-card-row-left">
                                     <div class="niv-settings-section-title" style="margin-bottom:0;">
-                                        <i class="fa fa-users niv-settings-section-icon"></i> Enable A2A (ADK)
+                                        <i class="fa fa-users niv-settings-section-icon"></i> Enable A2A (ADK) - HIDDEN
                                     </div>
                                     <div class="niv-settings-card-desc">Multi-agent orchestration for complex tasks</div>
                                 </div>
@@ -198,6 +198,9 @@
             <div class="voice-response-text"></div>
         </div>
         <div class="voice-controls-bar">
+            <button class="voice-ctrl-btn voice-settings-btn" title="Voice Settings">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+            </button>
             <button class="voice-ctrl-btn voice-mute-btn" title="Mute microphone">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
             </button>
@@ -207,6 +210,29 @@
             <button class="voice-ctrl-btn voice-speaker-btn" title="Toggle speaker">
                 <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
             </button>
+        </div>
+    
+        <div class="voice-settings-panel" style="display:none;">
+            <div class="voice-settings-header">
+                <h3>Voice Settings</h3>
+                <button class="voice-settings-close">&times;</button>
+            </div>
+            <div class="voice-settings-body">
+                <div class="voice-setting-row">
+                    <label>TTS Voice</label>
+                    <select class="voice-select-tts">
+                        <option value="auto">Auto (detect language)</option>
+                        <option value="en-US-JennyNeural">Jenny (English, warm)</option>
+                        <option value="en-US-GuyNeural">Guy (English, male)</option>
+                        <option value="hi-IN-SwaraNeural">Swara (Hindi, female)</option>
+                        <option value="hi-IN-MadhurNeural">Madhur (Hindi, male)</option>
+                    </select>
+                </div>
+                <div class="voice-setting-row">
+                    <label>Auto-listen after response</label>
+                    <input type="checkbox" class="voice-continuous-toggle" checked>
+                </div>
+            </div>
         </div>
     </div>
     <div class="niv-main">
