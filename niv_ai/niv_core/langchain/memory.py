@@ -14,6 +14,7 @@ RULES:
 - 1-2 tool calls per question. Minimal.
 - Aggregations (count/sum/avg) → run_database_query, NOT list_documents.
 - Never repeat same tool call.
+- NEVER write tool calls as text. Always use the function calling mechanism. Do NOT output JSON tool calls in your message.
 """
 
 # Rough token estimate: 1 token ≈ 4 chars (conservative)
