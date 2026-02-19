@@ -16,6 +16,43 @@ def after_install():
     print("  → Connect an MCP server in Niv Settings to enable tools")
 
 
+def setup_provider(base_url, api_key, model="mistral-large-latest", fast_model="mistral-small-latest"):
+    """Setup AI provider and configure Niv Settings. Called by setup.sh."""
+    provider_name = "AI Provider"
+    
+    if not frappe.db.exists("Niv AI Provider", provider_name):
+        doc = frappe.get_doc({
+            "doctype": "Niv AI Provider",
+            "provider_name": provider_name,
+            "base_url": base_url,
+            "api_key": api_key,
+            "default_model": model,
+        })
+        doc.insert(ignore_permissions=True)
+        print(f"  → Created AI Provider: {provider_name}")
+    else:
+        doc = frappe.get_doc("Niv AI Provider", provider_name)
+        doc.base_url = base_url
+        doc.api_key = api_key
+        doc.default_model = model
+        doc.save(ignore_permissions=True)
+        print(f"  → Updated AI Provider: {provider_name}")
+
+    settings = frappe.get_single("Niv Settings")
+    settings.default_provider = provider_name
+    settings.default_model = model
+    settings.fast_model = fast_model
+    settings.enable_widget = 1
+    settings.widget_title = "Niv AI"
+    settings.enable_billing = 1
+    settings.billing_mode = "Shared Pool"
+    if not settings.shared_pool_balance or int(settings.shared_pool_balance or 0) == 0:
+        settings.shared_pool_balance = 10000000
+    settings.save(ignore_permissions=True)
+    frappe.db.commit()
+    print(f"  → Niv Settings configured (model: {model}, fast: {fast_model})")
+
+
 def after_migrate():
     """Run after bench migrate — ensures defaults exist, re-discovers system"""
     _create_settings()

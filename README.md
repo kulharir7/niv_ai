@@ -105,7 +105,23 @@ User Input (Text / Voice / Widget)
 - `frappe_assistant_core` (FAC) installed
 - Python 3.10+
 
-### Install
+### Quick Setup (One Command)
+
+```bash
+cd /path/to/frappe-bench
+
+# Get niv_ai first (setup.sh is inside)
+bench get-app https://github.com/kulharir7/niv_ai.git
+
+# Run setup — installs everything, configures provider, enables billing
+bash apps/niv_ai/setup.sh yoursite.com https://api.mistral.ai/v1 YOUR_API_KEY
+```
+
+That's it. Open `/app/niv-chat` and start chatting.
+
+### Manual Install
+
+If you prefer step-by-step, see **[INSTALL.md](INSTALL.md)** for the full guide.
 
 ```bash
 # 1. Install FAC (MCP tool provider)
@@ -116,19 +132,10 @@ bench --site yoursite install-app frappe_assistant_core
 bench get-app https://github.com/kulharir7/niv_ai.git
 bench --site yoursite install-app niv_ai
 bench --site yoursite migrate
+bench build --app niv_ai
+
+# 3. Configure at /app/niv-settings
 ```
-
-### Configure
-
-1. Go to **Niv Settings** (`/app/niv-settings`)
-2. Set up an AI Provider:
-   - **Provider Name**: e.g., "Mistral"
-   - **Base URL**: `https://api.mistral.ai/v1`
-   - **API Key**: Your Mistral API key
-   - **Default Model**: `mistral-large-latest`
-3. Set **Fast Model**: `mistral-small-latest` (for two-model optimization)
-4. Optional: Set ElevenLabs API key for premium voice
-5. Navigate to `/app/niv-chat` and start chatting
 
 ---
 
