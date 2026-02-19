@@ -15,6 +15,8 @@ import uuid
 import asyncio
 import hashlib
 import time
+import threading
+import queue as queue_module
 from typing import List, Optional
 
 import frappe
@@ -445,12 +447,105 @@ def stream_voice_chat(**kwargs):
     _site_name = frappe.local.site
 
     def generate():
-        """SSE generator — streams audio chunks as LLM generates text."""
+        """SSE generator — streams audio chunks as LLM generates text.
+
+        Architecture (Producer-Consumer):
+          Main thread: LLM stream → chunker → text clauses → tts_queue
+          TTS thread:  tts_queue → Edge TTS (parallel) → output_queue
+          Generator:   output_queue → yield SSE events
+
+        This ensures LLM streaming is NEVER blocked by TTS generation.
+        The TTS thread runs independently, generating audio while LLM
+        continues producing tokens. Result: true parallel pipeline.
+        """
         full_response = ""
         tool_calls_data = []
         chunk_index = 0
         voice = voice_override or ""
         voice_detected = False
+
+        # Thread-safe queues for producer-consumer pipeline
+        # tts_queue: main thread puts (clause_text, index) → TTS thread consumes
+        # output_queue: TTS thread puts SSE bytes → generator yields them
+        tts_queue = queue_module.Queue(maxsize=20)
+        output_queue = queue_module.Queue(maxsize=50)
+        tts_thread_done = threading.Event()
+
+        def detect_voice(clause_text):
+            """Auto-detect language and set voice on first clause."""
+            nonlocal voice, voice_detected
+            if not voice_detected:
+                lang = _detect_language(clause_text)
+                if not voice:
+                    voice = _get_edge_voice(lang)
+                voice_detected = True
+
+        def tts_worker():
+            """TTS worker thread — consumes clauses, generates audio, pushes to output.
+
+            Runs in background. Generates Edge TTS for each clause independently.
+            Uses prefetch: starts generating next chunk while current is being sent.
+            """
+            try:
+                while True:
+                    item = tts_queue.get(timeout=60)
+                    if item is None:  # Poison pill — shutdown signal
+                        break
+
+                    item_type = item.get("type", "")
+
+                    if item_type == "clause":
+                        clause_text = item["text"]
+                        idx = item["index"]
+                        chunk_voice = item["voice"]
+
+                        tts_result = _generate_tts_chunk(clause_text, chunk_voice)
+
+                        if tts_result:
+                            output_queue.put(_sse({
+                                "type": "audio_chunk",
+                                "index": idx,
+                                "text": clause_text,
+                                "audio_base64": tts_result["audio_base64"],
+                                "format": tts_result["format"],
+                                "cached": tts_result.get("cached", False),
+                            }))
+                        else:
+                            # TTS failed — send text so frontend uses browser TTS
+                            output_queue.put(_sse({
+                                "type": "text_chunk",
+                                "index": idx,
+                                "text": clause_text,
+                            }))
+
+                    elif item_type == "filler":
+                        phrase = item["text"]
+                        idx = item["index"]
+                        filler_voice = item["voice"]
+
+                        tts_result = _generate_tts_chunk(phrase, filler_voice)
+                        if tts_result:
+                            output_queue.put(_sse({
+                                "type": "filler",
+                                "index": idx,
+                                "text": phrase,
+                                "audio_base64": tts_result["audio_base64"],
+                                "format": tts_result["format"],
+                            }))
+
+                    elif item_type == "passthrough":
+                        # Non-TTS events (tool_call, tool_result, etc.) — pass directly
+                        output_queue.put(item["data"])
+
+            except queue_module.Empty:
+                pass
+            except Exception as e:
+                output_queue.put(_sse({
+                    "type": "error",
+                    "content": f"TTS worker error: {str(e)[:200]}",
+                }))
+            finally:
+                tts_thread_done.set()
 
         try:
             # Re-init Frappe context inside generator
@@ -461,13 +556,12 @@ def stream_voice_chat(**kwargs):
             files_dir = frappe.get_site_path("private", "files")
             os.makedirs(files_dir, exist_ok=True)
 
-            # Pre-cache filler phrases (one-time)
+            # Pre-cache filler phrases (one-time, non-blocking if cached)
             try:
                 _ensure_filler_cache()
             except Exception:
                 pass
 
-            # Import and start LLM stream
             from niv_ai.niv_core.langchain.agent import stream_agent
             from niv_ai.niv_core.langchain.tools import (
                 set_dev_mode as _set_dev_mode,
@@ -475,6 +569,10 @@ def stream_voice_chat(**kwargs):
             )
 
             set_active_dev_conversation(conversation_id)
+
+            # Start TTS worker thread
+            tts_thread = threading.Thread(target=tts_worker, daemon=True, name="niv-tts-worker")
+            tts_thread.start()
 
             # Initialize chunker
             chunker = ClauseChunker()
@@ -493,75 +591,55 @@ def stream_voice_chat(**kwargs):
                             frappe.connect()
                     last_db_check = time.time()
 
-            def detect_voice_if_needed(clause_text):
-                """Auto-detect language and set voice on first clause."""
-                nonlocal voice, voice_detected
-                if not voice_detected:
-                    lang = _detect_language(clause_text)
-                    if not voice:
-                        voice = _get_edge_voice(lang)
-                    voice_detected = True
-
-            def generate_and_send_chunk(clause_text):
-                """Generate TTS for a clause and yield the SSE event."""
+            def submit_clause(clause_text):
+                """Submit a clause for TTS generation (non-blocking)."""
                 nonlocal chunk_index
+                detect_voice(clause_text)
+                chunk_index += 1
+                tts_queue.put({
+                    "type": "clause",
+                    "text": clause_text,
+                    "index": chunk_index,
+                    "voice": voice,
+                })
 
-                detect_voice_if_needed(clause_text)
-
-                # Generate TTS audio
-                tts_result = _generate_tts_chunk(clause_text, voice)
-
-                if tts_result:
-                    chunk_index += 1
-                    event = {
-                        "type": "audio_chunk",
-                        "index": chunk_index,
-                        "text": clause_text,
-                        "audio_base64": tts_result["audio_base64"],
-                        "format": tts_result["format"],
-                        "cached": tts_result.get("cached", False),
-                    }
-                    return _sse(event)
-                else:
-                    # TTS failed — send text-only so frontend can use browser TTS
-                    chunk_index += 1
-                    event = {
-                        "type": "text_chunk",
-                        "index": chunk_index,
-                        "text": clause_text,
-                    }
-                    return _sse(event)
-
-            def send_filler(filler_key):
-                """Send a pre-cached filler audio chunk."""
+            def submit_filler(filler_key):
+                """Submit a filler phrase for TTS (non-blocking)."""
                 nonlocal chunk_index
                 phrase = FILLER_PHRASES.get(filler_key, "")
                 if not phrase:
-                    return None
-
+                    return
                 lang = _detect_language(phrase)
                 filler_voice = _get_edge_voice(lang)
-                tts_result = _generate_tts_chunk(phrase, filler_voice)
+                chunk_index += 1
+                tts_queue.put({
+                    "type": "filler",
+                    "text": phrase,
+                    "index": chunk_index,
+                    "voice": filler_voice,
+                })
 
-                if tts_result:
-                    chunk_index += 1
-                    event = {
-                        "type": "filler",
-                        "index": chunk_index,
-                        "text": phrase,
-                        "audio_base64": tts_result["audio_base64"],
-                        "format": tts_result["format"],
-                    }
-                    return _sse(event)
-                return None
+            def passthrough(sse_data):
+                """Send non-TTS event through the pipeline (non-blocking)."""
+                tts_queue.put({"type": "passthrough", "data": sse_data})
 
-            # Send conversation ID (in case it was auto-created)
+            def drain_output():
+                """Yield all ready SSE events from the output queue (non-blocking)."""
+                events = []
+                while not output_queue.empty():
+                    try:
+                        events.append(output_queue.get_nowait())
+                    except queue_module.Empty:
+                        break
+                return events
+
+            # Send conversation ID
             yield _sse({
                 "type": "init",
                 "conversation_id": conversation_id,
             })
 
-            # Stream from LLM
+            # Stream from LLM — main thread stays fast, TTS runs in background
             tool_active = False
 
             for event in stream_agent(
@@ -574,6 +652,10 @@ def stream_voice_chat(**kwargs):
             ):
                 ensure_db()
 
+                # Drain any ready TTS audio chunks first (non-blocking)
+                for sse_bytes in drain_output():
+                    yield sse_bytes
+
                 event_type = event.get("type", "")
 
                 if event_type == "token":
@@ -584,11 +666,11 @@ def stream_voice_chat(**kwargs):
                     full_response += content
                     tool_active = False
 
-                    # Feed tokens to chunker
+                    # Feed tokens to chunker — clauses go to TTS thread
                     clauses = chunker.feed(content)
                     for clause in clauses:
                         if clause.strip():
-                            yield generate_and_send_chunk(clause)
+                            submit_clause(clause)
 
                 elif event_type == "tool_call":
                     tool_name = event.get("tool", "")
@@ -598,21 +680,19 @@ def stream_voice_chat(**kwargs):
                         "arguments": tool_args,
                     })
 
-                    # Send tool call event (for UI display)
+                    # Pass tool_call event through (instant, no TTS needed)
                     yield _sse({
                         "type": "tool_call",
                         "tool": tool_name,
                         "arguments": tool_args,
                     })
 
-                    # Send filler audio while tool executes
+                    # Submit filler audio (TTS thread generates while tool runs)
                     if not tool_active:
                         tool_active = True
                         filler_lang = _detect_language(text)
                         filler_key = "tool_start" if filler_lang == "hi" else "tool_start_en"
-                        filler_event = send_filler(filler_key)
-                        if filler_event:
-                            yield filler_event
+                        submit_filler(filler_key)
 
                 elif event_type == "tool_result":
                     tool_active = False
@@ -625,19 +705,9 @@ def stream_voice_chat(**kwargs):
                 elif event_type == "error":
                     error_content = event.get("content", "Something went wrong.")
                     full_response = error_content
-
-                    # Send error as audio too
-                    filler_event = send_filler("error")
-                    if filler_event:
-                        yield filler_event
-                    else:
-                        yield _sse({
-                            "type": "error",
-                            "content": error_content,
-                        })
+                    submit_filler("error")
 
                 elif event_type == "thought":
-                    # Don't speak thoughts, but forward for UI
                     yield _sse({
                         "type": "thought",
                         "content": event.get("content", ""),
@@ -646,7 +716,26 @@ def stream_voice_chat(**kwargs):
             # Flush remaining buffer
             remaining = chunker.flush()
             if remaining and remaining.strip():
-                yield generate_and_send_chunk(remaining)
+                submit_clause(remaining)
+
+            # Signal TTS thread to finish and wait for it
+            tts_queue.put(None)  # Poison pill
+            tts_thread.join(timeout=30)
+
+            # Drain remaining TTS output
+            for sse_bytes in drain_output():
+                yield sse_bytes
+
+            # Wait a bit more for any last TTS chunks
+            deadline = time.time() + 15
+            while not tts_thread_done.is_set() and time.time() < deadline:
+                time.sleep(0.1)
+                for sse_bytes in drain_output():
+                    yield sse_bytes
+
+            # Final drain
+            for sse_bytes in drain_output():
+                yield sse_bytes
 
             # Reconnect DB before saving
             try:
@@ -660,7 +749,6 @@ def stream_voice_chat(**kwargs):
 
             # Save assistant message
             if full_response.strip():
-                # Clean thought tags from saved response
                 clean_response = re.sub(
                     r"\[\[THOUGHT\]\].*?\[\[/THOUGHT\]\]", "", full_response, flags=re.DOTALL
                 ).strip()
@@ -683,6 +771,11 @@ def stream_voice_chat(**kwargs):
             })
 
         finally:
+            # Ensure TTS thread shuts down
+            try:
+                tts_queue.put(None)
+            except Exception:
+                pass
             try:
                 set_active_dev_conversation("")
             except Exception:
