@@ -2,7 +2,7 @@
 
 > AI-powered assistant with voice, MCP tools, Excel/PDF export, and developer mode
 
-[![Version](https://img.shields.io/badge/version-0.9.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
+[![Version](https://img.shields.io/badge/version-0.9.2-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
 [![ERPNext](https://img.shields.io/badge/ERPNext-v15-green.svg)](https://erpnext.com)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
