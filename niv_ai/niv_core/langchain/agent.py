@@ -335,7 +335,9 @@ def _stream_two_model(
     tools = get_langchain_tools()
 
     # ── Step 1: Fast model decides tool call (non-streaming, ~1-2s) ──
-    fast_llm = get_llm(provider_name, fast_model_name, streaming=False, callbacks=[])
+    # Pass billing callback so fast model tokens are tracked too
+    fast_callbacks = [cbs["billing"]] if "billing" in cbs else []
+    fast_llm = get_llm(provider_name, fast_model_name, streaming=False, callbacks=fast_callbacks)
     fast_llm_with_tools = fast_llm.bind_tools(tools)
 
     try:
