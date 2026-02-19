@@ -98,6 +98,25 @@ def _strip_thinking(text, final=False):
     return text.strip() if final else text
 
 
+def _has_incomplete_tag(text):
+    """Check if text has an incomplete opening tag that might close later.
+    Returns True if we should hold the buffer (don't yield yet)."""
+    if not text:
+        return False
+    # Check for incomplete <think>, <reasoning>, [[THOUGHT]], [[THINKING]]
+    openers = ['<think>', '<reasoning>', '[[THOUGHT]]', '[[THINKING]]']
+    for opener in openers:
+        # Check for partial opener at end: "<thi", "<think", "[[THOU" etc.
+        for i in range(1, len(opener) + 1):
+            if text.endswith(opener[:i]) and opener[:i] not in text[:-i]:
+                return True
+        # Check for complete opener without closer
+        closer = opener.replace('<', '</').replace('[[', '[[/')
+        if opener in text and closer not in text:
+            return True
+    return False
+
+
 # ─── API Key Isolation ──────────────────────────────────────────────
 
 def _setup_user_api_key(user: str):
@@ -151,13 +170,7 @@ def create_niv_agent(
     # ALL tools — LLM decides which to use
     tools = get_langchain_tools()
 
-    # System prompt + few-shot examples
-    system_prompt = get_system_prompt(conversation_id)
-    prompt_suffix = get_agent_prompt_suffix("general")
-    if prompt_suffix:
-        system_prompt = f"{system_prompt}\n\n{prompt_suffix}"
-
-    # Create agent
+    # Create agent (system prompt is built separately by caller)
     agent = create_react_agent(model=llm, tools=tools)
 
     config = {
@@ -165,7 +178,7 @@ def create_niv_agent(
         "callbacks": all_callbacks,
     }
 
-    return agent, config, system_prompt, {
+    return agent, config, {
         "stream": stream_cb,
         "billing": billing_cb,
         "logging": logging_cb,
@@ -185,7 +198,7 @@ def run_agent(
     """Run agent synchronously — returns final response text."""
     user = user or frappe.session.user
 
-    agent, config, default_prompt, cbs = create_niv_agent(
+    agent, config, cbs = create_niv_agent(
         provider_name=provider_name,
         model=model,
         conversation_id=conversation_id,
@@ -194,7 +207,9 @@ def run_agent(
         prompt_text=message,
     )
 
-    messages = _build_messages(message, conversation_id, system_prompt or default_prompt)
+    if not system_prompt:
+        system_prompt = _build_system_prompt(conversation_id)
+    messages = _build_messages(message, conversation_id, system_prompt)
 
     _setup_user_api_key(user)
     try:
@@ -270,14 +285,16 @@ def _stream_single_model(agent, messages, config, cbs, dev_mode=False, max_tool_
 
             if msg.content:
                 buffer += msg.content
-                clean = _strip_thinking(buffer)
-                if clean:
-                    yield {"type": "token", "content": clean}
-                    buffer = ""
+                # Hold buffer if it might contain an incomplete thinking tag
+                if not _has_incomplete_tag(buffer):
+                    clean = _strip_thinking(buffer)
+                    if clean:
+                        yield {"type": "token", "content": clean}
+                        buffer = ""
 
             if tool_calls or tool_call_chunks:
                 if buffer:
-                    clean = _strip_thinking(buffer)
+                    clean = _strip_thinking(buffer, final=True)
                     if clean:
                         yield {"type": "token", "content": clean}
                     buffer = ""
@@ -358,10 +375,11 @@ def _stream_two_model(
         for chunk in big_llm.stream(messages):
             if chunk.content:
                 buffer += chunk.content
-                clean = _strip_thinking(buffer)
-                if clean:
-                    yield {"type": "token", "content": clean}
-                    buffer = ""
+                if not _has_incomplete_tag(buffer):
+                    clean = _strip_thinking(buffer)
+                    if clean:
+                        yield {"type": "token", "content": clean}
+                        buffer = ""
         return
 
     # ── Step 2: Execute tool calls (~0.5-1s) ──
@@ -415,10 +433,11 @@ def _stream_two_model(
     for chunk in big_llm.stream(answer_messages):
         if chunk.content:
             buffer += chunk.content
-            clean = _strip_thinking(buffer)
-            if clean:
-                yield {"type": "token", "content": clean}
-                buffer = ""
+            if not _has_incomplete_tag(buffer):
+                clean = _strip_thinking(buffer)
+                if clean:
+                    yield {"type": "token", "content": clean}
+                    buffer = ""
 
 
 def stream_agent(
@@ -444,7 +463,7 @@ def stream_agent(
     """
     user = user or frappe.session.user
 
-    agent, config, system_prompt, cbs = create_niv_agent(
+    agent, config, cbs = create_niv_agent(
         provider_name=provider_name,
         model=model,
         conversation_id=conversation_id,
@@ -458,7 +477,9 @@ def stream_agent(
 
     _setup_user_api_key(user)
     MAX_TOOL_CALLS = 40 if dev_mode else 12
-    use_two_model = not dev_mode and _get_fast_model()
+    fast_model_name = _get_fast_model()
+    # Skip two-model if already routed to fast model (simple queries) — avoids calling fast model twice
+    use_two_model = not dev_mode and fast_model_name and model != fast_model_name
 
     try:
         if use_two_model:
