@@ -1,6 +1,12 @@
 """
 Niv AI Agent — LangGraph ReAct agent with MCP tools.
 Simple flow: User → LLM (thinks) → MCP Tools (data) → LLM (summarize) → Response
+
+Two-model optimization:
+  1. Fast model (non-streaming) decides: needs tools? which ones?
+  2a. If tools needed → execute tools → big model streams answer with tool results
+  2b. If no tools → big model streams answer directly
+  Fallback: single-model LangGraph ReAct agent (handles retries, multi-step)
 """
 import json
 import re
@@ -15,6 +21,29 @@ from .agent_router import get_agent_prompt_suffix
 from .callbacks import NivStreamingCallback, NivBillingCallback, NivLoggingCallback
 
 
+# ─── Thinking Tag Patterns ──────────────────────────────────────────
+# Models wrap internal reasoning in these tags. Must be stripped before user sees output.
+
+_THINKING_PATTERNS = [
+    (re.compile(r'<think>[\s\S]*?</think>'), ''),
+    (re.compile(r'<reasoning>[\s\S]*?</reasoning>'), ''),
+    (re.compile(r'\[\[THOUGHT\]\][\s\S]*?\[\[/THOUGHT\]\]'), ''),
+    (re.compile(r'\[\[THINKING\]\][\s\S]*?\[\[/THINKING\]\]'), ''),
+    (re.compile(r'(?m)^Thought:.*$'), ''),
+    (re.compile(r'(?m)^Action:.*$'), ''),
+    (re.compile(r'(?m)^Action Input:.*$'), ''),
+    (re.compile(r'(?m)^Observation:.*$'), ''),
+]
+
+# Opening tags that may appear in streaming chunks
+_TAG_OPENERS = [
+    ('<think>', '</think>'),
+    ('<reasoning>', '</reasoning>'),
+    ('[[THOUGHT]]', '[[/THOUGHT]]'),
+    ('[[THINKING]]', '[[/THINKING]]'),
+]
+
+
 # ─── Helpers ────────────────────────────────────────────────────────
 
 def _parse_tc_args(args_str):
@@ -27,6 +56,70 @@ def _parse_tc_args(args_str):
         return json.loads(args_str)
     except (json.JSONDecodeError, TypeError):
         return {}
+
+
+def _strip_thinking(text, final=False):
+    """Remove thinking/reasoning tags from response.
+    
+    Args:
+        text: Text to clean
+        final: If True, strip whitespace (for saved responses).
+               If False (streaming), preserve trailing spaces for token concatenation.
+    """
+    if not text:
+        return text
+    for pattern, repl in _THINKING_PATTERNS:
+        text = pattern.sub(repl, text)
+    text = re.sub(r'\n{3,}', '\n\n', text)
+    return text.strip() if final else text
+
+
+def _has_incomplete_thinking_tag(text):
+    """Check if text has an unclosed thinking tag — we should hold the buffer.
+    
+    Safety limits:
+    - Never hold more than 1500 chars (thinking blocks shouldn't be that long in streaming)
+    - Only check for tag openers, not partial chars (too many false positives)
+    """
+    if not text or len(text) > 1500:
+        return False
+    for opener, closer in _TAG_OPENERS:
+        if opener in text and closer not in text:
+            return True
+    return False
+
+
+def _is_garbled_tool_text(text):
+    """Detect if text is a raw tool call the LLM wrote as plain text.
+    
+    Some models (especially smaller Mistral variants) output tool calls
+    as text content instead of using the function_call API:
+      "list_documents {\"doctype\": \"Sales Order\", ...}"
+      "list_documents Räikk{\"doctype\": ...}"  (garbled variant)
+    
+    This must be detected and suppressed — it's not a real response.
+    """
+    if not text:
+        return False
+    stripped = text.strip()
+    if not stripped:
+        return False
+    # Must be relatively short (real responses are longer)
+    if len(stripped) > 600:
+        return False
+    # Pattern: function_name + optional garbage + JSON object
+    # Real responses don't start with a snake_case word followed by {
+    if re.match(r'^[a-z][a-z0-9_]+\s*\S*\s*\{', stripped):
+        # Verify there's a JSON-like structure
+        brace_start = stripped.find('{')
+        if brace_start >= 0:
+            json_part = stripped[brace_start:]
+            # Count braces — should roughly balance
+            opens = json_part.count('{')
+            closes = json_part.count('}')
+            if opens > 0 and abs(opens - closes) <= 1:
+                return True
+    return False
 
 
 def _build_messages(message: str, conversation_id: str = None, system_prompt: str = ""):
@@ -71,76 +164,62 @@ def _sanitize_error(error: Exception) -> str:
     return "Something went wrong. Please try again."
 
 
-_THINKING_PATTERNS = [
-    (r'<think>[\s\S]*?</think>', ''),
-    (r'<reasoning>[\s\S]*?</reasoning>', ''),
-    (r'\[\[THOUGHT\]\][\s\S]*?\[\[/THOUGHT\]\]', ''),
-    (r'\[\[THINKING\]\][\s\S]*?\[\[/THINKING\]\]', ''),
-    (r'(?m)^Thought:.*$', ''),
-    (r'(?m)^Action:.*$', ''),
-    (r'(?m)^Action Input:.*$', ''),
-    (r'(?m)^Observation:.*$', ''),
-]
+# ─── Buffer Streaming ──────────────────────────────────────────────
+# All streaming paths use this helper to avoid code duplication.
 
-def _strip_thinking(text, final=False):
-    """Remove thinking/reasoning tags from response.
+def _flush_buffer(buffer, final=False):
+    """Process buffer → return (text_to_yield, remaining_buffer).
     
-    Args:
-        text: Text to clean
-        final: If True, also strip leading/trailing whitespace (for saved responses).
-               If False (streaming), preserve spaces so token concatenation works.
+    If final=True, force flush everything (strip thinking, return result).
+    If final=False, hold buffer if there's an incomplete thinking tag.
     """
-    if not text:
-        return text
-    for pattern, repl in _THINKING_PATTERNS:
-        text = re.sub(pattern, repl, text)
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    return text.strip() if final else text
+    if not buffer:
+        return "", ""
+    
+    if not final and _has_incomplete_thinking_tag(buffer):
+        return "", buffer  # Hold it
+    
+    clean = _strip_thinking(buffer, final=final)
+    if clean:
+        return clean, ""
+    elif final:
+        return "", ""  # Thinking-only content → nothing to yield
+    else:
+        return "", buffer  # Still accumulating
 
 
-def _has_incomplete_tag(text):
-    """Check if text has an incomplete thinking tag that might close later.
-    Returns True if we should hold the buffer (don't yield yet).
-    Safety: never hold more than 2000 chars — force flush to avoid lost output."""
-    if not text:
-        return False
-    # Safety cap: if buffer is huge, the close tag isn't coming — force flush
-    if len(text) > 2000:
-        return False
-    # Check for complete opener without closer (buffering until close tag arrives)
-    _TAG_PAIRS = [
-        ('<think>', '</think>'),
-        ('<reasoning>', '</reasoning>'),
-        ('[[THOUGHT]]', '[[/THOUGHT]]'),
-        ('[[THINKING]]', '[[/THINKING]]'),
-    ]
-    for opener, closer in _TAG_PAIRS:
-        if opener in text and closer not in text:
-            return True
-    # Check for partial opener at END of text only (min 3 chars to avoid false positives)
-    tail = text[-15:]
-    _PARTIAL_OPENERS = ['<think>', '<reasoning>', '[[THOUGHT]]', '[[THINKING]]']
-    for opener in _PARTIAL_OPENERS:
-        for i in range(3, len(opener)):
-            partial = opener[:i]
-            if tail.endswith(partial):
-                return True
-    return False
-
-
-def _is_tool_call_text(text):
-    """Detect if text is a raw tool call that the LLM output as plain text
-    instead of using the function calling API. Returns True if it looks like
-    a tool call, not a real response."""
-    if not text or len(text) > 500:
-        return False  # Real responses are usually longer
-    stripped = text.strip()
-    # Pattern: starts with a function-like name and has JSON args
-    import re
-    if re.match(r'^[a-z_]+\s*[\w\W]*\{.*\}\s*$', stripped, re.DOTALL):
-        # Looks like: "list_documents {\"doctype\": ...}" or "get_report {...}"
-        return True
-    return False
+def _stream_llm_tokens(llm_stream):
+    """Yield cleaned token events from an LLM stream.
+    
+    Handles:
+    - Thinking tag buffering and stripping
+    - Garbled tool-call text detection
+    - Buffer flushing at stream end
+    
+    Yields: {"type": "token", "content": str}
+    """
+    buffer = ""
+    
+    for chunk in llm_stream:
+        content = getattr(chunk, "content", None)
+        if not content:
+            continue
+        
+        buffer += content
+        text, buffer = _flush_buffer(buffer, final=False)
+        if text:
+            yield {"type": "token", "content": text}
+    
+    # Final flush
+    if buffer:
+        text, _ = _flush_buffer(buffer, final=True)
+        if text:
+            # Check if the entire output is garbled tool text
+            if _is_garbled_tool_text(text):
+                # Don't yield — this was a tool call masquerading as text
+                pass
+            else:
+                yield {"type": "token", "content": text}
 
 
 # ─── API Key Isolation ──────────────────────────────────────────────
@@ -261,7 +340,7 @@ def run_agent(
         cbs["logging"].finalize()
 
 
-# ─── Stream ─────────────────────────────────────────────────────────
+# ─── Stream Helpers ─────────────────────────────────────────────────
 
 def _get_fast_model():
     """Get fast model name from settings, or None if not configured."""
@@ -292,14 +371,22 @@ def _build_system_prompt(conversation_id, dev_mode=False, page_context=None):
     return system_prompt
 
 
+# ─── Single-Model Streaming (LangGraph ReAct Agent) ────────────────
+
 def _stream_single_model(agent, messages, config, cbs, dev_mode=False, max_tool_calls=12):
-    """Original single-model streaming via LangGraph ReAct agent."""
+    """Stream via LangGraph ReAct agent.
+    
+    This is the reliable path — the agent handles tool selection, execution,
+    retries with corrected args, and multi-step reasoning automatically.
+    """
     pending_tool_calls = {}
     tool_call_count = 0
     start_ts = frappe.utils.now_datetime()
     buffer = ""
+    yielded_any_text = False
 
     for event in agent.stream({"messages": messages}, config=config, stream_mode="messages"):
+        # Timeout guard
         elapsed = (frappe.utils.now_datetime() - start_ts).total_seconds()
         if elapsed > (180 if dev_mode else 120):
             yield {"type": "error", "content": "Request took too long."}
@@ -309,24 +396,26 @@ def _stream_single_model(agent, messages, config, cbs, dev_mode=False, max_tool_
         if not hasattr(msg, "type"):
             continue
 
+        # ── AI message chunks (text + tool calls) ──
         if msg.type == "ai" or msg.type == "AIMessageChunk":
             tool_calls = getattr(msg, "tool_calls", None) or []
             tool_call_chunks = getattr(msg, "tool_call_chunks", None) or []
 
+            # Text content
             if msg.content:
                 buffer += msg.content
-                # Hold buffer if it might contain an incomplete thinking tag
-                if not _has_incomplete_tag(buffer):
-                    clean = _strip_thinking(buffer)
-                    if clean:
-                        yield {"type": "token", "content": clean}
-                        buffer = ""
+                text, buffer = _flush_buffer(buffer, final=False)
+                if text:
+                    yielded_any_text = True
+                    yield {"type": "token", "content": text}
 
+            # Tool calls — flush text buffer first
             if tool_calls or tool_call_chunks:
                 if buffer:
-                    clean = _strip_thinking(buffer, final=True)
-                    if clean:
-                        yield {"type": "token", "content": clean}
+                    text, buffer = _flush_buffer(buffer, final=True)
+                    if text and not _is_garbled_tool_text(text):
+                        yielded_any_text = True
+                        yield {"type": "token", "content": text}
                     buffer = ""
 
                 if tool_calls:
@@ -342,9 +431,12 @@ def _stream_single_model(agent, messages, config, cbs, dev_mode=False, max_tool_
                         if tc.get("args"):
                             pending_tool_calls[idx]["args"] += tc["args"]
 
+        # ── Tool result messages ──
         elif msg.type == "tool":
             tool_call_count += 1
-            for idx in list(pending_tool_calls.keys()):
+
+            # Emit any pending tool call chunks
+            for idx in sorted(pending_tool_calls.keys()):
                 tc_data = pending_tool_calls[idx]
                 if tc_data["name"]:
                     yield {"type": "tool_call", "tool": tc_data["name"], "arguments": _parse_tc_args(tc_data["args"])}
@@ -359,36 +451,39 @@ def _stream_single_model(agent, messages, config, cbs, dev_mode=False, max_tool_
                 yield {"type": "error", "content": "Tool call limit reached."}
                 break
 
-    # Flush remaining buffer after stream ends
+    # ── Final buffer flush ──
     if buffer:
-        clean = _strip_thinking(buffer, final=True)
-        if clean:
-            yield {"type": "token", "content": clean}
+        text, _ = _flush_buffer(buffer, final=True)
+        if text and not _is_garbled_tool_text(text):
+            yielded_any_text = True
+            yield {"type": "token", "content": text}
 
+
+# ─── Two-Model Streaming ───────────────────────────────────────────
 
 def _stream_two_model(
     message, messages, system_prompt, conversation_id, user,
     provider_name, model, cbs, dev_mode=False, max_tool_calls=12,
 ):
-    """Two-model optimization: fast model for tool selection, big model for final answer.
+    """Two-model optimization: fast model selects tools, big model answers.
     
     Flow:
-    1. Fast LLM (non-streaming) with tools → decides tool call or direct answer
-    2. If tool call → execute tool → get result
-    3. Big LLM (streaming) with original question + tool result → stream final answer
+      1. Fast LLM (non-streaming, with tools) → decides which tools to call
+      2. If tools needed → execute → big model streams answer with results
+      3. If no tools → big model streams answer directly
     
-    Falls back to single-model if fast model fails or isn't configured.
-    
-    Yields a special {"type": "_fallback"} event if fast model fails,
-    signaling the caller to use single-model instead.
+    Yields {"type": "_fallback"} to signal caller to use single-model instead.
+    This happens when:
+      - Fast model fails (API error, timeout)
+      - Fast model outputs garbled tool text instead of proper function calls
+      - All tool calls fail (single-model can retry with corrected args)
     """
     from .tools import get_langchain_tools
 
     fast_model_name = _get_fast_model()
     tools = get_langchain_tools()
 
-    # ── Step 1: Fast model decides tool call (non-streaming, ~1-2s) ──
-    # Pass billing callback so fast model tokens are tracked too
+    # ── Step 1: Fast model decides tool call (non-streaming) ──
     fast_callbacks = [cbs["billing"]] if "billing" in cbs else []
     fast_llm = get_llm(provider_name, fast_model_name, streaming=False, callbacks=fast_callbacks)
     fast_llm_with_tools = fast_llm.bind_tools(tools)
@@ -396,41 +491,26 @@ def _stream_two_model(
     try:
         fast_response = fast_llm_with_tools.invoke(messages)
     except Exception as e:
-        frappe.logger().warning(f"Niv AI: Fast model failed, falling back to single-model: {e}")
+        frappe.logger().warning(f"Niv AI: Fast model failed: {e}")
         yield {"type": "_fallback"}
         return
 
     fast_tool_calls = getattr(fast_response, "tool_calls", None) or []
-
-    # Detect fast model outputting tool calls as plain text (broken function calling)
     fast_content = getattr(fast_response, "content", "") or ""
-    if not fast_tool_calls and _is_tool_call_text(fast_content):
-        frappe.logger().warning(f"Niv AI: Fast model output tool call as text, falling back: {fast_content[:100]}")
+
+    # ── Guard: fast model wrote tool call as text (broken function calling) ──
+    if not fast_tool_calls and _is_garbled_tool_text(fast_content):
+        frappe.logger().warning(f"Niv AI: Fast model output tool text, falling back: {fast_content[:100]}")
         yield {"type": "_fallback"}
         return
 
-    # ── No tool call needed → stream answer with big model directly ──
+    # ── No tools needed → stream answer with big model ──
     if not fast_tool_calls:
-        # Fast model answered directly — but we want the big model's quality
-        # Stream with big model (no tools needed, pure text generation)
         big_llm = get_llm(provider_name, model, streaming=True, callbacks=list(cbs.values()))
-        buffer = ""
-        for chunk in big_llm.stream(messages):
-            if chunk.content:
-                buffer += chunk.content
-                if not _has_incomplete_tag(buffer):
-                    clean = _strip_thinking(buffer)
-                    if clean:
-                        yield {"type": "token", "content": clean}
-                        buffer = ""
-        # Flush remaining buffer
-        if buffer:
-            clean = _strip_thinking(buffer, final=True)
-            if clean:
-                yield {"type": "token", "content": clean}
+        yield from _stream_llm_tokens(big_llm.stream(messages))
         return
 
-    # ── Step 2: Execute tool calls (~0.5-1s) ──
+    # ── Step 2: Execute tool calls ──
     tool_map = {t.name: t for t in tools}
     tool_results = []
 
@@ -461,22 +541,15 @@ def _stream_two_model(
             "result": result_str,
         })
 
-    # ── Check if all tools failed — fall back to single-model for retry capability ──
+    # ── If all tools failed → fall back to single-model (can retry) ──
     all_failed = all("error" in (tr["result"] or "").lower() for tr in tool_results)
     if all_failed:
-        # Tool errors → big model will try to call tools again but we don't give it tools
-        # Fall back to single-model ReAct agent which can retry with corrected args
         yield {"type": "_fallback"}
         return
 
-    # ── Step 3: Big model streams final answer with tool results (~5-8s) ──
-    # Build messages with tool results appended
-    answer_messages = list(messages)  # Copy original messages
-
-    # Add the fast model's AI message with tool calls
-    answer_messages.append(fast_response)
-
-    # Add tool results as ToolMessages
+    # ── Step 3: Big model streams answer with tool results ──
+    answer_messages = list(messages)
+    answer_messages.append(fast_response)  # AI message with tool_calls
     for tr in tool_results:
         answer_messages.append(ToolMessage(
             content=tr["result"],
@@ -485,21 +558,10 @@ def _stream_two_model(
         ))
 
     big_llm = get_llm(provider_name, model, streaming=True, callbacks=list(cbs.values()))
-    buffer = ""
-    for chunk in big_llm.stream(answer_messages):
-        if chunk.content:
-            buffer += chunk.content
-            if not _has_incomplete_tag(buffer):
-                clean = _strip_thinking(buffer)
-                if clean:
-                    yield {"type": "token", "content": clean}
-                    buffer = ""
-    # Flush remaining buffer
-    if buffer:
-        clean = _strip_thinking(buffer, final=True)
-        if clean:
-            yield {"type": "token", "content": clean}
+    yield from _stream_llm_tokens(big_llm.stream(answer_messages))
 
+
+# ─── Main Entry Point ──────────────────────────────────────────────
 
 def stream_agent(
     message: str,
@@ -512,15 +574,8 @@ def stream_agent(
 ):
     """Stream agent — yields SSE event dicts.
     
-    Uses two-model optimization when fast_model is configured:
-      - Fast model (small) for tool selection (~1-2s)
-      - Big model for final answer streaming (~5-8s)
-      - Total: ~7-10s vs ~15-20s with single model
-    
-    Falls back to single-model LangGraph ReAct agent if:
-      - fast_model not configured
-      - fast model call fails
-      - dev_mode enabled (needs full agent loop)
+    Two-model optimization when fast_model is configured, with automatic
+    fallback to single-model LangGraph ReAct agent on any failure.
     """
     user = user or frappe.session.user
 
@@ -539,13 +594,16 @@ def stream_agent(
     _setup_user_api_key(user)
     MAX_TOOL_CALLS = 40 if dev_mode else 12
     fast_model_name = _get_fast_model()
-    # Skip two-model if already routed to fast model (simple queries) — avoids calling fast model twice
+    # Skip two-model if: no fast model, dev mode, or already routed to fast model (simple queries)
     use_two_model = not dev_mode and fast_model_name and model != fast_model_name
+
+    yielded_any_token = False
 
     try:
         if use_two_model:
-            # Try two-model optimization
             fell_back = False
+            two_model_events = []  # Buffer events in case we need to fall back
+            
             for event in _stream_two_model(
                 message=message,
                 messages=messages,
@@ -561,11 +619,24 @@ def stream_agent(
                 if event.get("type") == "_fallback":
                     fell_back = True
                     break
+                
+                # Track if we yielded any real text tokens
+                if event.get("type") == "token":
+                    yielded_any_token = True
+                
                 yield event
+            
             if fell_back:
-                yield from _stream_single_model(agent, messages, config, cbs, dev_mode, MAX_TOOL_CALLS)
+                # Single-model gets fresh start — it will re-discover and call tools itself
+                for event in _stream_single_model(agent, messages, config, cbs, dev_mode, MAX_TOOL_CALLS):
+                    if event.get("type") == "token":
+                        yielded_any_token = True
+                    yield event
         else:
-            yield from _stream_single_model(agent, messages, config, cbs, dev_mode, MAX_TOOL_CALLS)
+            for event in _stream_single_model(agent, messages, config, cbs, dev_mode, MAX_TOOL_CALLS):
+                if event.get("type") == "token":
+                    yielded_any_token = True
+                yield event
 
     except Exception as e:
         frappe.log_error(f"Stream agent error: {e}", "Niv AI Agent")
@@ -573,6 +644,8 @@ def stream_agent(
 
     finally:
         _cleanup_user_api_key()
+        
+        # Ensure DB is alive for billing
         try:
             frappe.db.sql("SELECT 1")
         except Exception:
@@ -580,6 +653,7 @@ def stream_agent(
                 frappe.db.connect()
             except Exception:
                 pass
+        
         # Build full prompt text for accurate token estimation
         full_prompt = "\n".join(
             getattr(m, "content", str(m)) for m in messages if hasattr(m, "content")
@@ -587,7 +661,7 @@ def stream_agent(
         cbs["billing"].finalize(stream_cb=cbs["stream"], full_prompt_text=full_prompt)
         cbs["logging"].finalize()
         
-        # Yield token usage for stream.py to save with the message
+        # Yield token usage for stream.py to capture
         yield {
             "type": "_token_usage",
             "input_tokens": cbs["billing"].total_prompt_tokens,

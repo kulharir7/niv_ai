@@ -1,6 +1,7 @@
 """
-Stream API ??? SSE endpoint using LangChain Agent
-Uses existing battle-tested LangChain agent (sync, no async issues)
+Stream API — SSE endpoint for Niv AI chat.
+Handles request parsing, message saving, and SSE response streaming.
+The agent (agent.py) handles all LLM/tool logic.
 """
 import json
 import frappe
@@ -8,52 +9,45 @@ from frappe import _
 from niv_ai.niv_core.api._helpers import validate_conversation, save_user_message, save_assistant_message, auto_title
 
 
-def _check_rate_limit(user=None):
-    """Rate limit check - uses settings if configured"""
-    try:
-        from niv_ai.niv_core.utils.rate_limiter import check_rate_limit
-        check_rate_limit(user)
-    except ImportError:
-        pass  # Rate limiter not available, skip
+# ─── Simple Query Detection ────────────────────────────────────────
 
+_SIMPLE_PATTERNS = frozenset({
+    "hi", "hello", "hey", "hii", "hiii", "namaste", "namaskar",
+    "thanks", "thank you", "thankyou", "dhanyavaad", "shukriya",
+    "ok", "okay", "k", "done", "yes", "no", "haan", "nahi", "na",
+    "good", "great", "nice", "awesome", "cool", "fine", "accha",
+    "bye", "goodbye", "good night", "good morning", "good evening",
+    "gm", "gn", "morning", "evening",
+    "hmm", "hm", "oh", "ah", "wow",
+})
 
-def _sse(data):
-    """Format SSE event"""
-    return f"data: {json.dumps(data)}\n\n"
+_QUESTION_WORDS = frozenset({
+    "what", "how", "why", "when", "where", "which", "who",
+    "kya", "kaise", "kab", "kahan", "kaun", "kitna", "kitne",
+    "show", "list", "get", "find", "create", "make", "delete",
+    "calculate", "report", "export", "analyze",
+})
 
 
 def _is_simple_query(message: str) -> bool:
-    """Detect simple queries that don't need a powerful model.
-    Greetings, thanks, yes/no, short confirmations, etc."""
+    """Detect simple queries that don't need a powerful model."""
     msg = (message or "").strip().lower()
-    # Very short messages (1-3 words) are usually simple
     word_count = len(msg.split())
-    if word_count <= 3:
-        # Check if it's a greeting/thanks/confirmation
-        simple_patterns = {
-            "hi", "hello", "hey", "hii", "hiii", "namaste", "namaskar",
-            "thanks", "thank you", "thankyou", "dhanyavaad", "shukriya",
-            "ok", "okay", "k", "done", "yes", "no", "haan", "nahi", "na",
-            "good", "great", "nice", "awesome", "cool", "fine", "accha",
-            "bye", "goodbye", "good night", "good morning", "good evening",
-            "gm", "gn", "morning", "evening",
-            "hmm", "hm", "oh", "ah", "wow",
-        }
-        if msg.rstrip("!.?") in simple_patterns:
-            return True
-        # Very short messages without question words
-        question_words = {"what", "how", "why", "when", "where", "which", "who",
-                         "kya", "kaise", "kab", "kahan", "kaun", "kitna", "kitne",
-                         "show", "list", "get", "find", "create", "make", "delete",
-                         "calculate", "report", "export", "analyze"}
-        if word_count <= 2 and not any(w in msg for w in question_words):
-            return True
+    if word_count > 3:
+        return False
+    # Check exact match against simple patterns (strip trailing punctuation)
+    if msg.rstrip("!.?") in _SIMPLE_PATTERNS:
+        return True
+    # 1-2 word messages without question/action words
+    if word_count <= 2 and not any(w in msg for w in _QUESTION_WORDS):
+        return True
     return False
 
 
+# ─── DB Connection Helpers ──────────────────────────────────────────
+
 def _ensure_db(site_name=None):
-    """Ensure DB connection is alive, reconnect if dead.
-    Fixes pymysql.err.InterfaceError: (0, '') from stale connections."""
+    """Ensure DB connection is alive, reconnect if dead."""
     try:
         frappe.db.sql("SELECT 1")
     except Exception:
@@ -65,10 +59,20 @@ def _ensure_db(site_name=None):
             pass
 
 
+# ─── SSE Formatting ────────────────────────────────────────────────
+
+def _sse(data):
+    """Format SSE event."""
+    return f"data: {json.dumps(data)}\n\n"
+
+
+# ─── Main Endpoint ─────────────────────────────────────────────────
+
 @frappe.whitelist(methods=["GET", "POST"])
 def stream_chat(**kwargs):
-    """Stream chat via LangChain Agent (SSE)"""
-    # Parse request
+    """Stream chat via Niv AI Agent (SSE)."""
+    
+    # ── Parse request ──
     if frappe.request.method == "POST":
         try:
             data = frappe.request.get_json(silent=True) or {}
@@ -97,7 +101,7 @@ def stream_chat(**kwargs):
     if not message:
         frappe.throw(_("Message cannot be empty"))
 
-    # Auto-route to fast model for simple queries (when user hasn't explicitly picked a model)
+    # ── Auto-route simple queries to fast model ──
     if not model:
         try:
             from niv_ai.niv_core.utils import get_niv_settings
@@ -108,7 +112,7 @@ def stream_chat(**kwargs):
         except Exception:
             pass
 
-    # Auto-create conversation if not provided
+    # ── Auto-create conversation if needed ──
     if not conversation_id:
         conv = frappe.get_doc({
             "doctype": "Niv Conversation",
@@ -127,26 +131,26 @@ def stream_chat(**kwargs):
 
     def generate():
         import time as _time
+        
         full_response = ""
         tool_calls_data = []
         token_data = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
         _last_db_check = _time.time()
-        
+
         def _heartbeat_db():
-            """Keep DB alive during long streams — prevents InterfaceError(0, '')."""
+            """Keep DB alive during long streams."""
             nonlocal _last_db_check
             now = _time.time()
-            if now - _last_db_check > 10:  # Every 10 seconds
+            if now - _last_db_check > 10:
                 _ensure_db(_site_name)
                 _last_db_check = now
-        
+
         try:
             frappe.init(site=_site_name)
             frappe.connect()
 
-            # Use existing LangChain agent - it handles everything!
             from niv_ai.niv_core.langchain.agent import stream_agent
-            
+
             for event in stream_agent(
                 message=message,
                 conversation_id=conversation_id,
@@ -154,69 +158,75 @@ def stream_chat(**kwargs):
                 model=model or None,
                 page_context=page_context,
             ):
-                _heartbeat_db()  # Keep DB alive during long streams
+                _heartbeat_db()
                 event_type = event.get("type", "")
-                
+
                 if event_type == "token":
                     content = event.get("content", "")
-                    full_response += content
-                    yield _sse(event)
-                
+                    if content:
+                        full_response += content
+                        yield _sse(event)
+
                 elif event_type == "tool_call":
                     tool_calls_data.append({
                         "tool": event.get("tool", ""),
                         "arguments": event.get("arguments", {})
                     })
                     yield _sse(event)
-                
+
                 elif event_type == "tool_result":
-                    _ensure_db(_site_name)  # Tools may have killed DB connection
+                    _ensure_db(_site_name)
                     yield _sse(event)
-                
+
                 elif event_type == "thought":
-                    # Pass through thought events for UI
                     yield _sse(event)
-                
+
                 elif event_type == "_token_usage":
-                    # Internal event from agent — capture but don't send to client
+                    # Internal — capture for saving, don't send to client
                     token_data = {
                         "input_tokens": event.get("input_tokens", 0),
                         "output_tokens": event.get("output_tokens", 0),
                         "total_tokens": event.get("total_tokens", 0),
                     }
-                
+
                 elif event_type == "error":
                     yield _sse(event)
-                    full_response = event.get("content", "Error occurred")
-                
+                    if not full_response.strip():
+                        full_response = event.get("content", "Error occurred")
+
                 else:
-                    # Pass through any other events
                     yield _sse(event)
 
         except Exception as e:
             error_msg = f"Error: {str(e)}"
-            full_response = error_msg
+            if not full_response.strip():
+                full_response = error_msg
             frappe.log_error(f"Stream error: {e}", "Niv AI Stream")
             yield _sse({"type": "error", "content": error_msg})
 
         finally:
-            # If tools ran but no text response, provide a fallback message
+            # ── Fallback: if tools ran but no text response, tell the user ──
             if not full_response.strip() and tool_calls_data:
-                full_response = "I looked up the information but couldn't generate a complete response. Please try again."
+                full_response = "I found some data but couldn't generate a response. Please try rephrasing your question."
+                yield _sse({"type": "token", "content": full_response})
+            
+            # ── Fallback: completely empty response ──
+            if not full_response.strip():
+                full_response = "I couldn't generate a response. Please try again."
                 yield _sse({"type": "token", "content": full_response})
 
-            # Save response - ensure DB connection is alive
-            if full_response.strip():
-                _ensure_db(_site_name)
-                # Resolve actual model name for DB
-                _model_used = model
-                if not _model_used:
-                    try:
-                        from niv_ai.niv_core.utils import get_niv_settings
-                        _s = get_niv_settings()
-                        _model_used = _s.default_model
-                    except Exception:
-                        pass
+            # ── Save assistant message to DB ──
+            _ensure_db(_site_name)
+            _model_used = model
+            if not _model_used:
+                try:
+                    from niv_ai.niv_core.utils import get_niv_settings
+                    _s = get_niv_settings()
+                    _model_used = _s.default_model
+                except Exception:
+                    pass
+            
+            try:
                 save_assistant_message(
                     conversation_id, full_response, tool_calls_data,
                     input_tokens=token_data.get("input_tokens", 0),
@@ -225,16 +235,16 @@ def stream_chat(**kwargs):
                     model=_model_used,
                 )
                 auto_title(conversation_id, message)
+            except Exception as e:
+                frappe.log_error(f"Save message error: {e}", "Niv AI Stream")
 
+            # ── Send done event ──
             yield _sse({
                 "type": "done", "content": "",
                 "input_tokens": token_data.get("input_tokens", 0),
                 "output_tokens": token_data.get("output_tokens", 0),
                 "total_tokens": token_data.get("total_tokens", 0),
             })
-
-            # Don't call frappe.destroy() here — it kills the DB connection
-            # for subsequent requests. Let Frappe's request lifecycle handle cleanup.
 
     from werkzeug.wrappers import Response
     return Response(
@@ -243,6 +253,6 @@ def stream_chat(**kwargs):
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
-            "Connection": "keep-alive"
-        }
+            "Connection": "keep-alive",
+        },
     )
