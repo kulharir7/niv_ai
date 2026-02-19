@@ -151,7 +151,7 @@ class NivCredits {
                 this.loadBalance();
                 this.loadTransactions();
                 return;
-            } else if (order.payment_mode === "erpnext") {
+            } else if (order.payment_mode === "growth") {
                 frappe.show_alert({ message: order.message || "Order created!", indicator: "green" }, 5);
                 this.loadBalance();
                 this.loadHistory();

@@ -293,8 +293,8 @@
     {
       "fieldname": "erp_billing_section",
       "fieldtype": "Section Break",
-      "label": "ERPNext Billing",
-      "description": "Connect to a remote ERPNext for billing. Recharge creates Sales Order on vendor's ERPNext. Tokens credited on SO submit via webhook.",
+      "label": "Growth Billing",
+      "description": "Connect to Growth System ERPNext for billing. Recharge creates Sales Order. Tokens credited on SO submit via webhook.",
       "collapsible": 1
     },
     {
