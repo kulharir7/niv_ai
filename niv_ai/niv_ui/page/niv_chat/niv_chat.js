@@ -517,6 +517,11 @@ class NivChat {
             // Unescape HTML entities that might have been double-escaped
             content = content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
             
+            // If content is just placeholder, don't overwrite current preview
+            if (content.includes("<!-- Generating...") && this.current_artifact_content && this.current_artifact_content.length > 50) {
+                return;
+            }
+            
             this.current_artifact_content = content;
             
             // Update code view with syntax highlighting
@@ -524,7 +529,7 @@ class NivChat {
             this.highlight_artifact_code();
             
             // Update preview iframe
-            if (content && (content.includes("<") || content.includes("{"))) {
+            if (content && content.length > 30 && (content.includes("<") || content.includes("{"))) {
                 this.show_live_preview(content);
             } else {
                 // Show "No preview" message - use show_live_preview to handle blob cleanup
@@ -802,10 +807,16 @@ class NivChat {
     is_html_response(content) {
         // Detect if AI response contains renderable HTML
         if (!content) return false;
-        return content.includes("<!DOCTYPE") || 
-               content.includes("<html") || 
-               (content.includes("<head") && content.includes("<body")) ||
-               (content.includes("<style>") && content.includes("<script>"));
+        // Markdown code block
+        if (content.includes("```html")) return true;
+        // Direct or partially-rendered HTML tags
+        if (content.includes("<!DOCTYPE") || content.includes("<html")) return true;
+        if (content.includes("<head") && content.includes("<body")) return true;
+        if (content.includes("<style>") || content.includes("<style ")) return true;
+        // Escaped HTML entities (from DB)
+        if (content.includes("&lt;html") || content.includes("&lt;!DOCTYPE")) return true;
+        if (content.includes("&lt;style&gt;") || content.includes("&lt;style ")) return true;
+        return false;
     }
 
     extract_artifact_title(text) {
@@ -1711,7 +1722,6 @@ ${htmlCode}
         }
 
         this.add_code_copy_buttons($msg);
-        if (!isUser) this.add_export_buttons($msg, content);
 
         if (window.hljs) {
             $msg.find("pre code").each(function () {
@@ -1719,9 +1729,39 @@ ${htmlCode}
             });
         }
 
-        // Auto-open artifacts if HTML detected
-        if (!isUser && this.is_html_response(content)) {
-            this.toggle_artifacts_panel(true);
+        // Auto-open artifacts and render preview if HTML detected
+        const _isHtml = !isUser && this.is_html_response(content);
+        console.log('[ART-DBG] append_message', { role, isUser, _isHtml, contentLen: (content||'').length, first80: (content||'').substring(0,80) });
+        if (_isHtml) {
+            // Open panel WITHOUT loading artifacts from DB (avoids overwriting preview with stale placeholder)
+            if (!this.artifacts_open) {
+                this.artifacts_open = true;
+                this.wrapper.find(".niv-main").addClass("niv-artifacts-open");
+                this.$artifactPanel.show();
+                this.wrapper.find(".btn-artifacts-toggle").addClass("active");
+            }
+            // Unescape HTML entities if content came from DB
+            let rawContent = content;
+            if (content.includes("&lt;")) {
+                rawContent = content.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+            }
+            // Try to extract code from markdown blocks first
+            let htmlToRender = this.extract_code_from_response(rawContent);
+            // If no code blocks found but content has HTML tags, use it directly
+            if (!htmlToRender && (rawContent.includes("<style") || rawContent.includes("<html") || rawContent.includes("<!DOCTYPE"))) {
+                htmlToRender = rawContent;
+            }
+            if (htmlToRender) {
+                this.show_live_preview(htmlToRender);
+                this.current_artifact_content = htmlToRender;
+                if (this.$artifactCode) {
+                    this.$artifactCode.text(htmlToRender);
+                }
+                // Also update artifact in DB if it still has placeholder content
+                if (this.active_artifact_id) {
+                    this.update_artifact_with_code(this.active_artifact_id, htmlToRender);
+                }
+            }
         }
 
         return $msg;
@@ -1749,79 +1789,6 @@ ${htmlCode}
                 });
             });
         });
-    }
-
-    /**
-     * Add Excel/CSV/PDF export buttons below messages that contain tables.
-     */
-    add_export_buttons($msg, content) {
-        if (!content) return;
-        $msg.find(".niv-export-bar").remove();
-
-        // Check if content has a markdown table (| header1 | header2 |)
-        const tableMatch = content.match(/^\|.+\|$/gm);
-        if (!tableMatch || tableMatch.length < 3) return;
-
-        // Parse markdown table into JSON
-        const lines = tableMatch.map(l => l.trim());
-        const headers = lines[0].replace(/^\||\|$/g, '').split('|').map(h => h.trim()).filter(h => h);
-        if (!headers.length) return;
-
-        const dataRows = [];
-        for (let i = 1; i < lines.length; i++) {
-            const cells = lines[i].replace(/^\||\|$/g, '').split('|').map(c => c.trim());
-            if (cells.every(c => /^[-:]+$/.test(c))) continue;
-            if (!cells.length) continue;
-            const row = {};
-            headers.forEach((h, idx) => { row[h] = (cells[idx] || '').trim(); });
-            dataRows.push(row);
-        }
-        if (dataRows.length === 0) return;
-
-        const $bar = $(`
-            <div class="niv-export-bar">
-                <button class="niv-export-btn niv-export-excel" title="Download as Excel">
-                    <i class="fa fa-file-excel-o"></i> Excel
-                </button>
-                <button class="niv-export-btn niv-export-csv" title="Download as CSV">
-                    <i class="fa fa-file-text-o"></i> CSV
-                </button>
-                <button class="niv-export-btn niv-export-pdf" title="Download as PDF">
-                    <i class="fa fa-file-pdf-o"></i> PDF
-                </button>
-            </div>
-        `);
-
-        const jsonData = JSON.stringify(dataRows);
-        $bar.find(".niv-export-excel").on("click", () => this._do_export(jsonData, "excel"));
-        $bar.find(".niv-export-csv").on("click", () => this._do_export(jsonData, "csv"));
-        $bar.find(".niv-export-pdf").on("click", () => this._do_export(jsonData, "pdf"));
-
-        $msg.find(".msg-content").after($bar);
-    }
-
-    async _do_export(jsonData, format) {
-        try {
-            frappe.show_alert({ message: `Generating ${format.toUpperCase()} file...`, indicator: "blue" });
-            const r = await frappe.call({
-                method: "niv_ai.niv_core.api.export.export_data",
-                args: { data: jsonData, format: format },
-            });
-            if (r.message && r.message.file_url) {
-                const a = document.createElement("a");
-                a.href = r.message.file_url;
-                a.download = r.message.filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                frappe.show_alert({ message: "Download started", indicator: "green" });
-            } else {
-                frappe.show_alert({ message: "Export failed", indicator: "red" });
-            }
-        } catch (e) {
-            console.error("Export error:", e);
-            frappe.show_alert({ message: `Export failed: ${e.message || e}`, indicator: "red" });
-        }
     }
 
     render_markdown(text) {
@@ -2145,9 +2112,22 @@ ${htmlCode}
         } catch(e) {}
         const route = frappe.get_route();
         const ctx = { route };
-        if (route && route[0] === "Form" && route.length >= 3) {
-            ctx.doctype = route[1];
-            ctx.docname = route[2];
+        if (route && route.length > 0) {
+            const view = route[0];
+            if (view === "Form" && route.length >= 3) {
+                ctx.doctype = route[1];
+                ctx.docname = route[2];
+            } else if (view === "List" && route.length >= 2) {
+                ctx.list_doctype = route[1];
+            } else if (view === "query-report" && route.length >= 2) {
+                ctx.query_report = route[1];
+            } else if (view === "Report" && route.length >= 2) {
+                ctx.report_name = route[1];
+            } else if (view === "Dashboard" && route.length >= 2) {
+                ctx.dashboard = route[1];
+            } else if (view === "Workspaces" || view === "app") {
+                ctx.workspace = route.slice(1).join("/") || "Home";
+            }
         }
         return ctx;
     }
@@ -2377,23 +2357,25 @@ ${htmlCode}
                                 this.is_streaming = false;
                                 this.$sendBtn.show();
                                 this.$stopBtn.hide();
-                                // Add export buttons if response has table data
-                                if ($msgEl && fullContent) {
-                                    this.add_export_buttons($msgEl, fullContent);
-                                }
-                                // Auto-update pending artifact with streamed content
-                                if (this._pendingArtifactId && fullContent) {
-                                    let htmlContent = fullContent;
-                                    const htmlMatch = fullContent.match(/```(?:html)?\s*([\s\S]*?)```/);
-                                    if (htmlMatch && htmlMatch[1]) {
-                                        htmlContent = htmlMatch[1].trim();
-                                    }
-                                    if (htmlContent.includes("<") || htmlContent.includes("{")) {
-                                        this.update_artifact_with_code(this._pendingArtifactId, htmlContent);
+
+                                // Artifact: update preview if HTML detected in response
+                                console.log("[Niv Debug] done handler, fullContent len:", fullContent?.length, "isHtml:", fullContent ? this.is_html_response(fullContent) : false, "pendingArtifact:", this._pendingArtifactId, "first100:", fullContent?.substring(0, 100));
+                                if (fullContent && this.is_html_response(fullContent)) {
+                                    const extractedCode = this.extract_code_from_response(fullContent);
+                                    const htmlToRender = extractedCode || fullContent;
+                                    if (this._pendingArtifactId) {
+                                        await this.update_artifact_with_code(this._pendingArtifactId, htmlToRender);
+                                    } else {
+                                        await this.auto_create_artifact_from_response(htmlToRender);
                                     }
                                     this._pendingArtifactId = null;
+                                    // Skip load_messages — streaming already rendered content,
+                                    // and load_messages would reload artifact with stale DB data
+                                    this.update_last_assistant_actions();
+                                } else {
+                                    this._pendingArtifactId = null;
+                                    this.load_messages(conv_id); // Refresh to get final saved state
                                 }
-                                this.load_messages(conv_id); // Refresh to get final saved state
                             }
                             resolve();
                         } else if (data.type === "error") {
@@ -2401,6 +2383,20 @@ ${htmlCode}
                             this.render_conversation_list();
                             if (is_active) {
                                 this.hide_typing();
+                                // Try to render partial artifact even on error (e.g. timeout)
+                                if (fullContent && this.is_html_response(fullContent)) {
+                                    const extractedCode = this.extract_code_from_response(fullContent);
+                                    const htmlToRender = extractedCode || fullContent;
+                                    if (this._pendingArtifactId) {
+                                        this.update_artifact_with_code(this._pendingArtifactId, htmlToRender);
+                                    } else {
+                                        this.auto_create_artifact_from_response(htmlToRender);
+                                    }
+                                }
+                                this._pendingArtifactId = null;
+                                this.is_streaming = false;
+                                this.$sendBtn.show();
+                                this.$stopBtn.hide();
                                 this.append_message("assistant", `❌ Error: ${data.content || data.message || "Unknown error"}`, { is_error: 1 });
                             }
                             resolve();
@@ -2590,6 +2586,13 @@ ${htmlCode}
     // ─── TTS ────────────────────────────────────────────────────────
 
     cleanTextForTTS(text) {
+        // Strip thinking/reasoning blocks first
+        text = text.replace(/<think>[\s\S]*?<\/think>/g, '');
+        text = text.replace(/<reasoning>[\s\S]*?<\/reasoning>/g, '');
+        text = text.replace(/^Thought:.*$/gm, '');
+        text = text.replace(/^Action:.*$/gm, '');
+        text = text.replace(/^Action Input:.*$/gm, '');
+        text = text.replace(/^Observation:.*$/gm, '');
         if (!text) return "";
         let t = text;
 
@@ -2656,7 +2659,7 @@ ${htmlCode}
         // Try Piper TTS API first
         frappe.call({
             method: "niv_ai.niv_core.api.voice.text_to_speech",
-            args: { text: clean },
+            args: { text: clean, voice: this.selectedTtsVoice || "auto" },
             async: true,
             callback: (r) => {
                 if (r.message && r.message.audio_url) {
@@ -2862,20 +2865,14 @@ ${htmlCode}
                 const label = data.mode === "shared_pool" ? "pool" : "credits";
                 this.$credits.text(this.format_credits(data.balance));
                 this.wrapper.find(".credit-label").text(label);
+                // Show daily usage for shared pool
+                if (data.mode === "shared_pool" && data.daily_limit) {
+                    this.$credits.attr("title", `Daily: ${data.daily_used || 0}/${data.daily_limit} tokens`);
+                }
                 this.current_balance = data.balance;
 
-                // Token Usage ring: show pool used/total for shared pool, balance for per-user
-                if (data.mode === "shared_pool") {
-                    const poolTotal = (data.total_used || 0) + (data.balance || 0);
-                    this.update_token_ring(data.total_used || 0, poolTotal);
-                    let tip = `Pool: ${(data.balance || 0).toLocaleString()} remaining`;
-                    if (data.daily_limit) {
-                        tip += ` | Today: ${(data.daily_used || 0).toLocaleString()}/${data.daily_limit.toLocaleString()}`;
-                    }
-                    this.$credits.attr("title", tip);
-                } else {
-                    this.update_token_ring(data.total_used || 0, (data.total_used || 0) + data.balance);
-                }
+                // Update Token Ring
+                this.update_token_ring(data.balance, data.daily_limit || 100000);
 
                 // Low balance warning
                 if (data.balance < 500 && data.balance > 0) {
@@ -3018,18 +3015,7 @@ ${htmlCode}
         return Number(n).toLocaleString();
     }
 
-    // ─── Voice Mode (Streaming) ──────────────────────────────────────
-    //
-    // Architecture:
-    //   Browser STT (instant) → text → SSE stream_voice_chat endpoint
-    //   → LLM streaming → clause-level TTS chunks → audio queue → gapless playback
-    //
-    // First audio latency target: ~1.5–2 seconds
-    //
-    // Audio Pipeline:
-    //   SSE event (base64 audio) → decode → AudioBuffer → queue → play seamlessly
-    //   Each chunk plays immediately while next chunks are being generated.
-    //   Interruption: user speaks → flush queue → stop playback → start recording.
+    // ─── Voice Mode ─────────────────────────────────────────────────
 
     setup_voice_mode() {
         this.$voiceOverlay = this.wrapper.find(".niv-voice-overlay");
@@ -3038,7 +3024,6 @@ ${htmlCode}
         this.$voiceTranscript = this.$voiceOverlay.find(".voice-transcript");
         this.$voiceResponse = this.$voiceOverlay.find(".voice-response-text");
 
-        // Core state
         this.voiceState = "idle"; // idle | listening | processing | speaking | error
         this.voiceAudioCtx = null;
         this.voiceAnalyser = null;
@@ -3048,18 +3033,57 @@ ${htmlCode}
         this.voiceAnimFrame = null;
         this.voiceSilenceTimer = null;
         this.voiceSilenceStart = null;
+        this.voiceAudio = null;
+        this.voicePlaybackSource = null;
         this.voiceContinuous = true;
-
-        // Streaming audio queue (gapless playback)
-        this._audioQueue = [];           // Array of { buffer: AudioBuffer, text: string }
-        this._audioPlaying = false;       // Whether a chunk is currently playing
-        this._audioSource = null;         // Current AudioBufferSourceNode
-        this._streamEventSource = null;   // Active SSE connection
-        this._streamFullResponse = "";    // Accumulated response text
-        this._streamAborted = false;      // Whether user interrupted
-        this._instantFillerActive = false; // Whether instant filler is speaking
-
-        // Voice monitor (interrupt detection during playback)
+        
+        // Streaming TTS queue (Phase 2)
+        this.voiceAudioQueue = [];
+        this.voiceIsPlaying = false;
+        this.voiceSentenceBuffer = "";
+        this.voiceStreamDone = false;
+        this.voiceStreamingMode = false;  // true when using SSE + sentence TTS
+        
+        // Voice settings panel
+        this.$voiceSettingsBtn = this.$voiceOverlay.find(".voice-settings-btn");
+        this.$voiceSettingsPanel = this.$voiceOverlay.find(".voice-settings-panel");
+        this.$voiceSelectTts = this.$voiceSettingsPanel.find(".voice-select-tts");
+        this.$voiceContinuousToggle = this.$voiceSettingsPanel.find(".voice-continuous-toggle");
+        
+        // Load saved preferences
+        const savedVoice = localStorage.getItem("niv_tts_voice") || "auto";
+        this.$voiceSelectTts.val(savedVoice);
+        this.selectedTtsVoice = savedVoice;
+        
+        const savedContinuous = localStorage.getItem("niv_voice_continuous");
+        if (savedContinuous !== null) {
+            this.voiceContinuous = savedContinuous === "true";
+            this.$voiceContinuousToggle.prop("checked", this.voiceContinuous);
+        }
+        
+        // Settings button click
+        this.$voiceSettingsBtn.on("click", (e) => {
+            e.stopPropagation();
+            this.$voiceSettingsPanel.toggle();
+        });
+        
+        // Close settings
+        this.$voiceSettingsPanel.find(".voice-settings-close").on("click", () => {
+            this.$voiceSettingsPanel.hide();
+        });
+        
+        // Voice selection change
+        this.$voiceSelectTts.on("change", (e) => {
+            this.selectedTtsVoice = e.target.value;
+            localStorage.setItem("niv_tts_voice", this.selectedTtsVoice);
+        });
+        
+        // Continuous toggle change
+        this.$voiceContinuousToggle.on("change", (e) => {
+            this.voiceContinuous = e.target.checked;
+            localStorage.setItem("niv_voice_continuous", this.voiceContinuous);
+        });
+        // Conversational mode: monitor mic during AI speech for auto-interrupt
         this.voiceMonitorStream = null;
         this.voiceMonitorAnalyser = null;
         this.voiceMonitorTimer = null;
@@ -3073,20 +3097,16 @@ ${htmlCode}
 
         // Control bar buttons
         this.$voiceOverlay.find(".voice-end-btn").on("click", () => this.close_voice_mode());
-        this.$voiceOverlay.find(".voice-mute-btn").on("click", function () {
+        this.$voiceOverlay.find(".voice-mute-btn").on("click", function() {
             $(this).toggleClass("active");
             if (self.voiceStream) {
                 self.voiceStream.getAudioTracks().forEach(t => { t.enabled = !t.enabled; });
             }
         });
-        this.$voiceOverlay.find(".voice-speaker-btn").on("click", function () {
+        this.$voiceOverlay.find(".voice-speaker-btn").on("click", function() {
             $(this).toggleClass("active");
-            // Mute/unmute active playback
-            if (self.voiceAudioCtx) {
-                const gain = self._masterGain;
-                if (gain) {
-                    gain.gain.value = gain.gain.value > 0 ? 0 : 1;
-                }
+            if (self.voiceAudio) {
+                self.voiceAudio.muted = !self.voiceAudio.muted;
             }
         });
 
@@ -3103,16 +3123,12 @@ ${htmlCode}
         this.$voiceOverlay.fadeIn(200);
         this.set_voice_state("idle");
         $("body").css("overflow", "hidden");
-
-        // Pre-initialize AudioContext for gapless playback
-        await this._ensureAudioContext();
     }
 
     close_voice_mode() {
         this.stop_voice_recording();
         this.stop_voice_playback();
         this.stop_voice_monitor();
-        this._abortVoiceStream();
         this.cancel_voice_animation();
         if (this.voiceStream) {
             this.voiceStream.getTracks().forEach(t => t.stop());
@@ -3122,7 +3138,12 @@ ${htmlCode}
             this.voiceMonitorStream.getTracks().forEach(t => t.stop());
             this.voiceMonitorStream = null;
         }
-        // Don't close AudioContext — reuse across voice sessions for faster startup
+        if (this.voiceAudioCtx && this.voiceAudioCtx.state !== "closed") {
+            this.voiceAudioCtx.close().catch(() => {});
+            this.voiceAudioCtx = null;
+            this.voiceAnalyser = null;
+            this.voiceMonitorAnalyser = null;
+        }
         this.$voiceOverlay.fadeOut(200);
         this.voiceState = "idle";
         $("body").css("overflow", "");
@@ -3134,15 +3155,9 @@ ${htmlCode}
         } else if (this.voiceState === "listening") {
             this.stop_voice_recording();
         } else if (this.voiceState === "speaking") {
-            // Interrupt AI speech → flush queue → start listening
+            // Interrupt AI speech → immediately start listening
             this.stop_voice_playback();
-            this._abortVoiceStream();
             this.start_voice_recording();
-        } else if (this.voiceState === "processing") {
-            // Cancel ongoing request → back to idle
-            this._abortVoiceStream();
-            this.stop_voice_playback();
-            this.set_voice_state("idle");
         }
     }
 
@@ -3170,181 +3185,24 @@ ${htmlCode}
         }
     }
 
-    // ─── Audio Context & Gapless Playback Engine ───────────────────
-
-    async _ensureAudioContext() {
-        /* Initialize or resume the shared AudioContext for playback. */
-        if (!this.voiceAudioCtx || this.voiceAudioCtx.state === "closed") {
-            this.voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-            // Master gain node for mute/unmute
-            this._masterGain = this.voiceAudioCtx.createGain();
-            this._masterGain.connect(this.voiceAudioCtx.destination);
-            // Analyser for playback visualization
-            this.voiceAnalyser = this.voiceAudioCtx.createAnalyser();
-            this.voiceAnalyser.fftSize = 256;
-            this.voiceAnalyser.connect(this._masterGain);
-        }
-        if (this.voiceAudioCtx.state === "suspended") {
-            await this.voiceAudioCtx.resume();
-        }
-    }
-
-    _flushAudioQueue() {
-        /* Clear the audio queue and stop any playing chunk. */
-        this._audioQueue = [];
-        this._audioPlaying = false;
-        if (this._audioSource) {
-            try {
-                this._audioSource.onended = null;
-                this._audioSource.stop();
-            } catch (e) { /* already stopped */ }
-            this._audioSource = null;
-        }
-    }
-
-    async _enqueueAudioChunk(base64Audio, format, chunkText) {
-        /* Decode base64 audio and add to the playback queue.
-        Starts playback immediately if nothing is playing.
-         */
-        try {
-            await this._ensureAudioContext();
-
-            // Decode base64 → ArrayBuffer → AudioBuffer
-            const binaryStr = atob(base64Audio);
-            const bytes = new Uint8Array(binaryStr.length);
-            for (let i = 0; i < binaryStr.length; i++) {
-                bytes[i] = binaryStr.charCodeAt(i);
-            }
-            const audioBuffer = await this.voiceAudioCtx.decodeAudioData(bytes.buffer.slice(0));
-
-            this._audioQueue.push({ buffer: audioBuffer, text: chunkText });
-
-            // Start playing if not already
-            if (!this._audioPlaying) {
-                this._playNextChunk();
-            }
-        } catch (e) {
-            console.warn("Failed to decode audio chunk:", e);
-            // Fallback: use browser TTS for this chunk
-            this._browserTTSChunk(chunkText);
-        }
-    }
-
-    _playNextChunk() {
-        /* Play the next AudioBuffer from the queue. Chain to next on end. */
-        if (this._audioQueue.length === 0 || this._streamAborted) {
-            this._audioPlaying = false;
-            this.cancel_voice_animation();
-
-            // All chunks played — check if stream is done
-            if (!this._streamEventSource && this.voiceState === "speaking") {
-                // Stream finished and all audio played
-                this._onStreamPlaybackComplete();
-            }
-            return;
-        }
-
-        this._audioPlaying = true;
-        const chunk = this._audioQueue.shift();
-
-        // Create source → analyser → gain → destination
-        const source = this.voiceAudioCtx.createBufferSource();
-        source.buffer = chunk.buffer;
-        source.connect(this.voiceAnalyser); // analyser → masterGain → destination
-        this._audioSource = source;
-
-        // Update response text progressively
-        if (chunk.text) {
-            const currentText = this.$voiceResponse.text();
-            const separator = currentText ? " " : "";
-            this.$voiceResponse.text(currentText + separator + chunk.text);
-        }
-
-        // Visualize during playback
-        this.voice_visualize_playback();
-
-        // Chain to next chunk on end (gapless)
-        source.onended = () => {
-            this._audioSource = null;
-            this._playNextChunk();
-        };
-
-        source.start(0);
-
-        // Start voice monitor for interruption
-        if (!this.voiceMonitorTimer) {
-            this.start_voice_monitor();
-        }
-    }
-
-    _browserTTSChunk(text) {
-        /* Fallback: speak a single chunk via browser speechSynthesis.
-           Sets _audioPlaying to prevent concurrent playback. */
-        if (!text || !("speechSynthesis" in window)) {
-            // Can't speak — skip and continue queue
-            this._playNextChunk();
-            return;
-        }
-        this._audioPlaying = true; // Block queue from double-playing
-        const utterance = new SpeechSynthesisUtterance(text);
-        utterance.lang = "en-IN";
-        utterance.rate = 1.0;
-        utterance.onend = () => {
-            this._audioPlaying = false;
-            // Continue queue after browser TTS finishes
-            this._playNextChunk();
-        };
-        utterance.onerror = () => {
-            this._audioPlaying = false;
-            this._playNextChunk();
-        };
-        window.speechSynthesis.speak(utterance);
-    }
-
-    _onStreamPlaybackComplete() {
-        /* Called when all audio chunks have been played and stream is done. */
-        this.cancel_voice_animation();
-        this.stop_voice_monitor();
-
-        if (this.voiceContinuous && this.voiceState === "speaking") {
-            // Auto-start next recording for continuous conversation
-            if (this.$voiceOverlay.is(":visible")) {
-                this.start_voice_recording();
-            } else {
-                this.set_voice_state("idle");
-            }
-        } else {
-            this.set_voice_state("idle");
-        }
-    }
-
-    // ─── Recording ─────────────────────────────────────────────────
-
     async start_voice_recording() {
         try {
-            await this._ensureAudioContext();
+            if (!this.voiceAudioCtx || this.voiceAudioCtx.state === "closed") {
+                this.voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (this.voiceAudioCtx.state === "suspended") {
+                await this.voiceAudioCtx.resume();
+            }
 
-            this.voiceStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    channelCount: 1,
-                    sampleRate: 16000,
-                }
-            });
+            this.voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            // Setup analyser for input visualization with software gain
+            // Setup analyser for visualization
             const source = this.voiceAudioCtx.createMediaStreamSource(this.voiceStream);
-            this._inputGain = this.voiceAudioCtx.createGain();
-            this._inputGain.gain.value = 2.5; // Software amplification for low-volume mics
-            const inputAnalyser = this.voiceAudioCtx.createAnalyser();
-            inputAnalyser.fftSize = 256;
-            source.connect(this._inputGain);
-            this._inputGain.connect(inputAnalyser);
-            this._inputAnalyser = inputAnalyser;
+            this.voiceAnalyser = this.voiceAudioCtx.createAnalyser();
+            this.voiceAnalyser.fftSize = 256;
+            source.connect(this.voiceAnalyser);
 
-            // MediaRecorder is kept for fallback (server STT) but primary is browser STT
+            // Start MediaRecorder
             let mimeType = "audio/webm;codecs=opus";
             if (!MediaRecorder.isTypeSupported(mimeType)) {
                 mimeType = "audio/webm";
@@ -3358,22 +3216,21 @@ ${htmlCode}
             this.voiceMediaRecorder.ondataavailable = (e) => {
                 if (e.data.size > 0) this.voiceAudioChunks.push(e.data);
             };
-            this.voiceMediaRecorder.onstop = () => this._onRecordingStopped();
+            this.voiceMediaRecorder.onstop = () => this.process_voice_recording();
 
-            this.voiceMediaRecorder.start(250);
+            this.voiceMediaRecorder.start(250); // collect in 250ms chunks
             this.set_voice_state("listening");
-            this._voice_visualize_input();
+            this.voice_visualize_input();
             this.voice_start_silence_detection();
 
-            // Start browser STT (primary transcription — instant, no upload needed)
+            // Also start browser STT as fallback transcript
             this.voiceBrowserTranscript = "";
-            this._voiceInterimTranscript = "";
             const SpeechRecog = window.SpeechRecognition || window.webkitSpeechRecognition;
             if (SpeechRecog) {
                 this.voiceSpeechRecog = new SpeechRecog();
                 this.voiceSpeechRecog.continuous = true;
                 this.voiceSpeechRecog.interimResults = true;
-                this.voiceSpeechRecog.lang = "hi-IN"; // Hindi primary (NBFC users)
+                this.voiceSpeechRecog.lang = "en-IN";
                 this.voiceSpeechRecog.onresult = (event) => {
                     let finalTranscript = "";
                     let interimTranscript = "";
@@ -3384,20 +3241,18 @@ ${htmlCode}
                             interimTranscript += event.results[i][0].transcript;
                         }
                     }
+                    // Store only final results for sending
                     this.voiceBrowserTranscript = finalTranscript.trim();
-                    this._voiceInterimTranscript = interimTranscript.trim();
-                    // Live feedback: show final + interim (grayed)
+                    // Show both for live feedback (final + interim in gray)
                     this.$voiceTranscript.html(
-                        finalTranscript +
-                        (interimTranscript
-                            ? '<span style="opacity:0.5">' + interimTranscript + "</span>"
-                            : "")
+                        finalTranscript + (interimTranscript ? '<span style="opacity:0.5">' + interimTranscript + '</span>' : '')
                     );
                 };
                 this.voiceSpeechRecog.onerror = () => {};
                 this.voiceSpeechRecog.onend = () => {};
-                try { this.voiceSpeechRecog.start(); } catch (e) {}
+                try { this.voiceSpeechRecog.start(); } catch(e) {}
             }
+
         } catch (err) {
             console.error("Voice recording error:", err);
             if (err.name === "NotAllowedError" || err.name === "PermissionDeniedError") {
@@ -3415,7 +3270,7 @@ ${htmlCode}
         }
         this.cancel_voice_animation();
         if (this.voiceSpeechRecog) {
-            try { this.voiceSpeechRecog.stop(); } catch (e) {}
+            try { this.voiceSpeechRecog.stop(); } catch(e) {}
             this.voiceSpeechRecog = null;
         }
         if (this.voiceMediaRecorder && this.voiceMediaRecorder.state !== "inactive") {
@@ -3427,16 +3282,16 @@ ${htmlCode}
         }
     }
 
-    _voice_visualize_input() {
-        if (!this._inputAnalyser || this.voiceState !== "listening") return;
-        const dataArray = new Uint8Array(this._inputAnalyser.frequencyBinCount);
+    voice_visualize_input() {
+        if (!this.voiceAnalyser || this.voiceState !== "listening") return;
+        const dataArray = new Uint8Array(this.voiceAnalyser.frequencyBinCount);
 
         const draw = () => {
             if (this.voiceState !== "listening") return;
             this.voiceAnimFrame = requestAnimationFrame(draw);
-            this._inputAnalyser.getByteFrequencyData(dataArray);
+            this.voiceAnalyser.getByteFrequencyData(dataArray);
             const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
-            const level = Math.min(avg / 80, 1);
+            const level = Math.min(avg / 80, 1); // normalize 0-1
             this.$voiceOrb.css("--voice-level", level);
         };
         draw();
@@ -3444,26 +3299,27 @@ ${htmlCode}
 
     voice_start_silence_detection() {
         this.voiceSilenceStart = null;
-        const silenceThreshold = 8;
-        const silenceDuration = 1000; // 1s for faster turn-taking
+        const silenceThreshold = 10;
+        const silenceDuration = 1500; // 1.5 seconds for faster turn-taking
 
         this.voiceSilenceTimer = setInterval(() => {
-            if (this.voiceState !== "listening" || !this._inputAnalyser) return;
-            const dataArray = new Uint8Array(this._inputAnalyser.frequencyBinCount);
-            this._inputAnalyser.getByteFrequencyData(dataArray);
+            if (this.voiceState !== "listening" || !this.voiceAnalyser) return;
+            const dataArray = new Uint8Array(this.voiceAnalyser.frequencyBinCount);
+            this.voiceAnalyser.getByteFrequencyData(dataArray);
             const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
 
             if (avg < silenceThreshold) {
                 if (!this.voiceSilenceStart) this.voiceSilenceStart = Date.now();
                 if (Date.now() - this.voiceSilenceStart > silenceDuration) {
-                    if (this.voiceAudioChunks.length > 0 || this.voiceBrowserTranscript) {
+                    // Only auto-stop if we have some audio data
+                    if (this.voiceAudioChunks.length > 0) {
                         this.stop_voice_recording();
                     }
                 }
             } else {
                 this.voiceSilenceStart = null;
             }
-        }, 100);
+        }, 200);
     }
 
     cancel_voice_animation() {
@@ -3474,288 +3330,142 @@ ${htmlCode}
         this.$voiceOrb && this.$voiceOrb.css("--voice-level", 0);
     }
 
-    // ─── Streaming Voice Processing ────────────────────────────────
-
-    async _onRecordingStopped() {
-        /* Called when MediaRecorder stops. Initiates streaming voice chat. */
-        // Get transcript — prefer browser STT (instant), fallback to interim
-        const transcript = this.voiceBrowserTranscript || this._voiceInterimTranscript || "";
-
-        if (!transcript) {
-            this.set_voice_state("error", "Could not hear you. Try again.");
+    async process_voice_recording() {
+        if (this.voiceAudioChunks.length === 0) {
+            this.set_voice_state("idle");
             return;
         }
 
-        this.$voiceTranscript.text(transcript);
         this.set_voice_state("processing");
 
-        // Append user message to chat UI immediately
-        this.append_message("user", transcript);
-        this.scroll_to_bottom();
-
-        // Reset streaming state
-        this._streamFullResponse = "";
-        this._streamAborted = false;
-        this._flushAudioQueue();
-
-        // ── Instant filler: speak immediately while server processes ──
-        this._playInstantFiller(transcript);
+        // Phase 3: Send audio to server for Faster-Whisper STT (accurate, multilingual)
+        try {
+            const blob = new Blob(this.voiceAudioChunks, { type: this.voiceAudioChunks[0]?.type || "audio/webm" });
+            const reader = new FileReader();
+            const base64Data = await new Promise((resolve, reject) => {
+                reader.onloadend = () => resolve(reader.result.split(",")[1]);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+            
+            // Show browser transcript as interim while server processes
+            if (this.voiceBrowserTranscript && this.voiceBrowserTranscript.trim()) {
+                this.$voiceTranscript.html(
+                    '<span style="opacity:0.6">' + this.voiceBrowserTranscript + '</span> <span style="font-size:0.8em">⏳</span>'
+                );
+            }
+            
+            // Call server STT (Faster-Whisper)
+            const sttResult = await frappe.call({
+                method: "niv_ai.niv_core.api.voice.stt_from_base64",
+                args: { audio_base64: base64Data },
+            });
+            
+            const serverTranscript = (sttResult.message && sttResult.message.text) ? sttResult.message.text.trim() : "";
+            
+            // Use server transcript if available, fall back to browser
+            const transcript = serverTranscript || (this.voiceBrowserTranscript || "").trim();
+            
+            if (!transcript) {
+                this.set_voice_state("error", "Couldn't understand. Try again.");
+                return;
+            }
+            
+            // Show final transcript
+            this.$voiceTranscript.text(transcript);
+            
+            // Use streaming voice mode
+            this.voice_send_streaming(transcript);
+            return;
+            
+        } catch (sttErr) {
+            console.warn("Server STT failed:", sttErr);
+            // Fall back to browser transcript
+            const fallback = (this.voiceBrowserTranscript || "").trim();
+            if (fallback) {
+                this.$voiceTranscript.text(fallback);
+                this.voice_send_streaming(fallback);
+                return;
+            }
+            this.set_voice_state("error", "STT failed. Try again.");
+            return;
+        }
 
         try {
-            // Start SSE stream to streaming voice endpoint
-            await this._startVoiceStream(transcript);
-        } catch (err) {
-            console.error("Voice stream error — falling back to sequential:", err?.message || err);
+            // Try server-side voice_chat first (OpenAI Whisper + TTS)
+            let useServerAPI = true;
+            let result = null;
 
-            // Fallback to old sequential method
-            await this._fallbackVoiceChat(transcript);
-        }
-    }
-
-    async _startVoiceStream(transcript) {
-        /* Open SSE connection to stream_voice_chat and process audio chunks. */
-        const conversationId = this.current_conversation || "";
-
-        // Use XMLHttpRequest-style fetch with Frappe's expected headers.
-        // Frappe rejects raw fetch POST with 417 (Expectation Failed) unless
-        // we include X-Frappe-CSRF-Token AND set Accept to application/json.
-        const url = "/api/method/niv_ai.niv_core.api.voice_stream.stream_voice_chat";
-
-        const response = await fetch(url, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                "Accept": "text/event-stream",
-                "X-Frappe-CSRF-Token": frappe.csrf_token,
-            },
-            body: JSON.stringify({
-                text: transcript,
-                conversation_id: conversationId,
-            }),
-            credentials: "include",
-        });
-
-        if (!response.ok) {
-            throw new Error(`Voice stream HTTP ${response.status}`);
-        }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = "";
-
-        this._streamEventSource = reader; // Store reference for abort
-
-        while (true) {
-            if (this._streamAborted) {
-                reader.cancel();
-                break;
-            }
-
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            buffer += decoder.decode(value, { stream: true });
-
-            // Parse SSE events from buffer
-            const lines = buffer.split("\n");
-            buffer = lines.pop() || ""; // Keep incomplete line in buffer
-
-            for (const line of lines) {
-                if (!line.startsWith("data: ")) continue;
-
-                let event;
-                try {
-                    event = JSON.parse(line.slice(6));
-                } catch (e) {
-                    continue;
-                }
-
-                if (this._streamAborted) break;
-
-                this._handleVoiceStreamEvent(event);
-            }
-        }
-
-        this._streamEventSource = null;
-
-        // If no audio was queued and we have text, use browser TTS as fallback
-        if (!this._audioPlaying && this._audioQueue.length === 0 && this._streamFullResponse) {
-            this._browserTTSChunk(this.cleanTextForTTS(this._streamFullResponse));
-        }
-    }
-
-    _handleVoiceStreamEvent(event) {
-        /* Process a single SSE event from the voice stream. */
-        switch (event.type) {
-            case "init":
-                // Update conversation_id if auto-created
-                if (event.conversation_id && !this.current_conversation) {
-                    this.current_conversation = event.conversation_id;
-                }
-                break;
-
-            case "audio_chunk":
-                // Core: decode and enqueue audio for gapless playback
-                this._cancelInstantFiller();
-                this.set_voice_state("speaking");
-                this._streamFullResponse += (this._streamFullResponse ? " " : "") + (event.text || "");
-                this._enqueueAudioChunk(event.audio_base64, event.format, event.text);
-                break;
-
-            case "text_chunk":
-                // TTS failed for this chunk — use browser TTS
-                this._cancelInstantFiller();
-                this.set_voice_state("speaking");
-                this._streamFullResponse += (this._streamFullResponse ? " " : "") + (event.text || "");
-                this._browserTTSChunk(event.text);
-                break;
-
-            case "filler":
-                // Filler audio during tool execution — server filler replaces instant filler
-                this._cancelInstantFiller();
-                this.set_voice_state("speaking");
-                this._enqueueAudioChunk(event.audio_base64, event.format, "");
-                break;
-
-            case "tool_call":
-                // Show tool being called
-                this.$voiceStatus.text("🔧 " + (event.tool || "Checking..."));
-                break;
-
-            case "tool_result":
-                // Tool completed — LLM will now generate response
-                this.$voiceStatus.text("Thinking...");
-                break;
-
-            case "thought":
-                // Internal reasoning — don't show to user
-                break;
-
-            case "done":
-                // Stream complete — finalize
-                this._streamEventSource = null;
-                const fullText = event.full_text || this._streamFullResponse || "";
-
-                // Append assistant message to chat UI
-                if (fullText) {
-                    this.append_message("assistant", fullText, {});
-                    this.update_last_assistant_actions();
-                    this.scroll_to_bottom();
-                    this.auto_title(this.voiceBrowserTranscript || "");
-                    this.load_balance();
-                }
-
-                // If audio is still playing, _onStreamPlaybackComplete handles state transition
-                if (!this._audioPlaying && this._audioQueue.length === 0) {
-                    this._onStreamPlaybackComplete();
-                }
-                break;
-
-            case "error":
-                console.error("Voice stream error:", event.content);
-                if (!this._audioPlaying) {
-                    this.set_voice_state("error", event.content || "Something went wrong");
-                }
-                break;
-        }
-    }
-
-    // ─── Instant Filler (Browser TTS while server processes) ──────
-
-    _playInstantFiller(transcript) {
-        /* Play a short filler phrase instantly via browser speechSynthesis.
-           Gives immediate audio feedback while SSE connects + LLM processes.
-           Auto-cancelled when first real server audio/text arrives. */
-        if (!("speechSynthesis" in window)) return;
-
-        // Cancel any previous filler
-        this._cancelInstantFiller();
-
-        // Detect language from transcript
-        const hindiPattern = /[\u0900-\u097F]/;
-        const hindiWords = /\b(kya|hai|dikhao|batao|kitna|kitne|kab|kahan|mera|sabhi|sab|list)\b/i;
-        const isHindi = hindiPattern.test(transcript) || hindiWords.test(transcript);
-
-        const phrase = isHindi
-            ? "Ek second, check kar raha hoon"
-            : "Let me check that for you";
-
-        const utterance = new SpeechSynthesisUtterance(phrase);
-        utterance.lang = isHindi ? "hi-IN" : "en-IN";
-        utterance.rate = 1.1;  // Slightly faster — it's just a filler
-        utterance.volume = 0.8;
-
-        // Track so we can cancel when real audio arrives
-        this._instantFillerActive = true;
-        utterance.onend = () => { this._instantFillerActive = false; };
-        utterance.onerror = () => { this._instantFillerActive = false; };
-
-        window.speechSynthesis.speak(utterance);
-    }
-
-    _cancelInstantFiller() {
-        /* Cancel the instant filler if still speaking. */
-        if (this._instantFillerActive && "speechSynthesis" in window) {
-            window.speechSynthesis.cancel();
-        }
-        this._instantFillerActive = false;
-    }
-
-    _abortVoiceStream() {
-        /* Abort the active voice stream and flush the audio queue. */
-        this._streamAborted = true;
-        this._cancelInstantFiller();
-        if (this._streamEventSource) {
             try {
-                this._streamEventSource.cancel();
-            } catch (e) {}
-            this._streamEventSource = null;
-        }
-        this._flushAudioQueue();
-    }
+                const blob = new Blob(this.voiceAudioChunks, { type: this.voiceAudioChunks[0]?.type || "audio/webm" });
 
-    // ─── Fallback: Sequential Voice Chat ───────────────────────────
-
-    async _fallbackVoiceChat(transcript) {
-        /* Fallback to old sequential voice_chat_base64 when streaming fails. */
-        this._cancelInstantFiller();
-        try {
-            // Build audio blob if we have recorded chunks
-            let base64Data = "";
-            if (this.voiceAudioChunks.length > 0) {
-                const blob = new Blob(this.voiceAudioChunks, {
-                    type: this.voiceAudioChunks[0]?.type || "audio/webm",
-                });
+                // Convert blob to base64 and send via voice_chat_base64 (bypasses upload_file 417)
                 const reader = new FileReader();
-                base64Data = await new Promise((resolve, reject) => {
+                const base64Data = await new Promise((resolve, reject) => {
                     reader.onloadend = () => resolve(reader.result.split(",")[1]);
                     reader.onerror = reject;
                     reader.readAsDataURL(blob);
                 });
+
+                const r = await frappe.call({
+                    method: "niv_ai.niv_core.api.voice.voice_chat_base64",
+                    args: {
+                        conversation_id: this.current_conversation || "",
+                        audio_base64: base64Data,
+                        browser_transcript: this.voiceBrowserTranscript || "",
+                    },
+                });
+                result = r.message;
+                if (!result || !result.response) throw new Error("Empty response");
+
+                // Update conversation_id if auto-created
+                if (result.conversation_id && !this.current_conversation) {
+                    this.current_conversation = result.conversation_id;
+                }
+            } catch (serverErr) {
+                console.warn("Server voice API failed:", serverErr.message);
+                useServerAPI = false;
             }
 
-            const r = await frappe.call({
-                method: "niv_ai.niv_core.api.voice.voice_chat_base64",
-                args: {
-                    conversation_id: this.current_conversation || "",
-                    audio_base64: base64Data,
-                    browser_transcript: transcript,
-                },
-            });
-            const result = r.message;
+            // Fallback: Browser STT (already captured) + regular chat API + Browser TTS
+            if (!useServerAPI) {
+                const transcript = this.voiceBrowserTranscript || "";
+                if (!transcript) {
+                    // Use browser STT as one-shot
+                    this.set_voice_state("error", "Could not transcribe. Try again.");
+                    return;
+                }
 
-            if (!result || !result.response) {
-                this.set_voice_state("error", "No response received");
-                return;
+                this.$voiceTranscript.text(transcript);
+
+                // Send to regular chat API
+                if (!this.current_conversation) {
+                    const conv = await this._create_conversation_on_server("Voice Chat");
+                    this.current_conversation = conv.name;
+                }
+                const chatResp = await frappe.call({
+                    method: "niv_ai.niv_core.api.chat.send_message",
+                    args: {
+                        conversation_id: this.current_conversation,
+                        message: transcript,
+                        attachments: "[]",
+                    },
+                });
+                const chatData = chatResp.message;
+                result = {
+                    text: transcript,
+                    response: chatData.message || chatData.content || "",
+                    tokens: { total: chatData.total_tokens, input: chatData.input_tokens, output: chatData.output_tokens },
+                    audio_url: null, // Will use browser TTS
+                };
             }
 
-            // Update conversation
-            if (result.conversation_id && !this.current_conversation) {
-                this.current_conversation = result.conversation_id;
-            }
-
-            // Show response
+            // Show transcript & response
+            this.$voiceTranscript.text(result.text || "");
             this.$voiceResponse.text(result.response || "");
+
+            // Append messages to chat UI
+            if (result.text) this.append_message("user", result.text);
             if (result.response) {
                 this.append_message("assistant", result.response, {
                     total_tokens: result.tokens?.total || 0,
@@ -3766,53 +3476,30 @@ ${htmlCode}
             }
             this.scroll_to_bottom();
             this.load_balance();
+            this.auto_title(result.text || "");
 
-            // Play audio
+            // Play audio: server TTS (Piper) or browser TTS fallback
             if (result.audio_url) {
-                this._playFallbackAudio(result.audio_url);
+                this.play_voice_response(result.audio_url);
             } else if (result.response) {
-                this._playFallbackTTS(result.response);
+                // Try Piper TTS first, then browser fallback
+                this.play_voice_piper_or_browser(result.response);
             } else {
                 this.set_voice_state("idle");
             }
+
         } catch (err) {
-            console.error("Fallback voice chat error:", err);
+            console.error("Voice chat error:", err);
             this.set_voice_state("error", err.message || "Voice chat failed");
         }
     }
 
-    _playFallbackAudio(audioUrl) {
-        /* Play a single audio URL (old-style sequential playback). */
-        this.set_voice_state("speaking");
-        // Stop any previous fallback audio
-        if (this._fallbackAudio) {
-            try { this._fallbackAudio.pause(); this._fallbackAudio.src = ""; } catch(e) {}
-        }
-        const audio = new Audio(audioUrl);
-        this._fallbackAudio = audio; // Store reference so stop_voice_playback can kill it
-
-        audio.onended = () => {
-            frappe.call({
-                method: "niv_ai.niv_core.api.voice.cleanup_voice_file",
-                args: { file_url: audioUrl },
-            }).catch(() => {});
-
-            if (this.voiceContinuous && this.$voiceOverlay.is(":visible")) {
-                this.start_voice_recording();
-            } else {
-                this.set_voice_state("idle");
-            }
-        };
-        audio.onerror = () => this.set_voice_state("error", "Audio playback failed");
-        audio.play().catch((e) => {
-            console.error("Fallback audio play error:", e);
-            this.set_voice_state("error", "Could not play audio");
-        });
+    _strip_markdown(text) {
+        return this.cleanTextForTTS(text);
     }
 
-    async _playFallbackTTS(text) {
-        /* Try server TTS, then browser TTS as fallback. */
-        const clean = this.cleanTextForTTS(text);
+    async play_voice_piper_or_browser(text) {
+        const clean = this._strip_markdown(text);
         if (!clean) { this.set_voice_state("idle"); return; }
 
         this.set_voice_state("speaking");
@@ -3822,33 +3509,90 @@ ${htmlCode}
                 args: { text: clean },
             });
             if (r.message && r.message.audio_url) {
-                this._playFallbackAudio(r.message.audio_url);
+                this.play_voice_response(r.message.audio_url);
                 return;
             }
         } catch (e) {
-            console.warn("Server TTS failed, using browser:", e);
+            console.warn("Piper TTS failed in voice mode, using browser:", e);
         }
-
-        // Browser TTS fallback
-        if ("speechSynthesis" in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(clean);
-            utterance.lang = "en-IN";
-            utterance.onend = () => {
-                if (this.voiceContinuous && this.$voiceOverlay.is(":visible")) {
-                    this.start_voice_recording();
-                } else {
-                    this.set_voice_state("idle");
-                }
-            };
-            utterance.onerror = () => this.set_voice_state("idle");
-            window.speechSynthesis.speak(utterance);
-        } else {
-            this.set_voice_state("idle");
-        }
+        this.play_voice_browser_tts(clean);
     }
 
-    // ─── Playback Visualization ────────────────────────────────────
+    play_voice_browser_tts(text) {
+        if (!("speechSynthesis" in window)) {
+            this.set_voice_state("idle");
+            return;
+        }
+        this.set_voice_state("speaking");
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "en-IN";
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+        utterance.onend = () => {
+            if (this.voiceContinuous && this.voiceState === "speaking") {
+                this.start_voice_recording();
+            } else {
+                this.set_voice_state("idle");
+            }
+        };
+        utterance.onerror = () => this.set_voice_state("idle");
+        window.speechSynthesis.speak(utterance);
+        // Start monitoring mic for user interruption during browser TTS
+        this.start_voice_monitor();
+    }
+
+    play_voice_response(audioUrl) {
+        this.set_voice_state("speaking");
+
+        this.voiceAudio = new Audio(audioUrl);
+
+        // Try to connect to analyser for visualization
+        try {
+            if (!this.voiceAudioCtx || this.voiceAudioCtx.state === "closed") {
+                this.voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            this.voicePlaybackSource = this.voiceAudioCtx.createMediaElementSource(this.voiceAudio);
+            this.voiceAnalyser = this.voiceAudioCtx.createAnalyser();
+            this.voiceAnalyser.fftSize = 256;
+            this.voicePlaybackSource.connect(this.voiceAnalyser);
+            this.voiceAnalyser.connect(this.voiceAudioCtx.destination);
+            this.voice_visualize_playback();
+        } catch (e) {
+            // Fallback: play without visualization
+            console.warn("Could not setup audio visualization:", e);
+        }
+
+        this.voiceAudio.onended = () => {
+            this.cancel_voice_animation();
+            // Cleanup the TTS file
+            frappe.call({
+                method: "niv_ai.niv_core.api.voice.cleanup_voice_file",
+                args: { file_url: audioUrl },
+            }).catch(() => {});
+
+            if (this.voiceContinuous && this.voiceState === "speaking") {
+                // Auto-start next recording immediately
+                if (this.$voiceOverlay.is(":visible")) {
+                    this.start_voice_recording();
+                }
+            } else {
+                this.set_voice_state("idle");
+            }
+        };
+
+        this.voiceAudio.onerror = () => {
+            this.set_voice_state("error", "Audio playback failed");
+        };
+
+        this.voiceAudio.play().then(() => {
+            // Start monitoring mic for user interruption during playback
+            this.start_voice_monitor();
+        }).catch((e) => {
+            console.error("Audio play error:", e);
+            this.set_voice_state("error", "Could not play audio");
+        });
+    }
 
     voice_visualize_playback() {
         if (!this.voiceAnalyser || this.voiceState !== "speaking") return;
@@ -3866,27 +3610,23 @@ ${htmlCode}
     }
 
     // ─── Voice Monitor: detect user speech during AI playback ──────
-
     async start_voice_monitor() {
         this.stop_voice_monitor();
         try {
-            await this._ensureAudioContext();
-
-            this.voiceMonitorStream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    channelCount: 1,
-                }
-            });
+            if (!this.voiceAudioCtx || this.voiceAudioCtx.state === "closed") {
+                this.voiceAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (this.voiceAudioCtx.state === "suspended") {
+                await this.voiceAudioCtx.resume();
+            }
+            this.voiceMonitorStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             const src = this.voiceAudioCtx.createMediaStreamSource(this.voiceMonitorStream);
             this.voiceMonitorAnalyser = this.voiceAudioCtx.createAnalyser();
             this.voiceMonitorAnalyser.fftSize = 256;
             src.connect(this.voiceMonitorAnalyser);
 
-            const speechThreshold = 15;
-            const speechConfirmMs = 250; // Must speak 250ms to trigger interrupt
+            const speechThreshold = 25; // voice level to detect speech
+            const speechConfirmMs = 350; // must speak for 350ms to trigger interrupt
             this.voiceSpeechDetectedAt = null;
 
             this.voiceMonitorTimer = setInterval(() => {
@@ -3904,7 +3644,6 @@ ${htmlCode}
                         // User is speaking — interrupt AI and start listening
                         console.log("Voice monitor: user speech detected, interrupting AI");
                         this.stop_voice_playback();
-                        this._abortVoiceStream();
                         this.stop_voice_monitor();
                         this.start_voice_recording();
                     }
@@ -3932,18 +3671,331 @@ ${htmlCode}
 
     stop_voice_playback() {
         this.stop_voice_monitor();
-        this._flushAudioQueue();
-        this._cancelInstantFiller();
-        // Stop fallback Audio element if playing
-        if (this._fallbackAudio) {
-            try { this._fallbackAudio.pause(); this._fallbackAudio.src = ""; } catch(e) {}
-            this._fallbackAudio = null;
+        if (this.voiceAudio) {
+            this.voiceAudio.pause();
+            this.voiceAudio.currentTime = 0;
+            this.voiceAudio.onended = null;
+            this.voiceAudio = null;
         }
         // Also stop browser speechSynthesis if playing
         if ("speechSynthesis" in window) {
             window.speechSynthesis.cancel();
         }
         this.cancel_voice_animation();
+    }
+
+    // ─── Streaming Voice TTS (Phase 2) ─────────────────────────────
+
+    /**
+     * Start voice mode with SSE streaming — sends transcript to stream endpoint
+     * and plays audio sentence-by-sentence as it streams.
+     */
+    async voice_send_streaming(transcript) {
+        if (!transcript || !transcript.trim()) {
+            this.set_voice_state("idle");
+            return;
+        }
+
+        this.set_voice_state("processing");
+        this.$voiceTranscript.text(transcript);
+        this.$voiceResponse.text("");
+        
+        // Reset streaming state
+        this.voiceAudioQueue = [];
+        this.voiceIsPlaying = false;
+        this.voiceSentenceBuffer = "";
+        this.voiceStreamDone = false;
+        this.voiceStreamingMode = true;
+
+        // Ensure conversation exists
+        if (!this.current_conversation) {
+            try {
+                const conv = await this._create_conversation_on_server("Voice Chat");
+                this.current_conversation = conv.name;
+            } catch (e) {
+                this.set_voice_state("error", "Failed to create conversation");
+                return;
+            }
+        }
+
+        // Append user message to chat
+        this.append_message("user", transcript);
+        this.scroll_to_bottom();
+
+        // Use SSE streaming
+        const params = {
+            conversation_id: this.current_conversation,
+            message: transcript,
+            attachments: "[]",
+            context: JSON.stringify(this.get_current_context()),
+        };
+        if (this.selected_model) params.model = this.selected_model;
+
+        let fullContent = "";
+
+        try {
+            const response = await fetch(
+                "/api/method/niv_ai.niv_core.api.stream.stream_chat",
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Frappe-CSRF-Token": frappe.csrf_token,
+                        "Accept": "text/event-stream",
+                    },
+                    body: JSON.stringify(params),
+                    credentials: "include",
+                }
+            );
+
+            if (!response.ok) throw new Error("HTTP " + response.status);
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split("\n");
+                buffer = lines.pop();
+
+                for (const line of lines) {
+                    const trimmed = line.trim();
+                    if (!trimmed || !trimmed.startsWith("data: ")) continue;
+                    const jsonStr = trimmed.substring(6).trim();
+                    if (!jsonStr) continue;
+
+                    try {
+                        var data = JSON.parse(jsonStr);
+                    } catch (e) { continue; }
+
+                    if (data.type === "token" || data.type === "chunk") {
+                        fullContent += data.content;
+                        this.$voiceResponse.text(fullContent.substring(Math.max(0, fullContent.length - 200)));
+
+                        // Feed token to sentence buffer for streaming TTS
+                        this.voice_on_stream_token(data.content);
+                        
+                        // Switch to speaking state once we start getting content
+                        if (this.voiceState === "processing") {
+                            this.set_voice_state("speaking");
+                        }
+                    } else if (data.type === "done") {
+                        // Flush remaining sentence buffer
+                        this.voice_flush_sentence_buffer();
+                        this.voiceStreamDone = true;
+                        
+                        // Append assistant message to chat
+                        if (fullContent) {
+                            this.append_message("assistant", fullContent);
+                            this.scroll_to_bottom();
+                        }
+                        this.load_balance();
+                        this.auto_title(transcript);
+                    } else if (data.type === "error") {
+                        this.voiceStreamDone = true;
+                        this.set_voice_state("error", data.content || "Stream error");
+                    }
+                }
+            }
+        } catch (err) {
+            console.error("Voice streaming error:", err);
+            this.voiceStreamDone = true;
+            
+            // Fallback: if streaming fails, use non-streaming voice chat
+            if (!fullContent) {
+                this.voiceStreamingMode = false;
+                this.process_voice_fallback(transcript);
+                return;
+            }
+        }
+
+        // If no audio was queued (e.g. very short response), handle it
+        if (this.voiceAudioQueue.length === 0 && !this.voiceIsPlaying && fullContent) {
+            this.voice_queue_sentence_tts(this.cleanTextForTTS(fullContent));
+        }
+    }
+
+    /**
+     * Called for each token during SSE streaming in voice mode.
+     * Buffers tokens and sends complete sentences to TTS.
+     */
+    voice_on_stream_token(token) {
+        this.voiceSentenceBuffer += token;
+
+        // Check for sentence boundary: . ! ? followed by space/newline, or double newline
+        const match = this.voiceSentenceBuffer.match(/^(.*?[.!?])\s+(.*)$/s);
+        if (match) {
+            const sentence = match[1].trim();
+            this.voiceSentenceBuffer = match[2] || "";
+            if (sentence && sentence.length > 5) {
+                const clean = this.cleanTextForTTS(sentence);
+                if (clean && clean.length > 3) {
+                    this.voice_queue_sentence_tts(clean);
+                }
+            }
+        }
+        
+        // Also check for newline-based breaks (paragraphs)
+        if (this.voiceSentenceBuffer.includes("\n\n")) {
+            const parts = this.voiceSentenceBuffer.split("\n\n");
+            // Queue all complete paragraphs
+            for (let i = 0; i < parts.length - 1; i++) {
+                const clean = this.cleanTextForTTS(parts[i].trim());
+                if (clean && clean.length > 3) {
+                    this.voice_queue_sentence_tts(clean);
+                }
+            }
+            this.voiceSentenceBuffer = parts[parts.length - 1] || "";
+        }
+    }
+
+    /**
+     * Flush any remaining text in the sentence buffer to TTS.
+     */
+    voice_flush_sentence_buffer() {
+        if (this.voiceSentenceBuffer.trim()) {
+            const clean = this.cleanTextForTTS(this.voiceSentenceBuffer.trim());
+            if (clean && clean.length > 3) {
+                this.voice_queue_sentence_tts(clean);
+            }
+            this.voiceSentenceBuffer = "";
+        }
+    }
+
+    /**
+     * Queue a sentence for TTS generation and playback.
+     */
+    async voice_queue_sentence_tts(sentence) {
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_core.api.voice.stream_tts",
+                args: { text: sentence },
+            });
+            if (r.message && r.message.audio_url) {
+                this.voiceAudioQueue.push(r.message.audio_url);
+                if (!this.voiceIsPlaying) {
+                    this.voice_play_next_in_queue();
+                }
+            } else if (r.message && r.message.engine === "browser") {
+                // Browser TTS fallback for this sentence
+                this.voiceAudioQueue.push({ browser_tts: sentence });
+                if (!this.voiceIsPlaying) {
+                    this.voice_play_next_in_queue();
+                }
+            }
+        } catch (e) {
+            console.warn("stream_tts call failed:", e);
+            // Queue browser TTS as fallback
+            this.voiceAudioQueue.push({ browser_tts: sentence });
+            if (!this.voiceIsPlaying) {
+                this.voice_play_next_in_queue();
+            }
+        }
+    }
+
+    /**
+     * Play next audio segment in the queue. Chains playback for seamless audio.
+     */
+    voice_play_next_in_queue() {
+        if (this.voiceAudioQueue.length === 0) {
+            this.voiceIsPlaying = false;
+            if (this.voiceStreamDone) {
+                this.voiceStreamingMode = false;
+                if (this.voiceContinuous && this.$voiceOverlay.is(":visible")) {
+                    this.start_voice_recording();
+                } else {
+                    this.set_voice_state("idle");
+                }
+            }
+            return;
+        }
+
+        this.voiceIsPlaying = true;
+        this.set_voice_state("speaking");
+        const item = this.voiceAudioQueue.shift();
+
+        // Browser TTS fallback item
+        if (item && item.browser_tts) {
+            if ("speechSynthesis" in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(item.browser_tts);
+                utterance.lang = "en-IN";
+                utterance.rate = 1.0;
+                utterance.onend = () => this.voice_play_next_in_queue();
+                utterance.onerror = () => this.voice_play_next_in_queue();
+                window.speechSynthesis.speak(utterance);
+            } else {
+                this.voice_play_next_in_queue();
+            }
+            return;
+        }
+
+        // Server audio URL
+        const url = item;
+        const audio = new Audio(url);
+        this.voiceAudio = audio;
+
+        audio.onended = () => {
+            // Cleanup the streamed TTS file
+            frappe.call({
+                method: "niv_ai.niv_core.api.voice.cleanup_voice_file",
+                args: { file_url: url },
+            }).catch(() => {});
+            this.voice_play_next_in_queue();
+        };
+
+        audio.onerror = () => {
+            console.warn("Audio playback error for:", url);
+            this.voice_play_next_in_queue();
+        };
+
+        audio.play().catch((e) => {
+            console.warn("Audio play failed:", e);
+            this.voice_play_next_in_queue();
+        });
+    }
+
+    /**
+     * Fallback: non-streaming voice processing when SSE fails.
+     */
+    async process_voice_fallback(transcript) {
+        this.set_voice_state("processing");
+        try {
+            if (!this.current_conversation) {
+                const conv = await this._create_conversation_on_server("Voice Chat");
+                this.current_conversation = conv.name;
+            }
+            const chatResp = await frappe.call({
+                method: "niv_ai.niv_core.api.chat.send_message",
+                args: {
+                    conversation_id: this.current_conversation,
+                    message: transcript,
+                    attachments: "[]",
+                },
+            });
+            const chatData = chatResp.message;
+            const responseText = chatData.message || chatData.content || chatData.response || "";
+
+            this.$voiceResponse.text(responseText);
+            if (responseText) {
+                this.append_message("assistant", responseText);
+                this.scroll_to_bottom();
+            }
+            this.load_balance();
+
+            if (responseText) {
+                this.play_voice_piper_or_browser(responseText);
+            } else {
+                this.set_voice_state("idle");
+            }
+        } catch (e) {
+            console.error("Voice fallback error:", e);
+            this.set_voice_state("error", "Voice chat failed");
+        }
     }
 
     // ─── Dark Mode ────────────────────────────────────────────────
@@ -3985,17 +4037,13 @@ ${htmlCode}
 
         this.wrapper.find(".niv-dev-mode-section").show();
         this.$devModeToggle = this.wrapper.find(".btn-dev-mode-toggle");
-        this.$a2aToggle = this.wrapper.find(".btn-a2a-toggle");
+        // A2A removed: this.$a2aToggle = this.wrapper.find(".btn-a2a-toggle");
         
         this.dev_mode = localStorage.getItem("niv-dev-mode") === "true";
         this.$devModeToggle.prop("checked", this.dev_mode);
 
-        // Load A2A state from DB
-        frappe.db.get_value("Niv Settings", "Niv Settings", "enable_a2a").then((r) => {
-            if (r && r.message) {
-                this.$a2aToggle.prop("checked", !!r.message.enable_a2a);
-            }
-        });
+        // A2A toggle removed - start
+        // A2A toggle removed - end
 
         this.$devModeToggle.on("change", () => {
             this.dev_mode = this.$devModeToggle.is(":checked");
@@ -4008,12 +4056,8 @@ ${htmlCode}
             }
         });
 
-        this.$a2aToggle.on("change", () => {
-            const val = this.$a2aToggle.is(":checked") ? 1 : 0;
-            frappe.db.set_value("Niv Settings", "Niv Settings", "enable_a2a", val).then(() => {
-                frappe.show_alert({ message: val ? "A2A Protocol Enabled" : "A2A Protocol Disabled", indicator: val ? "green" : "orange" });
-            });
-        });
+        // A2A change handler removed - start
+        // A2A change handler removed - end
 
         this.update_dev_mode_indicator();
     }
