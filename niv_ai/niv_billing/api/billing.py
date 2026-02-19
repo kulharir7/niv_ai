@@ -55,16 +55,30 @@ def deduct_tokens(user=None, input_tokens=0, output_tokens=0,
                     daily_used, settings.per_user_daily_limit
                 ))
 
-        # Check pool balance
+        # Atomic deduction — prevents race condition when multiple users query simultaneously
+        # Uses SQL UPDATE with balance check in WHERE clause
         pool_balance = settings.shared_pool_balance or 0
         if pool_balance < total_tokens:
             frappe.throw(_("Company credit pool exhausted. Contact admin to recharge."))
 
-        # Deduct from shared pool
-        db_set_single_value("Niv Settings", {
-            "shared_pool_balance": pool_balance - total_tokens,
-            "shared_pool_used": (settings.shared_pool_used or 0) + total_tokens,
-        })
+        affected = frappe.db.sql("""
+            UPDATE `tabSingles`
+            SET `value` = CAST(CAST(`value` AS SIGNED) - %(tokens)s AS CHAR)
+            WHERE `doctype` = 'Niv Settings' AND `field` = 'shared_pool_balance'
+            AND CAST(`value` AS SIGNED) >= %(tokens)s
+        """, {"tokens": total_tokens})
+        rows_affected = frappe.db.sql("SELECT ROW_COUNT()")[0][0]
+
+        if rows_affected == 0:
+            frappe.throw(_("Company credit pool exhausted. Contact admin to recharge."))
+
+        # Update used counter (not critical if slightly off)
+        frappe.db.sql("""
+            UPDATE `tabSingles`
+            SET `value` = CAST(CAST(IFNULL(`value`, '0') AS SIGNED) + %(tokens)s AS CHAR)
+            WHERE `doctype` = 'Niv Settings' AND `field` = 'shared_pool_used'
+        """, {"tokens": total_tokens})
+
         remaining = pool_balance - total_tokens
     else:
         # Per-user wallet
