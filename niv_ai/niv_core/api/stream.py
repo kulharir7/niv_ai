@@ -126,9 +126,19 @@ def stream_chat(**kwargs):
     _site_name = frappe.local.site
 
     def generate():
+        import time as _time
         full_response = ""
         tool_calls_data = []
         token_data = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+        _last_db_check = _time.time()
+        
+        def _heartbeat_db():
+            """Keep DB alive during long streams — prevents InterfaceError(0, '')."""
+            nonlocal _last_db_check
+            now = _time.time()
+            if now - _last_db_check > 10:  # Every 10 seconds
+                _ensure_db(_site_name)
+                _last_db_check = now
         
         try:
             frappe.init(site=_site_name)
@@ -144,6 +154,7 @@ def stream_chat(**kwargs):
                 model=model or None,
                 page_context=page_context,
             ):
+                _heartbeat_db()  # Keep DB alive during long streams
                 event_type = event.get("type", "")
                 
                 if event_type == "token":
@@ -159,6 +170,7 @@ def stream_chat(**kwargs):
                     yield _sse(event)
                 
                 elif event_type == "tool_result":
+                    _ensure_db(_site_name)  # Tools may have killed DB connection
                     yield _sse(event)
                 
                 elif event_type == "thought":
