@@ -546,10 +546,10 @@ def _stream_two_model(
             "result": tr["result"][:2000],
         }
 
-    # ── Step 3: Big model streams answer with tool results ──
-    # Even if tools failed, let big model handle it — it can tell the user
-    # about the error or answer from context. This is faster than falling back
-    # to single-model which would re-discover and re-call tools (~12s saved).
+    # ── Step 3: Big model answers with tool results + sequential chaining ──
+    # Big model gets tool results. If it needs more tools (sequential chain),
+    # it can call them — up to 2 extra rounds. This enables patterns like:
+    # "Show overdue loans and email them to manager" (tool 2 depends on tool 1)
     answer_messages = list(messages)
     answer_messages.append(fast_response)  # AI message with tool_calls
     for tr in tool_results:
@@ -560,7 +560,89 @@ def _stream_two_model(
         ))
 
     big_llm = get_llm(provider_name, model, streaming=True, callbacks=list(cbs.values()))
-    yield from _stream_llm_tokens(big_llm.stream(answer_messages))
+    big_llm_with_tools = big_llm.bind_tools(tools)
+
+    # Chain loop: big model can call more tools if needed (max 2 extra rounds)
+    max_chain_rounds = 2
+    for chain_round in range(max_chain_rounds + 1):
+        collected_text = ""
+        buffer = ""
+        chain_tool_calls = []
+
+        # On last round, stream without tools (force final answer)
+        llm_to_use = big_llm_with_tools if chain_round < max_chain_rounds else big_llm
+
+        for chunk in llm_to_use.stream(answer_messages):
+            # Collect tool calls from big model
+            chunk_tool_calls = getattr(chunk, "tool_call_chunks", None) or []
+            if chunk_tool_calls:
+                for tc_chunk in chunk_tool_calls:
+                    idx = tc_chunk.get("index", len(chain_tool_calls))
+                    while len(chain_tool_calls) <= idx:
+                        chain_tool_calls.append({"name": "", "args": "", "id": ""})
+                    if tc_chunk.get("name"):
+                        chain_tool_calls[idx]["name"] = tc_chunk["name"]
+                    if tc_chunk.get("args"):
+                        chain_tool_calls[idx]["args"] += tc_chunk["args"]
+                    if tc_chunk.get("id"):
+                        chain_tool_calls[idx]["id"] = tc_chunk["id"]
+                continue
+
+            # Also check complete tool_calls
+            full_tc = getattr(chunk, "tool_calls", None) or []
+            if full_tc:
+                chain_tool_calls = [
+                    {"name": tc.get("name", ""), "args": tc.get("args", {}), "id": tc.get("id", "")}
+                    for tc in full_tc
+                ]
+                continue
+
+            # Stream text tokens to user
+            text_content = getattr(chunk, "content", None)
+            if text_content:
+                buffer += text_content
+                text, buffer = _flush_buffer(buffer, final=False)
+                if text:
+                    collected_text += text
+                    yield {"type": "token", "content": text}
+
+        # Final flush of buffer
+        if buffer:
+            text, buffer = _flush_buffer(buffer, final=True)
+            if text and not _is_garbled_tool_text(text):
+                collected_text += text
+                yield {"type": "token", "content": text}
+
+        # If no tool calls from big model, we're done
+        if not chain_tool_calls or not any(tc["name"] for tc in chain_tool_calls):
+            break
+
+        # Execute chained tool calls
+        chain_tool_calls = [tc for tc in chain_tool_calls if tc["name"]]
+        for tc in chain_tool_calls:
+            if isinstance(tc["args"], str):
+                tc["args"] = _parse_tc_args(tc["args"])
+            yield {"type": "tool_call", "tool": tc["name"], "arguments": tc["args"]}
+
+        # Build AI message for the chain
+        from langchain_core.messages import AIMessage as _AIMsg
+        chain_ai_msg = _AIMsg(
+            content=collected_text,
+            tool_calls=[{"name": tc["name"], "args": tc["args"], "id": tc.get("id", f"call_{tc['name']}")} for tc in chain_tool_calls],
+        )
+        answer_messages.append(chain_ai_msg)
+
+        # Execute tools
+        for tc in chain_tool_calls:
+            tc_result = _exec_one({"name": tc["name"], "args": tc["args"], "id": tc.get("id", f"call_{tc['name']}")})
+            yield {"type": "tool_result", "tool": tc_result["tool_name"], "result": tc_result["result"][:2000]}
+            answer_messages.append(ToolMessage(
+                content=tc_result["result"],
+                tool_call_id=tc_result["tool_call_id"],
+                name=tc_result["tool_name"],
+            ))
+
+        frappe.logger().info(f"Niv AI: Chain round {chain_round + 1}, {len(chain_tool_calls)} extra tool(s)")
 
 
 # ─── Main Entry Point ──────────────────────────────────────────────
