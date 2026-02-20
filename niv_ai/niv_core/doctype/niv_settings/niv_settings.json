@@ -61,6 +61,9 @@
     "elevenlabs_voice_en",
     "elevenlabs_voice_hi",
     "image_section",
+    "enable_vision",
+    "vision_model",
+    "vision_max_tokens",
     "enable_image_generation",
     "image_api_key",
     "column_break_image",
@@ -440,7 +443,7 @@
       "fieldname": "elevenlabs_api_key",
       "fieldtype": "Password",
       "label": "ElevenLabs API Key",
-      "description": "Get from elevenlabs.io → Profile → API Keys. When set, ElevenLabs becomes primary TTS."
+      "description": "Get from elevenlabs.io \u2192 Profile \u2192 API Keys. When set, ElevenLabs becomes primary TTS."
     },
     {
       "fieldname": "column_break_elevenlabs",
@@ -461,7 +464,29 @@
     {
       "fieldname": "image_section",
       "fieldtype": "Section Break",
-      "label": "Image Generation"
+      "label": "Vision & Image"
+    },
+    {
+      "fieldname": "enable_vision",
+      "fieldtype": "Check",
+      "label": "Enable Vision (OCR/Image Understanding)",
+      "default": "0",
+      "description": "When enabled, uploaded images are processed by the Vision Model for OCR and understanding before passing to the main AI model."
+    },
+    {
+      "fieldname": "vision_model",
+      "fieldtype": "Data",
+      "label": "Vision Model",
+      "description": "Model for OCR/image understanding (e.g. qwen3-vl:235b). Uses Default Provider's API.",
+      "depends_on": "enable_vision"
+    },
+    {
+      "fieldname": "vision_max_tokens",
+      "fieldtype": "Int",
+      "label": "Vision Max Tokens",
+      "default": "2048",
+      "description": "Max tokens for vision model response",
+      "depends_on": "enable_vision"
     },
     {
       "fieldname": "enable_image_generation",
@@ -540,7 +565,7 @@
       "fieldname": "advanced_help",
       "fieldtype": "HTML",
       "label": "Advanced Help",
-      "options": "<div style='padding:10px;background:var(--bg-light-gray, #f8f9fa);border-radius:8px;font-size:13px;line-height:1.6'><b>🔧 Model Routing</b><br>Set <b>Fast Model</b> in AI Configuration to auto-route simple queries (greetings, thanks) to a lightweight model for instant responses.<br><br><b>🔑 Setup Token (Claude)</b><br>Instead of an API key, you can use a Claude subscription token. In your Niv AI Provider, set Auth Type to <b>Setup Token</b> and paste the token from <code>claude setup-token</code>. No API billing — uses your Claude subscription.</div>"
+      "options": "<div style='padding:10px;background:var(--bg-light-gray, #f8f9fa);border-radius:8px;font-size:13px;line-height:1.6'><b>\ud83d\udd27 Model Routing</b><br>Set <b>Fast Model</b> in AI Configuration to auto-route simple queries (greetings, thanks) to a lightweight model for instant responses.<br><br><b>\ud83d\udd11 Setup Token (Claude)</b><br>Instead of an API key, you can use a Claude subscription token. In your Niv AI Provider, set Auth Type to <b>Setup Token</b> and paste the token from <code>claude setup-token</code>. No API billing \u2014 uses your Claude subscription.</div>"
     }
   ],
   "issingle": 1,

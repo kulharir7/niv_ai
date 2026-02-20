@@ -119,6 +119,7 @@ def stream_chat(**kwargs):
                 attachments = []
         elif isinstance(attachments_raw, list):
             attachments = attachments_raw
+    
 
     user = frappe.session.user
     message = (message or "").strip()

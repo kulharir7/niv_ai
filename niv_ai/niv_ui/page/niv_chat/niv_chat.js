@@ -1720,6 +1720,14 @@ ${htmlCode}
                 <div class="msg-body">
                     ${modelTag}
                     ${toolsHtml}
+                    ${(meta._attachments && meta._attachments.length) ? `<div class="msg-attachments">${meta._attachments.map(a => {
+                        const ext = (a.file_name || a.file_url || "").split(".").pop().toLowerCase();
+                        const isImg = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
+                        if (isImg) {
+                            return `<div class="msg-attach-thumb"><img src="${a.file_url}" alt="${frappe.utils.escape_html(a.file_name || '')}" style="max-width:200px;max-height:150px;border-radius:8px;margin:4px 0;cursor:pointer;" onclick="window.open('${a.file_url}','_blank')"/></div>`;
+                        }
+                        return `<div class="msg-attach-file" style="background:var(--bg-light-gray,#2a2a3e);padding:6px 10px;border-radius:6px;margin:4px 0;font-size:12px;">📎 ${frappe.utils.escape_html(a.file_name || a.file_url)}</div>`;
+                    }).join("")}</div>` : ""}
                     <div class="msg-content">${this.render_markdown(content || "")}</div>
                     <div class="msg-footer">
                         <span class="msg-time">${time}</span>
@@ -2070,7 +2078,13 @@ ${htmlCode}
         this.$inputPill.removeClass("has-text");
         localStorage.removeItem("niv_draft");
 
-        this.append_message("user", text);
+        // Capture file previews before clearing
+        const _attachFiles = this.pending_files.map(f => ({
+            file_url: f.file_url,
+            file_name: f.file_name || f.name,
+            _local_file: f._local_file
+        }));
+        this.append_message("user", text, { _attachments: _attachFiles });
         this.scroll_to_bottom();
 
         // Auto-detect artifact prompts and create artifact
@@ -2516,10 +2530,17 @@ ${htmlCode}
         this.$attachPreview.append($uploading);
 
         try {
-            const r = await frappe.call({
-                method: "frappe.client.upload_file",
-                args: { file, is_private: 1, folder: "Home/Niv AI" },
-                file_args: { file },
+            const formData = new FormData();
+            formData.append("file", file, file.name);
+            formData.append("is_private", 1);
+            formData.append("folder", "Home/Niv AI");
+            const r = await $.ajax({
+                url: "/api/method/upload_file",
+                type: "POST",
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: { "X-Frappe-CSRF-Token": frappe.csrf_token },
             });
             const fileDoc = r.message;
             fileDoc._local_file = file; // keep ref for preview
