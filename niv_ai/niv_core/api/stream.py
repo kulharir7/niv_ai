@@ -104,6 +104,22 @@ def stream_chat(**kwargs):
         except (json.JSONDecodeError, ValueError):
             page_context = None
 
+    # Parse attachments
+    if frappe.request.method == "POST":
+        attachments_raw = data.get("attachments") or frappe.form_dict.get("attachments")
+    else:
+        attachments_raw = kwargs.get("attachments") or frappe.form_dict.get("attachments")
+    
+    attachments = []
+    if attachments_raw:
+        if isinstance(attachments_raw, str):
+            try:
+                attachments = json.loads(attachments_raw)
+            except (json.JSONDecodeError, ValueError):
+                attachments = []
+        elif isinstance(attachments_raw, list):
+            attachments = attachments_raw
+
     user = frappe.session.user
     message = (message or "").strip()
 
@@ -166,6 +182,7 @@ def stream_chat(**kwargs):
                 user=user,
                 model=model or None,
                 page_context=page_context,
+                attachments=attachments,
             ):
                 _heartbeat_db()
                 event_type = event.get("type", "")

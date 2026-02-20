@@ -122,8 +122,8 @@ def _is_garbled_tool_text(text):
     return False
 
 
-def _build_messages(message: str, conversation_id: str = None, system_prompt: str = ""):
-    """Build message list: system + history + user message."""
+def _build_messages(message: str, conversation_id: str = None, system_prompt: str = "", attachments: list = None):
+    """Build message list: system + history + user message (with optional file attachments)."""
     messages = []
 
     if system_prompt:
@@ -142,7 +142,33 @@ def _build_messages(message: str, conversation_id: str = None, system_prompt: st
         history = get_chat_history_with_summary(conversation_id)
         messages.extend(history)
 
-    messages.append(HumanMessage(content=message))
+    # Build user message — multimodal if attachments present
+    if attachments:
+        try:
+            from niv_ai.niv_core.tools.file_processor import process_attachments
+            processed = process_attachments(attachments)
+            
+            # If images found, build multimodal message
+            if processed.get("images"):
+                content_parts = []
+                # Add text context from non-image files
+                if processed.get("text_context"):
+                    message = message + "\n\n" + processed["text_context"]
+                content_parts.append({"type": "text", "text": message})
+                # Add images for vision
+                for img_data in processed["images"]:
+                    content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
+                messages.append(HumanMessage(content=content_parts))
+            else:
+                # Text-only attachments (PDF, Excel, Word)
+                if processed.get("text_context"):
+                    message = message + "\n\n" + processed["text_context"]
+                messages.append(HumanMessage(content=message))
+        except Exception as e:
+            frappe.log_error(f"Niv AI: Attachment processing failed: {e}", "Niv Attachments")
+            messages.append(HumanMessage(content=message))
+    else:
+        messages.append(HumanMessage(content=message))
     return messages
 
 
@@ -318,7 +344,7 @@ def run_agent(
 
     if not system_prompt:
         system_prompt = _build_system_prompt(conversation_id)
-    messages = _build_messages(message, conversation_id, system_prompt)
+    messages = _build_messages(message, conversation_id, system_prompt, attachments=attachments)
 
     _setup_user_api_key(user)
     try:
@@ -656,6 +682,7 @@ def stream_agent(
     user: str = None,
     dev_mode: bool = False,
     page_context: dict = None,
+    attachments: list = None,
 ):
     """Stream agent — yields SSE event dicts.
     
