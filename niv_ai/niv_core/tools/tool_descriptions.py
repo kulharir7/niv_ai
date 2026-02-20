@@ -236,7 +236,11 @@ TOOL_ENHANCEMENTS = {
             "- Simple math → calculate it yourself\n"
             "- EMI, WRR, NPA calculations → use your own knowledge\n\n"
             "Always requires user confirmation before execution.\n"
-            "Available: frappe, json, datetime. No os/subprocess access."
+            "Available: frappe, json, datetime. No os/subprocess access.\n\n"
+            "BULK OPERATIONS: For batch update/create/delete, use:\n"
+            "  from niv_ai.niv_core.tools.bulk_ops import bulk_update, bulk_create, bulk_delete\n"
+            "  result = bulk_update('Loan', {'status': 'Active', 'branch': 'Mumbai'}, {'status': 'Closed'}, dry_run=True)\n"
+            "  Always call with dry_run=True first to preview, then dry_run=False to apply."
         ),
     },
 
