@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "niv_ai"
-version = "1.1.0"
+version = "1.2.0"
 description = "Niv AI - Complete AI Chat Assistant for ERPNext"
 readme = "README.md"
 license = {text = "MIT"}
@@ -87,7 +87,7 @@ include-package-data = true
 
 [tool.black]
 line-length = 100
-target-version = "1.1.0"
+target-version = "1.2.0"
 
 [tool.ruff]
 line-length = 100
