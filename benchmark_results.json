@@ -1,0 +1,158 @@
+{
+  "timestamp": "2026-02-20T12:24:10.980768",
+  "total": 50,
+  "passed": 40,
+  "failed": 10,
+  "errors": 0,
+  "accuracy": 80.0,
+  "by_category": {
+    "listing": {
+      "total": 7,
+      "passed": 7,
+      "accuracy": 100.0
+    },
+    "retrieval": {
+      "total": 4,
+      "passed": 4,
+      "accuracy": 100.0
+    },
+    "search": {
+      "total": 5,
+      "passed": 2,
+      "accuracy": 40.0
+    },
+    "analytics": {
+      "total": 10,
+      "passed": 10,
+      "accuracy": 100.0
+    },
+    "creation": {
+      "total": 3,
+      "passed": 1,
+      "accuracy": 33.3
+    },
+    "update": {
+      "total": 3,
+      "passed": 2,
+      "accuracy": 66.7
+    },
+    "schema": {
+      "total": 4,
+      "passed": 2,
+      "accuracy": 50.0
+    },
+    "reports": {
+      "total": 4,
+      "passed": 3,
+      "accuracy": 75.0
+    },
+    "visualization": {
+      "total": 2,
+      "passed": 1,
+      "accuracy": 50.0
+    },
+    "nbfc": {
+      "total": 5,
+      "passed": 5,
+      "accuracy": 100.0
+    },
+    "general": {
+      "total": 3,
+      "passed": 3,
+      "accuracy": 100.0
+    }
+  },
+  "failures": [
+    {
+      "query": "Search for customer Rajesh",
+      "expected": [
+        "search_documents",
+        "list_documents"
+      ],
+      "actual": [
+        "search_link"
+      ],
+      "category": "search"
+    },
+    {
+      "query": "What DocType stores loan data",
+      "expected": [
+        "search_doctype"
+      ],
+      "actual": [],
+      "category": "search"
+    },
+    {
+      "query": "Find the DocType for sales",
+      "expected": [
+        "search_doctype"
+      ],
+      "actual": [],
+      "category": "search"
+    },
+    {
+      "query": "Add a new task for follow up",
+      "expected": [
+        "create_document"
+      ],
+      "actual": [],
+      "category": "creation"
+    },
+    {
+      "query": "Create a ToDo reminder for tomorrow",
+      "expected": [
+        "create_document"
+      ],
+      "actual": [],
+      "category": "creation"
+    },
+    {
+      "query": "Update customer C-001 phone to 9876543210",
+      "expected": [
+        "update_document"
+      ],
+      "actual": [
+        "get_document"
+      ],
+      "category": "update"
+    },
+    {
+      "query": "What are the fields in Loan",
+      "expected": [
+        "get_doctype_info"
+      ],
+      "actual": [],
+      "category": "schema"
+    },
+    {
+      "query": "List all DocTypes in the system",
+      "expected": [
+        "search_doctype"
+      ],
+      "actual": [],
+      "category": "schema"
+    },
+    {
+      "query": "Run Accounts Receivable report",
+      "expected": [
+        "generate_report"
+      ],
+      "actual": [
+        "report_requirements"
+      ],
+      "category": "reports"
+    },
+    {
+      "query": "Create a pie chart of customers by city",
+      "expected": [
+        "create_visualization",
+        "run_database_query"
+      ],
+      "actual": [
+        "analyze_business_data"
+      ],
+      "category": "visualization"
+    }
+  ],
+  "duration_seconds": 113.21
+}
