@@ -174,6 +174,7 @@ def _get_fac_server():
     if _fac_mcp_server is not None and time.time() - _fac_mcp_server_time < _FAC_CACHE_TTL:
         return _fac_mcp_server
 
+    _ensure_db_alive()  # DB must be alive before FAC reads tool registry
     from frappe_assistant_core.api.fac_endpoint import mcp, _import_tools
     _import_tools()  # Register all enabled tools (re-imports on cache refresh)
 
@@ -509,11 +510,13 @@ def discover_tools(server_name, use_cache=True):
         frappe.logger().warning(f"Niv MCP: Live discovery failed for '{server_name}', using DB fallback")
         tools = _db_get_tools(server_name) or []
 
-    # Cache results
+    # Cache results — NEVER cache empty tools (would hide real tools for 5 min)
     if tools:
         with _cache_lock:
             _tools_cache[server_name] = {"tools": tools, "expires": time.time() + CACHE_TTL}
         _redis_set(f"tools:{server_name}", tools)
+    else:
+        frappe.logger().error(f"Niv MCP: 0 tools discovered for '{server_name}' — NOT caching empty result")
 
     return tools
 
