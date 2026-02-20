@@ -510,17 +510,18 @@ def _stream_two_model(
         yield from _stream_llm_tokens(big_llm.stream(messages))
         return
 
-    # ── Step 2: Execute tool calls ──
+    # ── Step 2: Execute tool calls (parallel if 2+) ──
     tool_map = {t.name: t for t in tools}
-    tool_results = []
+    calls = fast_tool_calls[:max_tool_calls]
 
-    for tc in fast_tool_calls[:max_tool_calls]:
+    # Emit all tool_call events first
+    for tc in calls:
+        yield {"type": "tool_call", "tool": tc.get("name", ""), "arguments": tc.get("args", {})}
+
+    def _exec_one(tc):
         tool_name = tc.get("name", "")
         tool_args = tc.get("args", {})
         tool_call_id = tc.get("id", f"call_{tool_name}")
-
-        yield {"type": "tool_call", "tool": tool_name, "arguments": tool_args}
-
         if tool_name in tool_map:
             try:
                 result = tool_map[tool_name].invoke(tool_args)
@@ -529,17 +530,21 @@ def _stream_two_model(
                 result_str = f"Error: {e}"
         else:
             result_str = f"Tool '{tool_name}' not found."
+        return {"tool_call_id": tool_call_id, "tool_name": tool_name, "result": result_str}
 
+    if len(calls) >= 2:
+        from concurrent.futures import ThreadPoolExecutor
+        with ThreadPoolExecutor(max_workers=min(len(calls), 4)) as pool:
+            tool_results = list(pool.map(_exec_one, calls))
+    else:
+        tool_results = [_exec_one(tc) for tc in calls]
+
+    for tr in tool_results:
         yield {
             "type": "tool_result",
-            "tool": tool_name,
-            "result": result_str[:2000],
+            "tool": tr["tool_name"],
+            "result": tr["result"][:2000],
         }
-        tool_results.append({
-            "tool_call_id": tool_call_id,
-            "tool_name": tool_name,
-            "result": result_str,
-        })
 
     # ── Step 3: Big model streams answer with tool results ──
     # Even if tools failed, let big model handle it — it can tell the user
