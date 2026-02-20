@@ -1,9 +1,9 @@
 # Niv AI — Intelligent Business Assistant for ERPNext
 
-> AI-powered assistant with voice, MCP tools, two-model optimization, Excel/PDF export, and developer mode
+> AI-powered assistant with voice, MCP tools, two-model optimization, Excel/PDF export, PWA, and developer mode
 
-[![Version](https://img.shields.io/badge/version-1.0.1-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
-[![ERPNext](https://img.shields.io/badge/ERPNext-v15-green.svg)](https://erpnext.com)
+[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
+[![ERPNext](https://img.shields.io/badge/ERPNext-v14%2B-green.svg)](https://erpnext.com)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
 ---
@@ -54,6 +54,21 @@ Niv AI is a production-ready AI assistant that sits inside your ERPNext system. 
 - Rate limiting (50 tool calls/min)
 - Error sanitization — no stack traces exposed to users
 - Atomic token deduction — prevents negative balance race conditions
+
+---
+
+### 📱 PWA (Progressive Web App)
+- Install on home screen — works like a native app
+- manifest.json + service worker
+- App icon (192px + 512px)
+- Standalone mode — full screen, no browser chrome
+
+### 🔍 Monitoring & Testing
+- **Sentry** error tracking (Python backend)
+- **Redis cache monitoring** API — track cache keys, sizes, TTLs
+- **Tool accuracy benchmark** — 50 queries, 80% baseline accuracy
+- **E2E tests** — 15 Playwright test cases (chat, features, mobile)
+- **CI/CD** — GitHub Actions (lint + structure check)
 
 ---
 
@@ -238,6 +253,7 @@ Token pool is shared across all users. Atomic SQL deduction prevents negative ba
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v1.1.0** | 2026-02-20 | Sentry error tracking, PWA support, Redis cache monitoring, CI/CD pipeline, tool accuracy benchmark (80%), E2E Playwright tests, mobile responsive CSS, parallel tool execution, MCP tools empty fix |
 | **v1.0.1** | 2026-02-19 | Voice overhaul — instant filler TTS, Voxtral Realtime STT, voice orb fixes, SSE streaming fixes, one-command setup.sh |
 | v1.0.0 | 2026-02-19 | Stable release — reliable streaming, two-model optimization, tool error resilience, export buttons restored, Razorpay removed |
 | v0.9.2 | 2026-02-19 | Two-model tool optimization, streaming fix, DB resilience, billing accuracy |

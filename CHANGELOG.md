@@ -1,3 +1,25 @@
+## [1.1.0] - 2026-02-20 — Polish & Reliability
+
+### Added
+- Sentry error tracking (Python backend)
+- PWA support — manifest.json, service worker, app icons
+- Redis cache monitoring API (get_cache_stats, clear_cache)
+- CI/CD pipeline — GitHub Actions (ruff lint + structure check)
+- Tool accuracy benchmark — 50 test cases, 80% baseline
+- E2E Playwright tests — 15 test cases (chat, features, mobile)
+- Mobile responsive CSS — sidebar overlay, touch-friendly 44px targets
+- Parallel tool execution — ThreadPoolExecutor for 2+ tools
+
+### Fixed
+- MCP tools empty bug — ensure_db before import, empty tools never cached
+- PWA sidebar not loading — migrate + restart fix
+
+### Performance
+- Parallel tool execution saves 2-3s on multi-tool queries
+- Redis cache: ~3MB (discovery 1.6MB + knowledge 1.3MB + tools 93KB)
+
+---
+
 ## [1.0.0] - 2026-02-19 — Stable Release 🎉
 
 ### 🚀 Production-Ready
@@ -153,6 +175,26 @@
 
 
 # Changelog
+
+## v1.1.0 (2026-02-20) — Polish & Reliability
+
+### Added
+- Sentry error tracking (Python backend, `default_integrations=False` for compatibility)
+- PWA support — manifest.json, service worker, app icons (192px + 512px)
+- Redis cache monitoring API (`get_cache_stats`, `clear_cache`)
+- CI/CD pipeline — GitHub Actions (ruff lint + structure check)
+- Tool accuracy benchmark — 50 test cases, 80% baseline accuracy
+- E2E Playwright tests — 15 test cases (chat, features, mobile)
+- Mobile responsive CSS — sidebar overlay, touch-friendly (44px targets)
+- Parallel tool execution — ThreadPoolExecutor for 2+ simultaneous tools
+
+### Fixed
+- MCP tools empty bug — `_ensure_db_alive()` before tool import, empty tools never cached
+- PWA sidebar/messaging not loading — fixed via migrate + restart
+
+### Performance
+- Tool execution parallelized (2-3s saving on multi-tool queries)
+- Redis cache: 5 keys, ~3MB (unified discovery 1.6MB, knowledge graph 1.3MB, tools 93KB)
 
 ## v0.6.1 (2026-02-17)
 ### Fixed
