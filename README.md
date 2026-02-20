@@ -1,8 +1,8 @@
 # Niv AI — Intelligent Business Assistant for ERPNext
 
-> AI-powered assistant with voice, MCP tools, two-model optimization, Excel/PDF export, PWA, and developer mode
+> AI-powered assistant with voice, MCP tools, two-model optimization, smart conversations, Excel/PDF export, PWA, and developer mode
 
-[![Version](https://img.shields.io/badge/version-1.1.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
+[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
 [![ERPNext](https://img.shields.io/badge/ERPNext-v14%2B-green.svg)](https://erpnext.com)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
@@ -38,9 +38,26 @@ Niv AI is a production-ready AI assistant that sits inside your ERPNext system. 
 
 ### 🛠️ Developer Mode
 - Create DocTypes, Custom Fields, Client/Server Scripts via chat
-- Impact analysis before modifications (checks dependencies across system)
+- **Impact analysis** — checks all dependencies before modifications (links, scripts, print formats)
+- **Diff view** — shows old→new values before confirming updates
+- **Bulk operations** — safe batch update/create/delete (max 50, dry-run preview)
+- **Script templates** — 5 Client Script + 4 Server Script ready-to-use patterns
+- **Import/Export customizations** — backup and restore Custom Fields, Property Setters, Scripts
+- **Test data generator** — realistic Indian names, phones, addresses for any DocType
 - Confirmation required before any create/update/delete
-- Undo support for recently created documents
+- Undo support for recently created documents (30 min window)
+
+### 🧠 Smart Conversations
+- **Sequential tool chaining** — AI calls additional tools based on first results (up to 2 rounds)
+- **Conversation summarization** — 20+ messages auto-summarized, last 10 kept fresh
+- **Follow-up understanding** — "Show loan X" → "iska status kya hai" works naturally
+- **Smart date parsing** — "pichhle hafte ki collections" understood in Hindi and English
+- **Clarification requests** — ambiguous queries get smart follow-up questions
+
+### 📅 Automation
+- **Scheduled reports** — Daily/Weekly/Monthly auto-generated reports
+- **Smart alerts** — Trigger-based AI actions on document events
+- **Daily digest** — Pre-built business summary templates (NBFC/Sales/General)
 
 ### 💬 Multi-Channel
 - **Web Chat** — Full-page chat + floating widget on every ERPNext page
@@ -188,7 +205,13 @@ niv_ai/
 │   ├── tools/                     # Tool enhancements
 │   │   ├── tool_descriptions.py  # Enhanced descriptions with field hints
 │   │   ├── result_processor.py   # Cap results at 4KB
-│   │   └── result_cache.py       # 2min TTL for read-only tools
+│   │   ├── result_cache.py       # 2min TTL for read-only tools
+│   │   ├── bulk_ops.py           # Bulk update/create/delete helpers
+│   │   ├── script_templates.py   # Client/Server Script patterns
+│   │   ├── customization_io.py   # Import/Export customizations
+│   │   ├── impact_analysis.py    # DocType dependency analysis
+│   │   ├── test_data_gen.py      # Realistic test data generator
+│   │   └── daily_digest.py       # Business summary templates
 │   │
 │   ├── api/                       # Endpoints
 │   │   ├── stream.py             # SSE chat streaming
@@ -253,6 +276,7 @@ Token pool is shared across all users. Atomic SQL deduction prevents negative ba
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v1.2.0** | 2026-02-20 | Smart Agent — sequential tool chaining, conversation summarization, diff view, bulk ops, script templates, impact analysis, test data generator, daily digest, import/export customizations |
 | **v1.1.0** | 2026-02-20 | Sentry error tracking, PWA support, Redis cache monitoring, CI/CD pipeline, tool accuracy benchmark (80%), E2E Playwright tests, mobile responsive CSS, parallel tool execution, MCP tools empty fix |
 | **v1.0.1** | 2026-02-19 | Voice overhaul — instant filler TTS, Voxtral Realtime STT, voice orb fixes, SSE streaming fixes, one-command setup.sh |
 | v1.0.0 | 2026-02-19 | Stable release — reliable streaming, two-model optimization, tool error resilience, export buttons restored, Razorpay removed |
