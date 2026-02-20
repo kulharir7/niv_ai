@@ -1,0 +1,71 @@
+name: Niv AI CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint & Syntax Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff (syntax + import errors only)
+        run: |
+          ruff check niv_ai/ \
+            --select E9,F63,F7,F82 \
+            --output-format github
+
+      - name: Python compile check
+        run: |
+          python -m py_compile niv_ai/__init__.py
+          find niv_ai/niv_core -name "*.py" -exec python -m py_compile {} +
+
+  structure:
+    name: File Structure Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check critical files exist
+        run: |
+          echo "Checking critical files..."
+          files=(
+            "niv_ai/__init__.py"
+            "niv_ai/hooks.py"
+            "niv_ai/niv_core/langchain/agent.py"
+            "niv_ai/niv_core/langchain/tools.py"
+            "niv_ai/niv_core/mcp_client.py"
+            "niv_ai/niv_core/api/stream.py"
+            "niv_ai/niv_core/api/telegram.py"
+            "niv_ai/niv_core/api/voice.py"
+            "niv_ai/niv_ui/page/niv_chat/niv_chat.js"
+            "niv_ai/niv_ui/page/niv_chat/niv_chat.css"
+            "niv_ai/niv_ui/page/niv_chat/niv_chat.html"
+            "niv_ai/public/manifest.json"
+          )
+          missing=0
+          for f in "${files[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "❌ MISSING: $f"
+              missing=$((missing + 1))
+            else
+              echo "✅ $f"
+            fi
+          done
+          if [ $missing -gt 0 ]; then
+            echo "::error::$missing critical files missing!"
+            exit 1
+          fi
+          echo "All critical files present ✅"
