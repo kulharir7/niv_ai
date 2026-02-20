@@ -147,6 +147,138 @@ def _truncate_by_tokens(messages: list, max_tokens: int) -> list:
     return messages[-keep_count:]
 
 
+# ── Conversation Summarization ──────────────────────────────────────
+
+# Redis key prefix for conversation summaries
+_SUMMARY_PREFIX = "niv_conv_summary_"
+_SUMMARY_THRESHOLD = 20  # Summarize when messages exceed this
+_KEEP_RECENT = 10        # Keep last N messages as-is
+
+def _get_cached_summary(conversation_id: str) -> str:
+    """Get cached conversation summary from Redis."""
+    try:
+        import frappe
+        key = f"{_SUMMARY_PREFIX}{conversation_id}"
+        return frappe.cache().get_value(key) or ""
+    except Exception:
+        return ""
+
+def _set_cached_summary(conversation_id: str, summary: str):
+    """Cache conversation summary in Redis (1 hour TTL)."""
+    try:
+        import frappe
+        key = f"{_SUMMARY_PREFIX}{conversation_id}"
+        frappe.cache().set_value(key, summary, expires_in_sec=3600)
+    except Exception:
+        pass
+
+def _summarize_messages(messages: list) -> str:
+    """Summarize a list of LangChain messages into a concise text.
+    Uses the fast model to save tokens/cost."""
+    if not messages:
+        return ""
+    
+    # Build text from messages
+    text_parts = []
+    for msg in messages:
+        role = "User" if isinstance(msg, HumanMessage) else "AI" if isinstance(msg, AIMessage) else "System"
+        content = (msg.content or "")[:500]  # Cap each message
+        if content.strip():
+            text_parts.append(f"{role}: {content}")
+    
+    conversation_text = "\n".join(text_parts)
+    if not conversation_text.strip():
+        return ""
+    
+    # Use fast model for summarization (cheap + fast)
+    try:
+        from niv_ai.niv_core.langchain.llm import get_llm
+        from niv_ai.niv_core.utils import get_niv_settings
+        
+        settings = get_niv_settings()
+        provider = getattr(settings, "default_provider", None) or getattr(settings, "ai_provider", None) or "ollama-cloud"
+        fast_model = getattr(settings, "fast_model", None) or "ministral-3:8b"
+        
+        llm = get_llm(provider, fast_model, streaming=False)
+        
+        prompt = (
+            "Summarize this conversation in 3-5 bullet points. "
+            "Focus on: what user asked, what data was shown, key numbers/facts, decisions made. "
+            "Be concise. Use same language as the conversation.\n\n"
+            f"{conversation_text}"
+        )
+        
+        response = llm.invoke([HumanMessage(content=prompt)])
+        summary = getattr(response, "content", "") or ""
+        return summary[:1000]  # Cap at 1000 chars
+    except Exception as e:
+        import frappe
+        frappe.logger().warning(f"Niv AI: Summarization failed: {e}")
+        return ""
+
+
+def get_chat_history_with_summary(conversation_id: str, limit: int = 50, max_tokens: int = None) -> list:
+    """Load conversation history with automatic summarization.
+    
+    When messages exceed threshold:
+    1. Check Redis for cached summary
+    2. If no cache, summarize older messages with fast model
+    3. Return: [SystemMessage(summary)] + recent messages
+    
+    This saves ~60% tokens on long conversations while preserving context.
+    """
+    if max_tokens is None:
+        try:
+            settings = get_niv_settings()
+            total_limit = 32000
+            max_msg_tokens = (settings.max_tokens_per_message or 4096)
+            max_tokens = total_limit - 2000 - (max_msg_tokens * 2)
+            if max_tokens < 4000: max_tokens = 8000
+        except Exception:
+            max_tokens = _DEFAULT_MAX_CONTEXT_TOKENS
+
+    messages = frappe.get_all(
+        "Niv Message",
+        filters={"conversation": conversation_id},
+        fields=["role", "content", "tool_calls_json", "tool_results_json"],
+        order_by="creation asc",
+        limit_page_length=limit,
+    )
+
+    if not messages:
+        return []
+
+    lc_messages = _convert_to_langchain(messages)
+    
+    # If under threshold, just truncate normally
+    if len(lc_messages) <= _SUMMARY_THRESHOLD:
+        return _truncate_by_tokens(lc_messages, max_tokens)
+    
+    # Split: older messages to summarize, recent to keep
+    older = lc_messages[:-_KEEP_RECENT]
+    recent = lc_messages[-_KEEP_RECENT:]
+    
+    # Check Redis cache first
+    summary = _get_cached_summary(conversation_id)
+    
+    if not summary:
+        # Summarize older messages
+        summary = _summarize_messages(older)
+        if summary:
+            _set_cached_summary(conversation_id, summary)
+    
+    result = []
+    if summary:
+        result.append(SystemMessage(
+            content=f"CONVERSATION SUMMARY (older messages):\n{summary}"
+        ))
+    
+    # Add recent messages (token-truncated)
+    result.extend(_truncate_by_tokens(recent, max_tokens - _estimate_tokens(summary)))
+    
+    return result
+
+
 def get_system_prompt(conversation_id: str = None) -> str:
     """Get system prompt for conversation.
 
