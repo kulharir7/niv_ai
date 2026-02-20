@@ -568,7 +568,7 @@ def _stream_two_model(
         collected_text = ""
         buffer = ""
         chain_tool_calls = []
-
+    
         # On last round, stream without tools (force final answer)
         llm_to_use = big_llm_with_tools if chain_round < max_chain_rounds else big_llm
 
@@ -612,6 +612,7 @@ def _stream_two_model(
             if text and not _is_garbled_tool_text(text):
                 collected_text += text
                 yield {"type": "token", "content": text}
+
 
         # If no tool calls from big model, we're done
         if not chain_tool_calls or not any(tc["name"] for tc in chain_tool_calls):
@@ -710,8 +711,11 @@ def stream_agent(
                 
                 yield event
             
-            if fell_back:
+            if fell_back or not yielded_any_token:
                 # Single-model gets fresh start — it will re-discover and call tools itself
+                # Also falls back when two-model produced tools but no text (garbled output)
+                if not fell_back:
+                    frappe.log_error("Two-model produced no text tokens, falling back to single-model", "Niv AI Fallback")
                 for event in _stream_single_model(agent, messages, config, cbs, dev_mode, MAX_TOOL_CALLS):
                     if event.get("type") == "token":
                         yielded_any_token = True

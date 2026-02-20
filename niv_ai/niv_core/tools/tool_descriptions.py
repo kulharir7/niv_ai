@@ -66,7 +66,9 @@ TOOL_ENHANCEMENTS = {
                     "- Purchase Order: name, supplier_name, transaction_date, grand_total, status\n"
                     "- Loan: name, applicant_name, loan_amount, status, posting_date, disbursement_date\n"
                     "- Customer: name, customer_name, customer_type, territory\n"
-                    "NOTE: Sales Order uses 'transaction_date' NOT 'posting_date'. Check DocType fields if unsure."
+                    "- Loan Repayment: name, against_loan, applicant, posting_date, amount_paid, principal_amount_paid, total_interest_paid, total_penalty_paid, payable_amount\n"
+                    "NOTE: Sales Order uses 'transaction_date' NOT 'posting_date'. "
+                    "Loan Repayment uses 'amount_paid' NOT 'amount' or 'repayment_amount'. Check DocType fields if unsure."
                 ),
             },
             "limit": {
