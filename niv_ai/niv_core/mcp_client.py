@@ -310,7 +310,7 @@ def _run_async(coro):
 
 
 def _build_connection_config(doc):
-    """Build SDK connection config from Niv MCP Server doc."""
+    """Build SDK connection config for remote MCP server."""
     api_key = None
     try:
         api_key = doc.get_password("api_key") if doc.api_key else None
@@ -414,25 +414,13 @@ def _sdk_call_tool(doc, tool_name, arguments, user_api_key=None):
 # ─── DB Fallback ──────────────────────────────────────────────────
 
 def _db_get_tools(server_name):
-    """Get tools from Niv MCP Server doc. Last resort, always works."""
+    """Get tools via direct FAC discovery. No DocType needed."""
     try:
-        doc = frappe.get_doc("Niv MCP Server", server_name)
-        raw = doc.get("tools_discovered")
-        if raw:
-            return json.loads(raw)
+        tools = _direct_discover()
+        if tools:
+            return tools
+        # Fallback: empty list
         tools = []
-        for row in (doc.get("tools") or []):
-            tool = {"name": row.tool_name}
-            if hasattr(row, "description") and row.description:
-                tool["description"] = row.description
-            schema = {"type": "object", "properties": {}}
-            if hasattr(row, "input_schema") and row.input_schema:
-                try:
-                    schema = json.loads(row.input_schema)
-                except Exception:
-                    pass
-            tool["inputSchema"] = schema
-            tools.append(tool)
         return tools if tools else None
     except Exception as e:
         frappe.logger().warning(f"Niv MCP: DB fallback failed for '{server_name}': {e}")
@@ -442,18 +430,27 @@ def _db_get_tools(server_name):
 # ─── Server Config Helper ─────────────────────────────────────────
 
 def _get_server_config(server_name):
+    """Get MCP server config. FAC is always same-server (direct Python).
+    No DocType needed — FAC runs on same Frappe instance."""
     cache_key = f"mcp_server_{server_name}"
     if hasattr(frappe.local, cache_key):
         return getattr(frappe.local, cache_key)
-    doc = frappe.get_doc("Niv MCP Server", server_name)
-    setattr(frappe.local, cache_key, doc)
-    return doc
+    # FAC is always local — return a simple config object
+    config = frappe._dict({
+        "server_name": server_name,
+        "transport_type": "http",
+        "server_url": f"http://localhost:{frappe.conf.get('webserver_port', 8000)}",
+        "is_active": 1,
+    })
+    setattr(frappe.local, cache_key, config)
+    return config
 
 
 # ─── High-Level API ────────────────────────────────────────────────
 
 def get_all_active_servers():
-    return [d.name for d in frappe.get_all("Niv MCP Server", filters={"is_active": 1}, fields=["name"])]
+    """Return active MCP servers. FAC (Frappe Assistant Core) is the only server."""
+    return ["Frappe Assistant Core"]
 
 
 def discover_tools(server_name, use_cache=True):
