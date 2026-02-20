@@ -161,6 +161,56 @@ class NivChat {
         this.$sidebar = this.wrapper.find(".niv-sidebar");
         this.$convList = this.wrapper.find(".niv-conversation-list");
         this.$chatArea = this.wrapper.find(".niv-chat-messages");
+
+        // ── Table Export Buttons (delegated) ──
+        this.wrapper.on("click", ".btn-table-export", (e) => {
+            const btn = $(e.currentTarget);
+            const format = btn.data("format");
+            const tableWrapper = btn.closest(".table-wrapper");
+            const table = tableWrapper.find("table")[0];
+            if (!table) return;
+
+            // Parse table to JSON
+            const headers = [];
+            table.querySelectorAll("thead th, tr:first-child th").forEach(th => headers.push(th.textContent.trim()));
+            if (headers.length === 0) {
+                table.querySelectorAll("tr:first-child td").forEach(td => headers.push(td.textContent.trim()));
+            }
+            const rows = [];
+            const bodyRows = table.querySelectorAll("tbody tr");
+            const allRows = bodyRows.length > 0 ? bodyRows : table.querySelectorAll("tr:not(:first-child)");
+            allRows.forEach(tr => {
+                const row = {};
+                tr.querySelectorAll("td").forEach((td, i) => {
+                    row[headers[i] || ("col_" + i)] = td.textContent.trim();
+                });
+                if (Object.keys(row).length > 0) rows.push(row);
+            });
+
+            if (rows.length === 0) {
+                frappe.msgprint(__("No data in table to export"));
+                return;
+            }
+
+            const origHtml = btn.html();
+            btn.prop("disabled", true).html('<i class="fa fa-spinner fa-spin"></i>');
+
+            frappe.call({
+                method: "niv_ai.niv_core.api.export.export_data",
+                args: { data: JSON.stringify(rows), format: format },
+                callback: (r) => {
+                    btn.prop("disabled", false).html(origHtml);
+                    if (r.message && r.message.file_url) {
+                        window.open(r.message.file_url);
+                    }
+                },
+                error: () => {
+                    btn.prop("disabled", false).html(origHtml);
+                    frappe.msgprint(__("Export failed"));
+                }
+            });
+        });
+
         this.$input = this.wrapper.find(".niv-input-textarea");
         this.$sendBtn = this.wrapper.find(".btn-send");
         this.$stopBtn = this.wrapper.find(".btn-stop");
@@ -1811,7 +1861,7 @@ ${htmlCode}
                 html = html.replace(/<a /g, '<a target="_blank" ');
                 // Wrap tables in scrollable container
                 html = html.replace(/<table>/g, '<div class="table-wrapper"><table>');
-                html = html.replace(/<\/table>/g, '</table></div>');
+                html = html.replace(/<\/table>/g, '</table><div class="niv-table-export-btns"><button class="btn-table-export" data-format="excel" title="Download Excel"><i class="fa fa-file-excel-o"></i> Excel</button><button class="btn-table-export" data-format="csv" title="Download CSV"><i class="fa fa-file-text-o"></i> CSV</button><button class="btn-table-export" data-format="pdf" title="Download PDF"><i class="fa fa-file-pdf-o"></i> PDF</button></div></div>');
                 // Render inline images with lightbox
                 html = html.replace(/<img\s+([^>]*?)src="([^"]+)"([^>]*?)>/g,
                     '<img $1src="$2"$3 class="niv-inline-image" onclick="window.open(\'$2\', \'_blank\')" style="max-width:100%;border-radius:8px;cursor:pointer;margin:8px 0;" />');
@@ -4753,3 +4803,26 @@ ${htmlCode}
         }
     }
 }
+
+
+// ── PWA: manifest + service worker (added at end, nothing above modified) ──
+(function() {
+    // Add manifest link to head
+    if (!document.querySelector('link[rel="manifest"]')) {
+        var link = document.createElement("link");
+        link.rel = "manifest";
+        link.href = "/assets/niv_ai/manifest.json";
+        document.head.appendChild(link);
+    }
+    // Add theme-color meta
+    if (!document.querySelector('meta[name="theme-color"]')) {
+        var meta = document.createElement("meta");
+        meta.name = "theme-color";
+        meta.content = "#7c3aed";
+        document.head.appendChild(meta);
+    }
+    // Register service worker
+    if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/assets/niv_ai/js/niv_sw.js").catch(function() {});
+    }
+})();
