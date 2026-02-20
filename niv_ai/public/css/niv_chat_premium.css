@@ -362,3 +362,41 @@
     background: rgba(124, 58, 237, 0.3);
     color: #e2e8f0;
 }
+
+/* ══ Mobile Responsive ══════════════════════════════════════
+   ADDED at end — nothing above modified.
+   Hides sidebar on mobile, makes chat full-width.
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    .niv-sidebar {
+        display: none !important;
+    }
+    .niv-main {
+        width: 100% !important;
+    }
+    .niv-chat-container {
+        flex-direction: column !important;
+    }
+    .niv-input-area {
+        padding: 8px !important;
+    }
+    /* 16px prevents iOS auto-zoom on input focus */
+    .niv-input-pill textarea,
+    .niv-input-area textarea,
+    .niv-input-area input {
+        font-size: 16px !important;
+    }
+    /* Bigger tap targets for touch */
+    .msg-action-btn {
+        min-width: 40px;
+        min-height: 40px;
+    }
+    .niv-export-btn {
+        padding: 10px 16px !important;
+        font-size: 14px !important;
+    }
+    /* Empty state orb smaller on mobile */
+    .empty-orb {
+        transform: scale(0.8);
+    }
+}
