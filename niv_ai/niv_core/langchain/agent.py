@@ -724,7 +724,9 @@ def stream_agent(
     MAX_TOOL_CALLS = 40 if dev_mode else 12
     fast_model_name = _get_fast_model()
     # Skip two-model if: no fast model, dev mode, or already routed to fast model (simple queries)
-    use_two_model = not dev_mode and fast_model_name and model != fast_model_name
+    # Skip two-model for image uploads — vision context confuses fast model
+    has_images = bool(attachments and any(a.get("file_url","").lower().split(".")[-1] in ("jpg","jpeg","png","gif","webp","bmp") for a in (attachments if isinstance(attachments, list) else [])))
+    use_two_model = not dev_mode and fast_model_name and model != fast_model_name and not has_images
 
     yielded_any_token = False
 
