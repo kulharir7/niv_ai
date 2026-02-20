@@ -166,7 +166,8 @@ class NivChat {
         this.wrapper.on("click", ".btn-table-export", (e) => {
             const btn = $(e.currentTarget);
             const format = btn.data("format");
-            const tableWrapper = btn.closest(".table-wrapper");
+            const exportDiv = btn.closest(".niv-table-export-btns");
+            const tableWrapper = exportDiv.prev(".table-wrapper");
             const table = tableWrapper.find("table")[0];
             if (!table) return;
 
@@ -1861,7 +1862,7 @@ ${htmlCode}
                 html = html.replace(/<a /g, '<a target="_blank" ');
                 // Wrap tables in scrollable container
                 html = html.replace(/<table>/g, '<div class="table-wrapper"><table>');
-                html = html.replace(/<\/table>/g, '</table><div class="niv-table-export-btns"><button class="btn-table-export" data-format="excel" title="Download Excel"><i class="fa fa-file-excel-o"></i> Excel</button><button class="btn-table-export" data-format="csv" title="Download CSV"><i class="fa fa-file-text-o"></i> CSV</button><button class="btn-table-export" data-format="pdf" title="Download PDF"><i class="fa fa-file-pdf-o"></i> PDF</button></div></div>');
+                html = html.replace(/<\/table>/g, '</table></div><div class="niv-table-export-btns"><button class="btn-table-export" data-format="excel" title="Download Excel"><i class="fa fa-file-excel-o"></i> Excel</button><button class="btn-table-export" data-format="csv" title="Download CSV"><i class="fa fa-file-text-o"></i> CSV</button><button class="btn-table-export" data-format="pdf" title="Download PDF"><i class="fa fa-file-pdf-o"></i> PDF</button></div>');
                 // Render inline images with lightbox
                 html = html.replace(/<img\s+([^>]*?)src="([^"]+)"([^>]*?)>/g,
                     '<img $1src="$2"$3 class="niv-inline-image" onclick="window.open(\'$2\', \'_blank\')" style="max-width:100%;border-radius:8px;cursor:pointer;margin:8px 0;" />');
