@@ -123,3 +123,77 @@ def get_llm(provider_name=None, model=None, streaming=True, callbacks=None):
         request_timeout=120,
         **common_kwargs,
     )
+
+
+def get_vision_llm(callbacks=None):
+    """Create LLM configured for vision/OCR tasks.
+    
+    Uses vision_model from Niv Settings. Falls back to default model.
+    Non-streaming since we need the full OCR text before passing to main LLM.
+    """
+    from niv_ai.niv_core.utils import get_niv_settings
+    settings = get_niv_settings()
+    
+    vision_model = getattr(settings, "vision_model", None)
+    if not vision_model:
+        # Fallback to default model
+        vision_model = settings.default_model
+    
+    return get_llm(
+        model=vision_model,
+        streaming=False,
+        callbacks=callbacks,
+    )
+
+
+def call_vision(image_base64: str, prompt: str = None, mime_type: str = "image/jpeg") -> str:
+    """Send image to vision model and get text extraction.
+    
+    Args:
+        image_base64: Base64-encoded image data
+        prompt: Custom prompt for vision model. Defaults to OCR extraction prompt.
+        mime_type: Image MIME type (image/jpeg, image/png, etc.)
+    
+    Returns:
+        Extracted text/description from the image
+    """
+    from niv_ai.niv_core.utils import get_niv_settings
+    settings = get_niv_settings()
+    
+    if not getattr(settings, "enable_vision", 0):
+        return "[Vision not enabled. Enable it in Niv Settings → Vision & Image]"
+    
+    if not prompt:
+        prompt = (
+            "Extract ALL text from this image. If it contains a table, preserve the table structure. "
+            "If it's a document (Aadhaar, PAN, cheque, bank statement, invoice), extract all fields with labels. "
+            "If it's a chart/graph, describe the data points and trends. "
+            "Return the extracted content in a clean, structured format."
+        )
+    
+    llm = get_vision_llm()
+    
+    from langchain_core.messages import HumanMessage
+    
+    message = HumanMessage(
+        content=[
+            {"type": "text", "text": prompt},
+            {
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:{mime_type};base64,{image_base64}"
+                }
+            }
+        ]
+    )
+    
+    try:
+        response = llm.invoke([message])
+        max_tokens = int(getattr(settings, "vision_max_tokens", 2048) or 2048)
+        text = response.content or ""
+        if len(text) > max_tokens * 4:  # rough char limit
+            text = text[:max_tokens * 4] + "\n...[truncated]"
+        return text
+    except Exception as e:
+        frappe.log_error(f"Vision call failed: {e}", "Niv AI Vision")
+        return f"[Vision processing failed: {str(e)}]"

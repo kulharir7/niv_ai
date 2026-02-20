@@ -148,17 +148,36 @@ def _build_messages(message: str, conversation_id: str = None, system_prompt: st
             from niv_ai.niv_core.tools.file_processor import process_attachments
             processed = process_attachments(attachments)
             
-            # If images found, build multimodal message
+            # If images found, use 2-step: Vision model (OCR) → text → Main model (tools)
             if processed.get("images"):
-                content_parts = []
-                # Add text context from non-image files
                 if processed.get("text_context"):
                     message = message + "\n\n" + processed["text_context"]
-                content_parts.append({"type": "text", "text": message})
-                # Add images for vision
-                for img_data in processed["images"]:
-                    content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
-                messages.append(HumanMessage(content=content_parts))
+                
+                from niv_ai.niv_core.utils import get_niv_settings
+                _vs = get_niv_settings()
+                if getattr(_vs, "enable_vision", 0) and getattr(_vs, "vision_model", None):
+                    from niv_ai.niv_core.langchain.llm import call_vision
+                    vision_texts = []
+                    for img_data in processed["images"]:
+                        if img_data.startswith("data:"):
+                            parts = img_data.split(";base64,", 1)
+                            mime = parts[0].replace("data:", "")
+                            b64 = parts[1] if len(parts) > 1 else ""
+                        else:
+                            mime, b64 = "image/jpeg", img_data
+                        extracted = call_vision(b64, mime_type=mime)
+                        if extracted:
+                            vision_texts.append(extracted)
+                    if vision_texts:
+                        vision_context = "\n\n".join(f"[Image {i+1} content]:\n{t}" for i, t in enumerate(vision_texts))
+                        message = message + "\n\n" + vision_context
+                    messages.append(HumanMessage(content=message))
+                else:
+                    # No vision — send as multimodal directly
+                    content_parts = [{"type": "text", "text": message}]
+                    for img_data in processed["images"]:
+                        content_parts.append({"type": "image_url", "image_url": {"url": img_data}})
+                    messages.append(HumanMessage(content=content_parts))
             else:
                 # Text-only attachments (PDF, Excel, Word)
                 if processed.get("text_context"):
@@ -345,7 +364,6 @@ def run_agent(
     if not system_prompt:
         system_prompt = _build_system_prompt(conversation_id)
     messages = _build_messages(message, conversation_id, system_prompt, attachments=attachments)
-
     _setup_user_api_key(user)
     try:
         result = agent.invoke({"messages": messages}, config=config)
@@ -701,8 +719,7 @@ def stream_agent(
     )
 
     system_prompt = _build_system_prompt(conversation_id, dev_mode, page_context)
-    messages = _build_messages(message, conversation_id, system_prompt)
-
+    messages = _build_messages(message, conversation_id, system_prompt, attachments=attachments)
     _setup_user_api_key(user)
     MAX_TOOL_CALLS = 40 if dev_mode else 12
     fast_model_name = _get_fast_model()
@@ -770,8 +787,12 @@ def stream_agent(
                 pass
         
         # Build full prompt text for accurate token estimation
+        def _content_to_str(c):
+            if isinstance(c, list):
+                return " ".join(p.get("text","") if isinstance(p,dict) else str(p) for p in c)
+            return str(c) if c else ""
         full_prompt = "\n".join(
-            getattr(m, "content", str(m)) for m in messages if hasattr(m, "content")
+            _content_to_str(getattr(m, "content", str(m))) for m in messages if hasattr(m, "content")
         )
         cbs["billing"].finalize(stream_cb=cbs["stream"], full_prompt_text=full_prompt)
         cbs["logging"].finalize()
