@@ -4753,3 +4753,26 @@ ${htmlCode}
         }
     }
 }
+
+
+// ── PWA: manifest + service worker (added at end, nothing above modified) ──
+(function() {
+    // Add manifest link to head
+    if (!document.querySelector('link[rel="manifest"]')) {
+        var link = document.createElement("link");
+        link.rel = "manifest";
+        link.href = "/assets/niv_ai/manifest.json";
+        document.head.appendChild(link);
+    }
+    // Add theme-color meta
+    if (!document.querySelector('meta[name="theme-color"]')) {
+        var meta = document.createElement("meta");
+        meta.name = "theme-color";
+        meta.content = "#7c3aed";
+        document.head.appendChild(meta);
+    }
+    // Register service worker
+    if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("/assets/niv_ai/js/niv_sw.js").catch(function() {});
+    }
+})();
