@@ -16,7 +16,7 @@ from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, Tool
 
 from .llm import get_llm
 from .tools import get_langchain_tools
-from .memory import get_chat_history, get_system_prompt
+from .memory import get_chat_history, get_chat_history_with_summary, get_system_prompt
 from .agent_router import get_agent_prompt_suffix
 from .callbacks import NivStreamingCallback, NivBillingCallback, NivLoggingCallback
 
@@ -139,7 +139,7 @@ def _build_messages(message: str, conversation_id: str = None, system_prompt: st
         pass
 
     if conversation_id:
-        history = get_chat_history(conversation_id)
+        history = get_chat_history_with_summary(conversation_id)
         messages.extend(history)
 
     messages.append(HumanMessage(content=message))
