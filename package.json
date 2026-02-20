@@ -1,0 +1,14 @@
+{
+  "name": "niv-ai-e2e",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:debug": "playwright test --debug",
+    "test:chat": "playwright test e2e/chat.spec.js",
+    "test:features": "playwright test e2e/features.spec.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.42.0"
+  }
+}
