@@ -664,13 +664,27 @@ def _make_mcp_executor(tool_name: str, input_schema: dict = None):
                 summary = f"📤 **SUBMIT** `{doctype}`: **{doc_name}**\n\n⚠️ Submitted documents cannot be easily modified!"
                 prompt_msg = "Ask the user to confirm submission by replying 'yes' or 'ha'. Reply 'no' to cancel."
             else:
-                # create/update
+                # create/update — show diff for updates
                 summary_parts = [f"📋 **{tool_name}** on `{doctype}`"]
                 if doc_name:
                     summary_parts[0] += f": **{doc_name}**"
+                # For updates, show old → new diff
+                old_values = {}
+                if tool_name == "update_document" and doc_name and doctype:
+                    try:
+                        old_values = {k: frappe.db.get_value(doctype, doc_name, k) for k in data.keys()}
+                    except Exception:
+                        pass
                 for k, v in list(data.items())[:8]:
                     val = str(v)[:100]
-                    summary_parts.append(f"  - {k}: {val}")
+                    if k in old_values and old_values[k] is not None:
+                        old_val = str(old_values[k])[:100]
+                        if old_val != val:
+                            summary_parts.append(f"  - {k}: `{old_val}` → `{val}`")
+                        else:
+                            summary_parts.append(f"  - {k}: `{val}` (no change)")
+                    else:
+                        summary_parts.append(f"  - {k}: `{val}`")
                 summary = "\n".join(summary_parts)
                 prompt_msg = "Tell the user what will be created/modified and ask them to reply 'yes' to confirm or 'no' to cancel."
             
