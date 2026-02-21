@@ -3942,30 +3942,30 @@ ${htmlCode}
      * Queue a sentence for TTS generation and playback.
      */
     async voice_queue_sentence_tts(sentence) {
+        // Use raw fetch (faster than frappe.call - no jQuery overhead)
         try {
-            const r = await frappe.call({
-                method: "niv_ai.niv_core.api.voice.stream_tts",
-                args: { text: sentence },
+            const resp = await fetch('/api/method/niv_ai.niv_core.api.voice.stream_tts', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Frappe-CSRF-Token': frappe.csrf_token,
+                },
+                body: JSON.stringify({ text: sentence }),
+                credentials: 'include',
             });
-            if (r.message && r.message.audio_url) {
-                this.voiceAudioQueue.push(r.message.audio_url);
-                if (!this.voiceIsPlaying) {
-                    this.voice_play_next_in_queue();
-                }
-            } else if (r.message && r.message.engine === "browser") {
-                // Browser TTS fallback for this sentence
+            const data = await resp.json();
+            const msg = data.message;
+            if (msg && msg.audio_url) {
+                this.voiceAudioQueue.push(msg.audio_url);
+                if (!this.voiceIsPlaying) this.voice_play_next_in_queue();
+            } else {
                 this.voiceAudioQueue.push({ browser_tts: sentence });
-                if (!this.voiceIsPlaying) {
-                    this.voice_play_next_in_queue();
-                }
+                if (!this.voiceIsPlaying) this.voice_play_next_in_queue();
             }
         } catch (e) {
-            console.warn("stream_tts call failed:", e);
-            // Queue browser TTS as fallback
+            console.warn('stream_tts fetch failed:', e);
             this.voiceAudioQueue.push({ browser_tts: sentence });
-            if (!this.voiceIsPlaying) {
-                this.voice_play_next_in_queue();
-            }
+            if (!this.voiceIsPlaying) this.voice_play_next_in_queue();
         }
     }
 
