@@ -3389,7 +3389,17 @@ ${htmlCode}
 
         this.set_voice_state("processing");
 
-        // Phase 3: Send audio to server for Faster-Whisper STT (accurate, multilingual)
+        // FAST PATH: If browser STT captured text, use it immediately (skip server STT = saves 2-3s)
+        const browserText = (this.voiceBrowserTranscript || "").trim();
+        
+        if (browserText) {
+            // Browser STT available — go straight to streaming (fastest path)
+            this.$voiceTranscript.text(browserText);
+            this.voice_send_streaming(browserText);
+            return;
+        }
+        
+        // SLOW PATH: No browser transcript — fall back to server STT
         try {
             const blob = new Blob(this.voiceAudioChunks, { type: this.voiceAudioChunks[0]?.type || "audio/webm" });
             const reader = new FileReader();
@@ -3399,14 +3409,8 @@ ${htmlCode}
                 reader.readAsDataURL(blob);
             });
             
-            // Show browser transcript as interim while server processes
-            if (this.voiceBrowserTranscript && this.voiceBrowserTranscript.trim()) {
-                this.$voiceTranscript.html(
-                    '<span style="opacity:0.6">' + this.voiceBrowserTranscript + '</span> <span style="font-size:0.8em">⏳</span>'
-                );
-            }
+            this.$voiceTranscript.html('<span style="opacity:0.6">Listening...</span>');
             
-            // Call server STT (Faster-Whisper)
             const sttResult = await frappe.call({
                 method: "niv_ai.niv_core.api.voice.stt_from_base64",
                 args: { audio_base64: base64Data },
@@ -3414,30 +3418,17 @@ ${htmlCode}
             
             const serverTranscript = (sttResult.message && sttResult.message.text) ? sttResult.message.text.trim() : "";
             
-            // Use server transcript if available, fall back to browser
-            const transcript = serverTranscript || (this.voiceBrowserTranscript || "").trim();
-            
-            if (!transcript) {
+            if (!serverTranscript) {
                 this.set_voice_state("error", "Couldn't understand. Try again.");
                 return;
             }
             
-            // Show final transcript
-            this.$voiceTranscript.text(transcript);
-            
-            // Use streaming voice mode
-            this.voice_send_streaming(transcript);
+            this.$voiceTranscript.text(serverTranscript);
+            this.voice_send_streaming(serverTranscript);
             return;
             
         } catch (sttErr) {
             console.warn("Server STT failed:", sttErr);
-            // Fall back to browser transcript
-            const fallback = (this.voiceBrowserTranscript || "").trim();
-            if (fallback) {
-                this.$voiceTranscript.text(fallback);
-                this.voice_send_streaming(fallback);
-                return;
-            }
             this.set_voice_state("error", "STT failed. Try again.");
             return;
         }
