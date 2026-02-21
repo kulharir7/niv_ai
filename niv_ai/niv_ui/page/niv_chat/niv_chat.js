@@ -1245,6 +1245,11 @@ ${htmlCode}
             // Update badge text
             this.update_model_badge(displayName, providerName || "");
 
+            // Update header title and placeholder dynamically
+            this.widget_name = displayName;
+            this.wrapper.find(".niv-header-title").text(displayName);
+            this.$input.attr("placeholder", "Message " + displayName + "...");
+
             if (providerName) {
                 try {
                     const prov = await frappe.call({ method: "frappe.client.get", args: { doctype: "Niv AI Provider", name: providerName } });
@@ -2965,7 +2970,7 @@ ${htmlCode}
                 } else {
                     this.$lowBalanceWarning.hide();
                     this.$credits.css("color", "");
-                    this.$input.prop("disabled", false).attr("placeholder", "Message Niv AI...");
+                    this.$input.prop("disabled", false).attr("placeholder", "Message " + (this.widget_name || "Niv AI") + "...");
                     this.$sendBtn.prop("disabled", false);
                 }
             }
@@ -2982,7 +2987,7 @@ ${htmlCode}
             if (balance < 500 && balance > 0) {
                 this.$lowBalanceWarning.show();
                 this.$credits.css("color", "#f59e0b");
-                this.$input.prop("disabled", false).attr("placeholder", "Message Niv AI...");
+                this.$input.prop("disabled", false).attr("placeholder", "Message " + (this.widget_name || "Niv AI") + "...");
                 this.$sendBtn.prop("disabled", false);
             } else if (balance <= 0) {
                 this.$lowBalanceWarning.show();
@@ -2992,7 +2997,7 @@ ${htmlCode}
             } else {
                 this.$lowBalanceWarning.hide();
                 this.$credits.css("color", "");
-                this.$input.prop("disabled", false).attr("placeholder", "Message Niv AI...");
+                this.$input.prop("disabled", false).attr("placeholder", "Message " + (this.widget_name || "Niv AI") + "...");
                 this.$sendBtn.prop("disabled", false);
             }
         }
