@@ -64,7 +64,7 @@
         panel.className = "niv-panel";
         panel.innerHTML = [
             '<div class="niv-panel-header">',
-            '  <div class="niv-panel-title"><span class="niv-panel-avatar">N</span> Niv AI</div>',
+            '  <div class="niv-panel-title"><span class="niv-panel-avatar" id="niv-panel-avatar-el">N</span> <span id="niv-panel-title-text">Niv AI</span></div>',
             '  <div class="niv-panel-actions">',
             '    <button class="niv-panel-btn" id="niv-fullscreen" title="Full page"><i class="fa fa-external-link"></i></button>',
             '    <button class="niv-panel-btn" id="niv-close" title="Close"><i class="fa fa-times"></i></button>',
@@ -154,10 +154,14 @@
                             "/* Welcome screen */",
                             ".niv-welcome-container { flex: 1 !important; display: flex !important; flex-direction: column !important; justify-content: center !important; align-items: center !important; max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 20px !important; }",
                             "",
-                            "/* Empty state - force full width and proper colors */",
-                            ".niv-empty-state { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 40px 16px !important; }",
-                            ".niv-empty-state .empty-greeting { color: #1a1a1a !important; font-weight: 600 !important; }",
-                            ".niv-empty-state .empty-subtitle { color: #666666 !important; }",
+                            "/* Empty state - compact, centered, no excess whitespace */",
+                            ".niv-chat-messages { display: flex !important; flex-direction: column !important; justify-content: center !important; }",
+                            ".niv-chat-messages:has(.niv-message) { justify-content: flex-start !important; }",
+                            ".niv-empty-state { max-width: 100% !important; width: 100% !important; margin: 0 auto !important; padding: 20px 16px !important; flex-shrink: 0 !important; }",
+                            ".niv-empty-state .empty-orb { width: 52px !important; height: 52px !important; margin-bottom: 12px !important; }",
+                            ".niv-empty-state .empty-greeting { color: #1a1a1a !important; font-weight: 600 !important; font-size: 18px !important; margin-bottom: 4px !important; }",
+                            ".niv-empty-state .empty-subtitle { color: #666666 !important; font-size: 13px !important; margin-bottom: 16px !important; }",
+                            ".empty-suggestions { gap: 6px !important; padding: 0 8px !important; }",
                             "",
                             "/* User message - white text on dark bubble */",
                             ".niv-message.user .msg-content { background: #1a1a1a !important; color: #ffffff !important; }",
@@ -202,6 +206,34 @@
         });
 
         // SPA navigation — hide on chat page, show elsewhere
+        // Load dynamic widget title and avatar from Niv Settings
+        (function loadWidgetBranding() {
+            if (typeof frappe !== "undefined" && frappe.call) {
+                frappe.call({
+                    method: "frappe.client.get_value",
+                    args: { doctype: "Niv Settings", fieldname: ["widget_title", "widget_logo"] },
+                    async: true,
+                    callback: function(r) {
+                        if (r && r.message) {
+                            var title = r.message.widget_title || "Niv AI";
+                            var logo = r.message.widget_logo;
+                            var titleEl = document.getElementById("niv-panel-title-text");
+                            var avatarEl = document.getElementById("niv-panel-avatar-el");
+                            if (titleEl) titleEl.textContent = title;
+                            if (avatarEl) {
+                                if (logo) {
+                                    avatarEl.innerHTML = '<img src="' + logo + '" style="width:100%;height:100%;object-fit:cover;border-radius:inherit;" />';
+                                } else {
+                                    avatarEl.textContent = title.charAt(0).toUpperCase();
+                                }
+                            }
+                            if (fab) fab.title = title;
+                        }
+                    }
+                });
+            }
+        })();
+
         function checkRoute() {
             var onChat = window.location.pathname.indexOf("/app/niv-chat") === 0;
             root.style.display = onChat ? "none" : "block";
