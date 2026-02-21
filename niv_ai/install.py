@@ -54,33 +54,110 @@ def setup_provider(base_url, api_key, model="mistral-large-latest", fast_model="
 
 
 def after_migrate():
-    """Run after bench migrate — ensures defaults exist, re-discovers system"""
+    """Run after bench migrate — ensures defaults exist, fills missing fields, re-discovers system"""
     _create_settings()
+    _ensure_settings_defaults()
     frappe.db.commit()
     _run_auto_discovery()
 
 
+def _ensure_settings_defaults():
+    """Fill missing default values on existing Niv Settings (runs on every migrate).
+    Only sets values that are empty/None — never overwrites user's custom values."""
+    if not frappe.db.exists("Niv Settings", "Niv Settings"):
+        return
+
+    settings = frappe.get_single("Niv Settings")
+    changed = False
+
+    # Map of fieldname -> default value (only set if empty)
+    defaults = {
+        "widget_title": "Niv AI",
+        "widget_position": "bottom-right",
+        "widget_color": "#7C3AED",
+        "auto_open_artifacts": 1,
+        "max_tokens_per_message": 4096,
+        "max_messages_per_conversation": 50,
+        "enable_tools": 1,
+        "enable_widget": 1,
+        "enable_voice": 1,
+        "stt_engine": "auto",
+        "tts_engine": "auto",
+        "tts_language": "auto",
+        "default_voice": "auto",
+        "tts_model": "tts-1",
+        "voice_base_url": "https://api.openai.com/v1",
+        "tool_priority": "MCP First",
+        "rate_limit_per_hour": 500,
+        "rate_limit_per_day": 5000,
+        "rate_limit_message": "You have reached the message limit. Please try again later.",
+        "token_cost_input": 1.0,
+        "token_cost_output": 3.0,
+        "billing_mode": "Shared Pool",
+        "enable_vision": 1,
+        "vision_model": "gemma3:27b",
+        "vision_max_tokens": 2048,
+    }
+
+    for field, default in defaults.items():
+        current = getattr(settings, field, None)
+        # Only set if truly empty (None, empty string, or 0 for non-check fields)
+        if current is None or current == "":
+            setattr(settings, field, default)
+            changed = True
+
+    if changed:
+        settings.save(ignore_permissions=True)
+        print("  → Niv Settings: filled missing defaults")
+
+
 def _create_settings():
-    """Create Niv Settings singleton if not exists"""
+    """Create Niv Settings singleton if not exists, with comprehensive defaults"""
     if not frappe.db.exists("Niv Settings", "Niv Settings"):
         doc = frappe.get_doc({
             "doctype": "Niv Settings",
+            # AI Configuration
             "default_model": "mistral-small-latest",
             "max_tokens_per_message": 4096,
             "max_messages_per_conversation": 50,
             "enable_tools": 1,
             "enable_billing": 0,
             "enable_widget": 1,
+            "enable_knowledge_base": 1,
+            "tool_priority": "MCP First",
+            "system_prompt": DEFAULT_SYSTEM_PROMPT,
+            # Rate Limiting
+            "rate_limit_per_hour": 500,
+            "rate_limit_per_day": 5000,
+            "rate_limit_message": "You have reached the message limit. Please try again later.",
+            # Widget Settings
             "widget_position": "bottom-right",
             "widget_title": "Niv AI",
-            "widget_color": "#5e64ff",
+            "widget_color": "#7C3AED",
+            "auto_open_artifacts": 1,
+            # Billing
             "admin_allocation_only": 1,
-            "token_cost_input": 0.001,
-            "token_cost_output": 0.003,
-            "system_prompt": DEFAULT_SYSTEM_PROMPT,
+            "billing_mode": "Shared Pool",
+            "shared_pool_balance": 10000000,
+            "token_cost_input": 1.0,
+            "token_cost_output": 3.0,
+            "payment_currency": "INR",
+            "currency": "INR",
+            # Voice
+            "enable_voice": 1,
+            "stt_engine": "auto",
+            "tts_engine": "auto",
+            "tts_language": "auto",
+            "default_voice": "auto",
+            "tts_model": "tts-1",
+            "voice_base_url": "https://api.openai.com/v1",
+            # Vision
+            "enable_vision": 1,
+            "vision_model": "gemma3:27b",
+            "vision_max_tokens": 2048,
         })
         doc.insert(ignore_permissions=True)
-        print("  → Niv Settings created")
+        print("  → Niv Settings created with all defaults")
 
 
 def _seed_default_prompts():
