@@ -387,21 +387,25 @@ class NivChat {
     }
 
     toggle_sidebar(forceState) {
-        const isMobile = window.innerWidth <= 768;
-        const currentOpen = isMobile ? this.$sidebar.hasClass("open") : !this.$sidebar.hasClass("collapsed");
+        // mobile-sidebar-fix-v4
+        const isMobile = window.innerWidth <= 768 || this.isWidgetMode;
+        const currentOpen = this.$sidebar.hasClass("open");
         const nextState = typeof forceState === "boolean" ? forceState : !currentOpen;
 
-        if (isMobile || this.isWidgetMode) {
-            // Mobile/Widget mode: use .open and backdrop
+        if (isMobile) {
+            // Mobile: .open class controls visibility (CSS handles transform)
+            // Do NOT remove .collapsed — CSS .open overrides it via !important
             if (nextState) {
-                this.$sidebar.addClass("open").removeClass("collapsed");
+                this.$sidebar.addClass("open");
                 this.$sidebarBackdrop.show().addClass("visible");
+                document.body.style.overflow = "hidden"; // prevent bg scroll
             } else {
                 this.$sidebar.removeClass("open");
                 this.$sidebarBackdrop.removeClass("visible").hide();
+                document.body.style.overflow = "";
             }
         } else {
-            // Desktop mode: use .collapsed
+            // Desktop: use .collapsed
             if (nextState) {
                 this.$sidebar.removeClass("collapsed").removeClass("open");
             } else {

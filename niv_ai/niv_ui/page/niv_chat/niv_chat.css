@@ -3861,3 +3861,38 @@ body.niv-widget-mode .niv-message.user .msg-content { max-width: 90% !important;
         overscroll-behavior: contain;
     }
 }
+
+/* mobile-sidebar-fix-v4 — .open overrides .collapsed on mobile */
+@media (max-width: 768px) {
+    .niv-sidebar.open {
+        transform: translateX(0) !important;
+        width: 85vw !important;
+        max-width: 320px !important;
+        min-width: 0 !important;
+        padding: 0 !important;
+        overflow: visible !important;
+        box-shadow: 8px 0 32px rgba(0, 0, 0, 0.35) !important;
+    }
+    .niv-sidebar.open > * {
+        display: flex !important;
+        visibility: visible !important;
+    }
+    .niv-sidebar.collapsed.open {
+        transform: translateX(0) !important;
+        width: 85vw !important;
+        max-width: 320px !important;
+        overflow: visible !important;
+    }
+    .niv-sidebar.collapsed.open > * {
+        display: flex !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+    }
+}
+@media (max-width: 480px) {
+    .niv-sidebar.open,
+    .niv-sidebar.collapsed.open {
+        width: 100vw !important;
+        max-width: 100vw !important;
+    }
+}
