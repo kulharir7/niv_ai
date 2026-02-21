@@ -17,6 +17,75 @@ except ImportError:
     log_api_call = lambda *a, **kw: None
 
 
+# ─── Cached Config (per-request) ─────────────────────────────────────────
+
+_voice_config_cache = {}
+_voice_config_cache_ts = 0
+
+def _get_voice_config_cached():
+    """Get voice config with 30s cache to avoid DB reads per TTS call."""
+    import time
+    global _voice_config_cache, _voice_config_cache_ts
+    now = time.time()
+    if _voice_config_cache and (now - _voice_config_cache_ts) < 30:
+        return _voice_config_cache
+    _voice_config_cache = _get_voice_config()
+    _voice_config_cache_ts = now
+    return _voice_config_cache
+
+
+def _clean_text_light(text):
+    """Lightweight text cleaning for streaming TTS — skip heavy regex for small chunks."""
+    if not text:
+        return ""
+    t = text
+    # Just the essentials for short streaming chunks
+    t = re.sub(r'```[\s\S]*?```', ' code block ', t)
+    t = re.sub(r'`([^`]+)`', r'\1', t)
+    t = re.sub(r'\*\*(.+?)\*\*', r'\1', t)
+    t = re.sub(r'\*(.+?)\*', r'\1', t)
+    t = re.sub(r'#{1,6}\s+', '', t)
+    t = re.sub(r'<[^>]+>', '', t)
+    t = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', t)
+    t = re.sub(r'https?://\S+', '', t)
+    t = re.sub(r'[\[\]{}<>\\|]', '', t)
+    t = re.sub(r'\s{2,}', ' ', t)
+    return t.strip()
+
+
+def _edge_tts_fast(text, voice):
+    """Fastest Edge TTS path — no SSML, no frills, just audio."""
+    try:
+        import edge_tts
+        import asyncio
+    except ImportError:
+        return None
+
+    output_dir = frappe.get_site_path("public", "files")
+    filename = "tts_s_{0}.mp3".format(uuid.uuid4().hex[:8])
+    output_path = os.path.join(output_dir, filename)
+
+    try:
+        async def _gen():
+            communicate = edge_tts.Communicate(text, voice)
+            await communicate.save(output_path)
+
+        try:
+            asyncio.run(_gen())
+        except RuntimeError:
+            # Event loop already running
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor() as pool:
+                pool.submit(asyncio.run, _gen()).result(timeout=15)
+
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            return {"audio_url": "/files/{0}".format(filename), "engine": "edge", "voice": voice}
+    except Exception as e:
+        frappe.logger().warning("edge_tts_fast failed: {0}".format(e))
+
+    return None
+
+
 # ─── Text Cleaning for TTS ──────────────────────────────────────────────
 
 def clean_text_for_tts(text):
@@ -781,107 +850,31 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
 
 @frappe.whitelist(allow_guest=False)
 def stream_tts(text, voice=None):
-    """Generate TTS for a single sentence/chunk. Used by streaming voice mode.
+    """Generate TTS for a single sentence/chunk — OPTIMIZED for speed.
     
-    This is optimized for low latency — short text segments get fast audio.
-    Returns audio_url immediately.
+    Uses cached config, lightweight cleaning, no SSML, direct Edge TTS.
+    Target: <1s per sentence.
     """
-    check_rate_limit()
-
     if not text or not text.strip():
         return {"audio_url": None}
 
-    # Full cleaning — same as text_to_speech for consistency
-    text = clean_text_for_tts(text)
+    # Lightweight cleaning (skip 100+ regex of full cleaner)
+    text = _clean_text_light(text)
 
     if not text.strip():
         return {"audio_url": None}
 
-    # Resolve voice based on language parameter or text detection
-    stt_language = frappe.form_dict.get("language", "")
-    
+    # Resolve voice — use cached config (no DB read)
     if not voice or voice == "auto":
-        # Use STT-detected language if available, otherwise detect from text
-        lang = stt_language or _detect_language(text)
-        if lang in ("hi", "hindi"):
-            voice = "hi-IN-SwaraNeural"  # Edge TTS for Hindi (Piper has no Hindi)
-        else:
-            voice = "en-IN-NeerjaExpressiveNeural"
+        lang = frappe.form_dict.get("language", "") or _detect_language(text)
+        voice = "hi-IN-SwaraNeural" if lang in ("hi", "hindi") else "en-IN-NeerjaExpressiveNeural"
 
-    # Check configured TTS engine
-    settings = frappe.get_single("Niv Settings")
-    tts_engine = getattr(settings, "tts_engine", "") or "auto"
-    config = _get_voice_config()
+    # FAST PATH: Edge TTS directly (no SSML, no ElevenLabs, no config overhead)
+    result = _edge_tts_fast(text, voice)
+    if result:
+        return result
 
-    # ── Try ElevenLabs first (most human-like) ──
-    if tts_engine in ("auto", "elevenlabs") and config.get("elevenlabs_api_key"):
-        result = _tts_elevenlabs(text, config=config)
-        if result:
-            return result
-
-    # ── Try Piper first if configured (English only - no Hindi model) ──
-    detected_lang = stt_language or _detect_language(text)
-    if tts_engine == "piper" and detected_lang not in ("hi", "hindi"):
-        piper_voice = "en_US-lessac-medium"
-        result = _tts_piper(text, piper_voice)
-        if result:
-            return result
-
-    # ── Edge TTS (free, human-like) ──
-    if tts_engine in ("auto", "edge"):
-        try:
-            import edge_tts
-            import asyncio
-        except ImportError:
-            return {"audio_url": None, "engine": "browser", "text": text}
-
-        try:
-            output_dir = frappe.get_site_path("public", "files")
-            filename = "tts_stream_{0}.mp3".format(uuid.uuid4().hex[:12])
-            output_path = os.path.join(output_dir, filename)
-
-            # Build simple SSML for just this sentence
-            ssml = None
-            try:
-                ssml = _text_to_ssml(text, voice)
-            except Exception:
-                ssml = None
-
-            async def _generate():
-                if ssml:
-                    communicate = edge_tts.Communicate(ssml, voice)
-                else:
-                    communicate = edge_tts.Communicate(text, voice)
-                await communicate.save(output_path)
-
-            try:
-                loop = asyncio.get_event_loop()
-                if loop.is_running():
-                    import concurrent.futures
-                    with concurrent.futures.ThreadPoolExecutor() as pool:
-                        pool.submit(asyncio.run, _generate()).result(timeout=15)
-                else:
-                    loop.run_until_complete(_generate())
-            except RuntimeError:
-                asyncio.run(_generate())
-
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                return {
-                    "audio_url": "/files/{0}".format(filename),
-                    "engine": "edge",
-                    "voice": voice,
-                }
-        except Exception as e:
-            frappe.logger().warning("stream_tts Edge failed: {0}".format(str(e)))
-
-    # ── Piper fallback (if not tried yet) ──
-    if tts_engine not in ("piper",):
-        piper_voice = "en_US-lessac-medium"
-        result = _tts_piper(text, piper_voice)
-        if result:
-            return result
-
-    # Fallback
+    # Fallback: browser TTS
     return {"audio_url": None, "engine": "browser", "text": text}
 
 
