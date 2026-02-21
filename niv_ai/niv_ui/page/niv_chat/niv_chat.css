@@ -3349,7 +3349,7 @@ body.niv-dark-mode .niv-header-actions .btn:hover { color: var(--niv-text); }
     border-radius: 14px;
     padding: 16px 18px;
 }
-.niv-settings-credit-info { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; color: var(--niv-text, #1a1a2e); }
+.niv-settings-credit-info { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 700; color: var(--niv-text, #e5e7eb); }
 .niv-settings-credit-info .credit-amount { color: #7c3aed; font-size: 22px; }
 .niv-settings-credit-info .credit-label { font-size: 13px; font-weight: 400; color: #94a3b8; }
 .niv-settings-credit-icon { font-size: 22px; }
@@ -3459,6 +3459,11 @@ body.niv-dark-mode .niv-settings-link-btn { background: #16213e; border-color: #
 body.niv-dark-mode .niv-settings-link-btn:hover { background: #1e293b; color: #e2e8f0; }
 body.niv-dark-mode .niv-settings-panel .niv-sidebar-model-btn { background: #16213e; border-color: #2d3748; color: #e2e8f0; }
 body.niv-dark-mode .niv-settings-panel .niv-sidebar-model-btn:hover { border-color: #7c3aed; box-shadow: 0 0 0 2px rgba(124,58,237,0.15); }
+body.niv-dark-mode .niv-settings-section-title { color: #94a3b8; }
+body.niv-dark-mode .niv-settings-credit-info { color: #e5e7eb; }
+body.niv-dark-mode .niv-mcp-server-name { color: #e5e7eb; }
+body.niv-dark-mode .niv-settings-content { color: #e5e7eb; }
+
 
 @media (max-width: 900px) {
     .niv-settings-panel { inset: 0; border-radius: 0; }
