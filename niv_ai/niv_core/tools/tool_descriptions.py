@@ -240,7 +240,7 @@ TOOL_ENHANCEMENTS = {
             "BULK OPERATIONS: For batch update/create/delete, use:\n"
             "  from niv_ai.niv_core.tools.bulk_ops import bulk_update, bulk_create, bulk_delete\n"
             "  result = bulk_update('Loan', {'status': 'Active', 'branch': 'Mumbai'}, {'status': 'Closed'}, dry_run=True)\n"
-            "  Always call with dry_run=True first to preview, then dry_run=False to apply."
+            "  Always call with dry_run=True first to preview, then dry_run=False to apply.\n\nBULK IMPORT FROM EXCEL: When user uploads Excel/CSV and wants to import data into ERPNext:\n  from niv_ai.niv_core.tools.bulk_import import preview_import, execute_import\n  result = preview_import(file_url, doctype)  # Preview and validate first\n  result = execute_import(file_url, doctype, skip_errors=True)  # Then create documents\n  file_url = uploaded file URL. Auto-maps Excel columns to DocType fields.\n\nDOCUMENT GENERATION: For PDFs (loan agreement, receipt, SOA, letters):\n  from niv_ai.niv_core.tools.doc_generator import generate_document\n  result = generate_document(template_type, context_dict)"
         ),
     },
 
