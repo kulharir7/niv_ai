@@ -217,6 +217,13 @@
    "description": "Logo shown in chat header (recommended: 32x32 or 40x40 px)"
   },
   {
+   "fieldname": "auto_open_artifacts",
+   "fieldtype": "Check",
+   "label": "Auto-Open Artifacts Panel",
+   "default": "1",
+   "description": "Automatically open artifacts panel when AI generates code/apps. Uncheck to keep it closed."
+  },
+  {
    "fieldname": "widget_color",
    "fieldtype": "Color",
    "label": "Widget Color",
@@ -576,7 +583,7 @@
  ],
  "issingle": 1,
  "links": [],
- "modified": "2026-02-21 14:34:00.000000",
+ "modified": "2026-02-21 14:42:00.000000",
  "modified_by": "Administrator",
  "module": "Niv Core",
  "name": "Niv Settings",

@@ -893,8 +893,8 @@ class NivChat {
     }
 
     async auto_create_artifact(prompt) {
-        // Auto-open panel
-        if (!this.artifacts_open) {
+        // Auto-open panel (respects setting)
+        if (!this.artifacts_open && this._auto_open_artifacts !== false) {
             this.toggle_artifacts_panel(true);
         }
 
@@ -923,8 +923,8 @@ class NivChat {
     }
 
     async auto_create_artifact_from_response(htmlContent) {
-        // Auto-open panel
-        if (!this.artifacts_open) {
+        // Auto-open panel (respects setting)
+        if (!this.artifacts_open && this._auto_open_artifacts !== false) {
             this.toggle_artifacts_panel(true);
         }
 
@@ -1253,6 +1253,7 @@ ${htmlCode}
             // Update header logo if set
             const logoUrl = s.widget_logo;
             this._bot_logo_url = logoUrl || "";
+            this._auto_open_artifacts = s.auto_open_artifacts !== 0;
             const $header = this.wrapper.find(".niv-chat-header");
             $header.find(".niv-header-logo").remove();
             if (logoUrl) {
@@ -1809,7 +1810,7 @@ ${htmlCode}
         console.log('[ART-DBG] append_message', { role, isUser, _isHtml, contentLen: (content||'').length, first80: (content||'').substring(0,80) });
         if (_isHtml) {
             // Open panel WITHOUT loading artifacts from DB (avoids overwriting preview with stale placeholder)
-            if (!this.artifacts_open) {
+            if (!this.artifacts_open && this._auto_open_artifacts !== false) {
                 this.artifacts_open = true;
                 this.wrapper.find(".niv-main").addClass("niv-artifacts-open");
                 this.$artifactPanel.show();
