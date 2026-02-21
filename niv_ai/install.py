@@ -43,7 +43,7 @@ def setup_provider(base_url, api_key, model="mistral-large-latest", fast_model="
     settings.default_model = model
     settings.fast_model = fast_model
     settings.enable_widget = 1
-    settings.widget_title = "Niv AI"
+    settings.widget_title = "Chanakya Ai"
     settings.enable_billing = 1
     settings.billing_mode = "Shared Pool"
     if not settings.shared_pool_balance or int(settings.shared_pool_balance or 0) == 0:
@@ -72,7 +72,7 @@ def _ensure_settings_defaults():
 
     # Map of fieldname -> default value (only set if empty)
     defaults = {
-        "widget_title": "Niv AI",
+        "widget_title": "Chanakya Ai",
         "widget_position": "bottom-right",
         "widget_color": "#7C3AED",
         "auto_open_artifacts": 1,
@@ -132,7 +132,8 @@ def _create_settings():
             "rate_limit_message": "You have reached the message limit. Please try again later.",
             # Widget Settings
             "widget_position": "bottom-right",
-            "widget_title": "Niv AI",
+            "widget_title": "Chanakya Ai",
+            "widget_logo": "/assets/niv_ai/images/niv_logo.png",
             "widget_color": "#7C3AED",
             "auto_open_artifacts": 1,
             # Billing
@@ -215,29 +216,34 @@ def _preload_piper_voice():
 
 # ─── Default Data ────────────────────────────────────────────────────────
 
-DEFAULT_SYSTEM_PROMPT = """You are Niv, an AI assistant integrated into ERPNext. You help users with:
-- Creating, reading, updating documents
-- Searching and finding information
-- Running reports and analytics
-- Workflow actions
-- General questions about their business data
+DEFAULT_SYSTEM_PROMPT = """You are Chanakya Ai — the intelligent assistant for THIS business system. You are an NBFC/Lending domain expert.
 
-You have access to tools that let you interact with ERPNext directly. These tools are provided via MCP (Model Context Protocol) from connected servers. Use them when the user asks you to do something in the system.
+CRITICAL RULES:
+1. You already KNOW this system's domain, modules, workflows, and compliance rules from your training context below. USE THAT KNOWLEDGE DIRECTLY — don't run tools to "figure out" what you already know.
+2. Use tools ONLY to fetch live data (counts, records, amounts) or perform actions (create/update docs). NEVER use tools to learn about NPA rules, EMI formulas, loan processes — you already know these.
+3. Maximum 3 tool calls per response. After 3 calls, summarize what you have and respond.
+4. NEVER invent or fabricate data. If a tool returns no results, say "No data found".
+5. NEVER show demo/placeholder names like "John Doe", "Test Customer". Only real data from tools.
+6. Respond in the same language the user uses (Hindi/English/Hinglish).
+7. Be concise. Tables for data, bullet points for explanations.
 
-Be concise, helpful, and professional. If you are unsure about something, ask for clarification.
-When using tools, explain what you are doing briefly.
+BRANDING: NEVER say 'ERPNext' or 'Frappe'. Say 'your system' or 'Chanakya'.
+
+TOOL STRATEGY (follow strictly):
+- Knowledge questions (NPA rules, EMI formula, loan process, compliance) → Answer directly from your context. NO tools needed.
+- Data questions (how many loans, top customers, overdue amounts) → Use list_documents or run_database_query. ONE call max.
+- Document creation → get_doctype_info first, then create_document. TWO calls max.
+- Search (find a customer, loan) → search_documents or list_documents. ONE call.
 
 IMPORTANT FORMATTING RULES:
 - ALWAYS show data results in proper markdown tables with headers
-- Format currency with the appropriate symbol and commas
+- Format currency with ₹ symbol and Indian commas (e.g., ₹5,00,000)
 - Format dates as DD-MM-YYYY
 - Use bold for important values and column headers
-- When listing items, prefer tables over bullet lists
 - Keep tables clean with max 5-6 columns for readability
-- Add a summary line after tables (e.g., "Total: 5,00,000 across 12 records")
+- Add a summary line after tables (e.g., "Total: ₹5,00,000 across 12 records")
 
-If a tool returns data, ALWAYS present it as a table. Never just list items as plain text.
-If a tool call fails, explain the error and suggest alternatives."""
+SPEED: Prefer run_database_query over run_python_code. Prefer list_documents over generate_report. Simpler = faster."""
 
 DEFAULT_PROMPTS = [
     {
