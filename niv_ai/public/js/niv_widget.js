@@ -6,6 +6,42 @@
 (function () {
     "use strict";
 
+    // PWA: Inject manifest + meta tags
+    (function() {
+        if (document.getElementById("pwa-manifest-link")) return;
+        var link = document.createElement("link");
+        link.id = "pwa-manifest-link";
+        link.rel = "manifest";
+        link.href = "/assets/niv_ai/manifest.json";
+        document.head.appendChild(link);
+
+        var metas = [
+            {name: "mobile-web-app-capable", content: "yes"},
+            {name: "apple-mobile-web-app-capable", content: "yes"},
+            {name: "apple-mobile-web-app-status-bar-style", content: "black-translucent"},
+            {name: "apple-mobile-web-app-title", content: "Chanakya AI"},
+            {name: "theme-color", content: "#7c3aed"},
+            {name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"}
+        ];
+        metas.forEach(function(m) {
+            if (!document.querySelector('meta[name="' + m.name + '"]')) {
+                var meta = document.createElement("meta");
+                meta.name = m.name;
+                meta.content = m.content;
+                document.head.appendChild(meta);
+            }
+        });
+
+        // Apple touch icon
+        if (!document.querySelector('link[rel="apple-touch-icon"]')) {
+            var icon = document.createElement("link");
+            icon.rel = "apple-touch-icon";
+            icon.href = "/assets/niv_ai/images/niv-icon-192.png";
+            document.head.appendChild(icon);
+        }
+    })();
+
+
     if (typeof frappe === "undefined") return;
 
     function init() {
