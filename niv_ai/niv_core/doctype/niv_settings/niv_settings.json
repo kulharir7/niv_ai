@@ -1,588 +1,594 @@
 {
-  "actions": [],
-  "creation": "2026-02-09 00:00:00",
-  "doctype": "DocType",
-  "engine": "InnoDB",
-  "field_order": [
-    "ai_section",
-    "default_provider",
-    "default_model",
-    "fast_model",
-    "system_prompt",
-    "max_tokens_per_message",
-    "max_messages_per_conversation",
-    "column_break_ai",
-    "enable_a2a",
-    "enable_tools",
-    "enable_billing",
-    "enable_widget",
-    "enable_knowledge_base",
-    "tool_priority",
-    "per_user_tool_permissions",
-    "rate_limit_section",
-    "rate_limit_per_hour",
-    "rate_limit_per_day",
-    "column_break_rate_limit",
-    "rate_limit_message",
-    "widget_section",
-    "widget_position",
-    "widget_title",
-    "widget_color",
-    "column_break_widget",
-    "allowed_roles",
-    "billing_section",
-    "billing_mode",
-    "shared_pool_balance",
-    "shared_pool_used",
-    "per_user_daily_limit",
-    "admin_allocation_only",
-    "token_cost_input",
-    "token_cost_output",
-    "column_break_billing",
-    "payment_currency",
-    "currency",
-    "voice_section",
-    "enable_voice",
-    "stt_engine",
-    "tts_engine",
-    "column_break_voice",
-    "tts_voice",
-    "tts_language",
-    "auto_play_response",
-    "voice_api_section",
-    "voice_api_key",
-    "voice_base_url",
-    "column_break_voice_api",
-    "default_voice",
-    "tts_model",
-    "elevenlabs_section",
-    "elevenlabs_api_key",
-    "column_break_elevenlabs",
-    "elevenlabs_voice_en",
-    "elevenlabs_voice_hi",
-    "image_section",
-    "enable_vision",
-    "vision_model",
-    "vision_max_tokens",
-    "enable_image_generation",
-    "image_api_key",
-    "column_break_image",
-    "image_api_url",
-    "telegram_section",
-    "telegram_bot_token",
-    "telegram_webhook_url",
-    "telegram_bot_username",
-    "column_break_telegram",
-    "telegram_secret_token",
-    "telegram_live_stream",
-    "advanced_section",
-    "advanced_help"
-  ],
-  "fields": [
-    {
-      "fieldname": "ai_section",
-      "fieldtype": "Section Break",
-      "label": "AI Configuration"
-    },
-    {
-      "fieldname": "default_provider",
-      "fieldtype": "Link",
-      "label": "Default Provider",
-      "options": "Niv AI Provider"
-    },
-    {
-      "fieldname": "default_model",
-      "fieldtype": "Data",
-      "label": "Default Model",
-      "description": "Primary model for complex queries requiring tools (e.g. mistral-large-latest)"
-    },
-    {
-      "fieldname": "fast_model",
-      "fieldtype": "Data",
-      "label": "Fast Model",
-      "description": "Lightweight model for simple queries like greetings, thanks, yes/no (e.g. mistral-small-latest). Leave blank to always use Default Model."
-    },
-    {
-      "fieldname": "system_prompt",
-      "fieldtype": "Text",
-      "label": "Default System Prompt",
-      "default": "You are Niv AI, a helpful assistant integrated with ERPNext. You can help users with their business data, create documents, generate reports, and answer questions. Be concise and helpful."
-    },
-    {
-      "fieldname": "max_tokens_per_message",
-      "fieldtype": "Int",
-      "label": "Max Tokens Per Message",
-      "default": "4096"
-    },
-    {
-      "fieldname": "max_messages_per_conversation",
-      "fieldtype": "Int",
-      "label": "Max Messages in Context",
-      "default": "50"
-    },
-    {
-      "fieldname": "column_break_ai",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "enable_tools",
-      "fieldtype": "Check",
-      "label": "Enable Tools",
-      "default": "1"
-    },
-    {
-      "fieldname": "enable_billing",
-      "fieldtype": "Check",
-      "label": "Enable Billing",
-      "default": "0"
-    },
-    {
-      "fieldname": "enable_widget",
-      "fieldtype": "Check",
-      "label": "Enable Floating Widget",
-      "default": "1"
-    },
-    {
-      "fieldname": "enable_knowledge_base",
-      "fieldtype": "Check",
-      "label": "Enable Knowledge Base (RAG)",
-      "default": "0"
-    },
-    {
-      "fieldname": "tool_priority",
-      "fieldtype": "Select",
-      "label": "Tool Priority",
-      "options": "MCP First\nNative First",
-      "default": "MCP First",
-      "description": "MCP First: Use MCP server tools (like FAC) before native tools. Best when FAC is installed. Native First: Use built-in Niv tools first."
-    },
-    {
-      "fieldname": "per_user_tool_permissions",
-      "fieldtype": "Check",
-      "label": "Per-User Tool Permissions",
-      "default": "0",
-      "description": "When enabled, AI tool calls use each user's own API credentials. Tool results will respect ERPNext role permissions \u2014 users only see data they have access to. API keys are auto-generated on first chat."
-    },
-    {
-      "fieldname": "rate_limit_section",
-      "fieldtype": "Section Break",
-      "label": "Rate Limiting"
-    },
-    {
-      "fieldname": "rate_limit_per_hour",
-      "fieldtype": "Int",
-      "label": "Messages per Hour (per user)",
-      "default": "60",
-      "description": "Max messages a user can send per hour. 0 = unlimited."
-    },
-    {
-      "fieldname": "rate_limit_per_day",
-      "fieldtype": "Int",
-      "label": "Messages per Day (per user)",
-      "default": "500",
-      "description": "Max messages a user can send per day. 0 = unlimited."
-    },
-    {
-      "fieldname": "column_break_rate_limit",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "rate_limit_message",
-      "fieldtype": "Data",
-      "label": "Rate Limit Message",
-      "default": "You have reached the message limit. Please try again later."
-    },
-    {
-      "fieldname": "widget_section",
-      "fieldtype": "Section Break",
-      "label": "Widget Settings"
-    },
-    {
-      "fieldname": "widget_position",
-      "fieldtype": "Select",
-      "label": "Widget Position",
-      "options": "bottom-right\nbottom-left",
-      "default": "bottom-right"
-    },
-    {
-      "fieldname": "widget_title",
-      "fieldtype": "Data",
-      "label": "Widget Title",
-      "default": "Niv AI"
-    },
-    {
-      "fieldname": "widget_color",
-      "fieldtype": "Color",
-      "label": "Widget Color",
-      "default": "#7C3AED"
-    },
-    {
-      "fieldname": "column_break_widget",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "allowed_roles",
-      "fieldtype": "Table",
-      "label": "Allowed Roles",
-      "options": "Has Role"
-    },
-    {
-      "fieldname": "billing_section",
-      "fieldtype": "Section Break",
-      "label": "Billing Settings"
-    },
-    {
-      "fieldname": "billing_mode",
-      "fieldtype": "Select",
-      "label": "Billing Mode",
-      "options": "Per User\nShared Pool",
-      "default": "Shared Pool",
-      "depends_on": "enable_billing",
-      "description": "Per User: each user has own wallet. Shared Pool: one company pool, all users consume from it."
-    },
-    {
-      "fieldname": "shared_pool_balance",
-      "fieldtype": "Int",
-      "label": "Shared Pool Balance",
-      "default": "0",
-      "depends_on": "eval:doc.enable_billing && doc.billing_mode=='Shared Pool'",
-      "description": "Total tokens available in shared pool"
-    },
-    {
-      "fieldname": "shared_pool_used",
-      "fieldtype": "Int",
-      "label": "Shared Pool Used",
-      "default": "0",
-      "read_only": 1,
-      "depends_on": "eval:doc.enable_billing && doc.billing_mode=='Shared Pool'"
-    },
-    {
-      "fieldname": "per_user_daily_limit",
-      "fieldtype": "Int",
-      "label": "Per User Daily Limit",
-      "default": "0",
-      "depends_on": "eval:doc.enable_billing && doc.billing_mode=='Shared Pool'",
-      "description": "Max tokens per user per day (0 = unlimited)"
-    },
-    {
-      "fieldname": "admin_allocation_only",
-      "fieldtype": "Check",
-      "label": "Admin Allocation Only",
-      "default": "1",
-      "depends_on": "eval:doc.enable_billing && doc.billing_mode=='Per User'"
-    },
-    {
-      "fieldname": "token_cost_input",
-      "fieldtype": "Float",
-      "label": "Cost per 1K Input Tokens",
-      "default": "1"
-    },
-    {
-      "fieldname": "token_cost_output",
-      "fieldtype": "Float",
-      "label": "Cost per 1K Output Tokens",
-      "default": "3"
-    },
-    {
-      "fieldname": "column_break_billing",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "payment_currency",
-      "fieldtype": "Data",
-      "label": "Payment Currency",
-      "default": "INR"
-    },
-    {
-      "fieldname": "erp_billing_section",
-      "fieldtype": "Section Break",
-      "label": "Growth Billing",
-      "description": "Connect to Growth System ERPNext for billing. Recharge creates Sales Order. Tokens credited on SO submit via webhook.",
-      "collapsible": 1
-    },
-    {
-      "fieldname": "billing_erp_url",
-      "fieldtype": "Data",
-      "label": "Vendor ERPNext URL",
-      "description": "e.g. https://erp.yourcompany.com"
-    },
-    {
-      "fieldname": "billing_erp_api_key",
-      "fieldtype": "Data",
-      "label": "API Key"
-    },
-    {
-      "fieldname": "billing_erp_api_secret",
-      "fieldtype": "Password",
-      "label": "API Secret"
-    },
-    {
-      "fieldname": "column_break_erp_billing",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "billing_erp_customer",
-      "fieldtype": "Data",
-      "label": "Customer Name",
-      "default": "Niv AI Customer",
-      "description": "Customer name on Growth ERPNext (must exist there)"
-    },
-    {
-      "fieldname": "billing_erp_item",
-      "fieldtype": "Data",
-      "label": "Item Code",
-      "default": "Niv AI Token Recharge",
-      "description": "Item code on Growth ERPNext (must exist there)"
-    },
-    {
-      "fieldname": "billing_erp_webhook_secret",
-      "fieldtype": "Password",
-      "label": "Webhook Secret",
-      "description": "Shared secret for verifying webhook callbacks from vendor ERPNext"
-    },
-    {
-      "fieldname": "currency",
-      "fieldtype": "Data",
-      "label": "Currency (Legacy)",
-      "default": "INR",
-      "hidden": 1
-    },
-    {
-      "fieldname": "voice_section",
-      "fieldtype": "Section Break",
-      "label": "Voice Settings"
-    },
-    {
-      "fieldname": "enable_voice",
-      "fieldtype": "Check",
-      "label": "Enable Voice Features",
-      "default": "1"
-    },
-    {
-      "fieldname": "stt_engine",
-      "fieldtype": "Select",
-      "label": "STT Engine",
-      "options": "auto\nmistral\nwhisper\nbrowser",
-      "default": "auto",
-      "description": "Auto uses Mistral STT if available, falls back to browser"
-    },
-    {
-      "fieldname": "tts_engine",
-      "fieldtype": "Select",
-      "label": "TTS Engine",
-      "options": "auto\nedge\npiper\nopenai\nbrowser",
-      "default": "auto",
-      "description": "Edge TTS (free, best quality), Piper (offline), OpenAI (paid), Browser (fallback)"
-    },
-    {
-      "fieldname": "column_break_voice",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "tts_voice",
-      "fieldtype": "Data",
-      "label": "TTS Voice"
-    },
-    {
-      "fieldname": "tts_language",
-      "fieldtype": "Select",
-      "label": "TTS Language",
-      "options": "en\nhi\nauto",
-      "default": "en"
-    },
-    {
-      "fieldname": "auto_play_response",
-      "fieldtype": "Check",
-      "label": "Auto-Play AI Responses",
-      "default": "0"
-    },
-    {
-      "fieldname": "voice_api_section",
-      "fieldtype": "Section Break",
-      "label": "Voice API (OpenAI TTS/STT)"
-    },
-    {
-      "fieldname": "voice_api_key",
-      "fieldtype": "Password",
-      "label": "Voice API Key",
-      "description": "OpenAI API key for TTS/STT. If blank, uses default provider's key."
-    },
-    {
-      "fieldname": "voice_base_url",
-      "fieldtype": "Data",
-      "label": "Voice API Base URL",
-      "default": "https://api.openai.com/v1",
-      "description": "Base URL for TTS/STT API (OpenAI-compatible)"
-    },
-    {
-      "fieldname": "column_break_voice_api",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "default_voice",
-      "fieldtype": "Select",
-      "label": "Default TTS Voice",
-      "options": "auto\nen-US-JennyNeural\nhi-IN-SwaraNeural\nen-US-lessac-medium\nhi_IN-swara-medium\nalloy\nnova",
-      "default": "auto",
-      "description": "Edge: *Neural, Piper: lang-voice-quality, OpenAI: alloy/nova"
-    },
-    {
-      "fieldname": "tts_model",
-      "fieldtype": "Select",
-      "label": "TTS Model",
-      "options": "tts-1\ntts-1-hd",
-      "default": "tts-1"
-    },
-    {
-      "fieldname": "elevenlabs_section",
-      "fieldtype": "Section Break",
-      "label": "ElevenLabs TTS (Human-like Voice)",
-      "collapsible": 1
-    },
-    {
-      "fieldname": "elevenlabs_api_key",
-      "fieldtype": "Password",
-      "label": "ElevenLabs API Key",
-      "description": "Get from elevenlabs.io \u2192 Profile \u2192 API Keys. When set, ElevenLabs becomes primary TTS."
-    },
-    {
-      "fieldname": "column_break_elevenlabs",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "elevenlabs_voice_en",
-      "fieldtype": "Data",
-      "label": "ElevenLabs Voice ID (English)",
-      "description": "Voice ID for English. Default: Rachel (21m00Tcm4TlvDq8ikWAM)"
-    },
-    {
-      "fieldname": "elevenlabs_voice_hi",
-      "fieldtype": "Data",
-      "label": "ElevenLabs Voice ID (Hindi)",
-      "description": "Voice ID for Hindi. Use multilingual voices. Default: same as English."
-    },
-    {
-      "fieldname": "image_section",
-      "fieldtype": "Section Break",
-      "label": "Vision & Image"
-    },
-    {
-      "fieldname": "enable_vision",
-      "fieldtype": "Check",
-      "label": "Enable Vision (OCR/Image Understanding)",
-      "default": "0",
-      "description": "When enabled, uploaded images are processed by the Vision Model for OCR and understanding before passing to the main AI model."
-    },
-    {
-      "fieldname": "vision_model",
-      "fieldtype": "Data",
-      "label": "Vision Model",
-      "description": "Model for OCR/image understanding (e.g. qwen3-vl:235b). Uses Default Provider's API.",
-      "depends_on": "enable_vision"
-    },
-    {
-      "fieldname": "vision_max_tokens",
-      "fieldtype": "Int",
-      "label": "Vision Max Tokens",
-      "default": "2048",
-      "description": "Max tokens for vision model response",
-      "depends_on": "enable_vision"
-    },
-    {
-      "fieldname": "enable_image_generation",
-      "fieldtype": "Check",
-      "label": "Enable Image Generation",
-      "default": "0"
-    },
-    {
-      "fieldname": "image_api_key",
-      "fieldtype": "Password",
-      "label": "Image API Key",
-      "description": "API key for image generation. If blank, uses default provider's key.",
-      "depends_on": "enable_image_generation"
-    },
-    {
-      "fieldname": "column_break_image",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "image_api_url",
-      "fieldtype": "Data",
-      "label": "Image API URL",
-      "default": "https://api.openai.com/v1",
-      "description": "Base URL for image generation API (OpenAI-compatible)",
-      "depends_on": "enable_image_generation"
-    },
-    {
-      "fieldname": "telegram_section",
-      "fieldtype": "Section Break",
-      "label": "Telegram Bot",
-      "collapsible": 1
-    },
-    {
-      "fieldname": "telegram_bot_token",
-      "fieldtype": "Password",
-      "label": "Bot Token",
-      "description": "Get from @BotFather on Telegram"
-    },
-    {
-      "fieldname": "telegram_webhook_url",
-      "fieldtype": "Data",
-      "label": "Webhook URL",
-      "description": "e.g. https://yoursite.com/api/method/niv_ai.niv_core.api.telegram.webhook"
-    },
-    {
-      "fieldname": "telegram_bot_username",
-      "fieldtype": "Data",
-      "label": "Bot Username",
-      "description": "Without @. e.g. NivAIBot. Needed for group chat @mention detection."
-    },
-    {
-      "fieldname": "column_break_telegram",
-      "fieldtype": "Column Break"
-    },
-    {
-      "fieldname": "telegram_secret_token",
-      "fieldtype": "Data",
-      "label": "Secret Token",
-      "description": "Optional. Set in BotFather webhook for security validation."
-    },
-    {
-      "fieldname": "telegram_live_stream",
-      "fieldtype": "Check",
-      "label": "Live Stream Responses",
-      "default": "1",
-      "description": "Edit message in real-time as AI generates response (like ChatGPT bots)"
-    },
-    {
-      "fieldname": "advanced_section",
-      "fieldtype": "Section Break",
-      "label": "Advanced",
-      "collapsible": 1,
-      "collapsible_depends_on": "eval:false"
-    },
-    {
-      "fieldname": "advanced_help",
-      "fieldtype": "HTML",
-      "label": "Advanced Help",
-      "options": "<div style='padding:10px;background:var(--bg-light-gray, #f8f9fa);border-radius:8px;font-size:13px;line-height:1.6'><b>\ud83d\udd27 Model Routing</b><br>Set <b>Fast Model</b> in AI Configuration to auto-route simple queries (greetings, thanks) to a lightweight model for instant responses.<br><br><b>\ud83d\udd11 Setup Token (Claude)</b><br>Instead of an API key, you can use a Claude subscription token. In your Niv AI Provider, set Auth Type to <b>Setup Token</b> and paste the token from <code>claude setup-token</code>. No API billing \u2014 uses your Claude subscription.</div>"
-    }
-  ],
-  "issingle": 1,
-  "links": [],
-  "modified": "2026-02-09 00:00:00",
-  "modified_by": "Administrator",
-  "module": "Niv Core",
-  "name": "Niv Settings",
-  "owner": "Administrator",
-  "permissions": [
-    {
-      "role": "System Manager",
-      "read": 1,
-      "write": 1,
-      "create": 1
-    }
-  ],
-  "sort_field": "modified",
-  "sort_order": "DESC"
+ "actions": [],
+ "creation": "2026-02-09 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "ai_section",
+  "default_provider",
+  "default_model",
+  "fast_model",
+  "system_prompt",
+  "max_tokens_per_message",
+  "max_messages_per_conversation",
+  "column_break_ai",
+  "enable_a2a",
+  "enable_tools",
+  "enable_billing",
+  "enable_widget",
+  "enable_knowledge_base",
+  "tool_priority",
+  "per_user_tool_permissions",
+  "rate_limit_section",
+  "rate_limit_per_hour",
+  "rate_limit_per_day",
+  "column_break_rate_limit",
+  "rate_limit_message",
+  "widget_section",
+  "widget_position",
+  "widget_title",
+  "widget_color",
+  "column_break_widget",
+  "allowed_roles",
+  "billing_section",
+  "billing_mode",
+  "shared_pool_balance",
+  "shared_pool_used",
+  "per_user_daily_limit",
+  "admin_allocation_only",
+  "token_cost_input",
+  "token_cost_output",
+  "column_break_billing",
+  "payment_currency",
+  "currency",
+  "voice_section",
+  "enable_voice",
+  "stt_engine",
+  "tts_engine",
+  "column_break_voice",
+  "tts_voice",
+  "tts_language",
+  "auto_play_response",
+  "voice_api_section",
+  "voice_api_key",
+  "voice_base_url",
+  "column_break_voice_api",
+  "default_voice",
+  "tts_model",
+  "elevenlabs_section",
+  "elevenlabs_api_key",
+  "column_break_elevenlabs",
+  "elevenlabs_voice_en",
+  "elevenlabs_voice_hi",
+  "image_section",
+  "enable_vision",
+  "vision_model",
+  "vision_max_tokens",
+  "enable_image_generation",
+  "image_api_key",
+  "column_break_image",
+  "image_api_url",
+  "telegram_section",
+  "telegram_bot_token",
+  "telegram_webhook_url",
+  "telegram_bot_username",
+  "column_break_telegram",
+  "telegram_secret_token",
+  "telegram_live_stream",
+  "advanced_section",
+  "advanced_help"
+ ],
+ "fields": [
+  {
+   "fieldname": "ai_section",
+   "fieldtype": "Section Break",
+   "label": "AI Configuration"
+  },
+  {
+   "fieldname": "default_provider",
+   "fieldtype": "Link",
+   "label": "Default Provider",
+   "options": "Niv AI Provider"
+  },
+  {
+   "fieldname": "default_model",
+   "fieldtype": "Data",
+   "label": "Default Model",
+   "description": "Primary model for complex queries requiring tools (e.g. mistral-large-latest)"
+  },
+  {
+   "fieldname": "fast_model",
+   "fieldtype": "Data",
+   "label": "Fast Model",
+   "description": "Lightweight model for simple queries like greetings, thanks, yes/no (e.g. mistral-small-latest). Leave blank to always use Default Model."
+  },
+  {
+   "fieldname": "system_prompt",
+   "fieldtype": "Text",
+   "label": "Default System Prompt",
+   "default": "You are Niv AI, a helpful assistant integrated with ERPNext. You can help users with their business data, create documents, generate reports, and answer questions. Be concise and helpful."
+  },
+  {
+   "fieldname": "max_tokens_per_message",
+   "fieldtype": "Int",
+   "label": "Max Tokens Per Message",
+   "default": "4096"
+  },
+  {
+   "fieldname": "max_messages_per_conversation",
+   "fieldtype": "Int",
+   "label": "Max Messages in Context",
+   "default": "50"
+  },
+  {
+   "fieldname": "column_break_ai",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "enable_tools",
+   "fieldtype": "Check",
+   "label": "Enable Tools",
+   "default": "1"
+  },
+  {
+   "fieldname": "enable_billing",
+   "fieldtype": "Check",
+   "label": "Enable Billing",
+   "default": "0"
+  },
+  {
+   "fieldname": "enable_widget",
+   "fieldtype": "Check",
+   "label": "Enable Floating Widget",
+   "default": "1"
+  },
+  {
+   "fieldname": "enable_knowledge_base",
+   "fieldtype": "Check",
+   "label": "Enable Knowledge Base (RAG)",
+   "default": "0"
+  },
+  {
+   "fieldname": "tool_priority",
+   "fieldtype": "Select",
+   "label": "Tool Priority",
+   "options": "MCP First\nNative First",
+   "default": "MCP First",
+   "description": "MCP First: Use MCP server tools (like FAC) before native tools. Best when FAC is installed. Native First: Use built-in Niv tools first."
+  },
+  {
+   "fieldname": "per_user_tool_permissions",
+   "fieldtype": "Check",
+   "label": "Per-User Tool Permissions",
+   "default": "0",
+   "description": "When enabled, AI tool calls use each user's own API credentials. Tool results will respect ERPNext role permissions \u2014 users only see data they have access to. API keys are auto-generated on first chat."
+  },
+  {
+   "fieldname": "rate_limit_section",
+   "fieldtype": "Section Break",
+   "label": "Rate Limiting"
+  },
+  {
+   "fieldname": "rate_limit_per_hour",
+   "fieldtype": "Int",
+   "label": "Messages per Hour (per user)",
+   "default": "60",
+   "description": "Max messages a user can send per hour. 0 = unlimited."
+  },
+  {
+   "fieldname": "rate_limit_per_day",
+   "fieldtype": "Int",
+   "label": "Messages per Day (per user)",
+   "default": "500",
+   "description": "Max messages a user can send per day. 0 = unlimited."
+  },
+  {
+   "fieldname": "column_break_rate_limit",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "rate_limit_message",
+   "fieldtype": "Data",
+   "label": "Rate Limit Message",
+   "default": "You have reached the message limit. Please try again later."
+  },
+  {
+   "fieldname": "widget_section",
+   "fieldtype": "Section Break",
+   "label": "Widget Settings"
+  },
+  {
+   "fieldname": "widget_position",
+   "fieldtype": "Select",
+   "label": "Widget Position",
+   "options": "bottom-right\nbottom-left",
+   "default": "bottom-right"
+  },
+  {
+   "fieldname": "widget_title",
+   "fieldtype": "Data",
+   "label": "Widget Title",
+   "default": "Niv AI"
+  },
+  {
+   "fieldname": "widget_logo",
+   "fieldtype": "Attach Image",
+   "label": "Widget Logo",
+   "description": "Logo shown in chat header (recommended: 32x32 or 40x40 px)"
+  },
+  {
+   "fieldname": "widget_color",
+   "fieldtype": "Color",
+   "label": "Widget Color",
+   "default": "#7C3AED"
+  },
+  {
+   "fieldname": "column_break_widget",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "allowed_roles",
+   "fieldtype": "Table",
+   "label": "Allowed Roles",
+   "options": "Has Role"
+  },
+  {
+   "fieldname": "billing_section",
+   "fieldtype": "Section Break",
+   "label": "Billing Settings"
+  },
+  {
+   "fieldname": "billing_mode",
+   "fieldtype": "Select",
+   "label": "Billing Mode",
+   "options": "Per User\nShared Pool",
+   "default": "Shared Pool",
+   "depends_on": "enable_billing",
+   "description": "Per User: each user has own wallet. Shared Pool: one company pool, all users consume from it."
+  },
+  {
+   "fieldname": "shared_pool_balance",
+   "fieldtype": "Int",
+   "label": "Shared Pool Balance",
+   "default": "0",
+   "depends_on": "eval:doc.enable_billing && doc.billing_mode=='Shared Pool'",
+   "description": "Total tokens available in shared pool"
+  },
+  {
+   "fieldname": "shared_pool_used",
+   "fieldtype": "Int",
+   "label": "Shared Pool Used",
+   "default": "0",
+   "read_only": 1,
+   "depends_on": "eval:doc.enable_billing && doc.billing_mode=='Shared Pool'"
+  },
+  {
+   "fieldname": "per_user_daily_limit",
+   "fieldtype": "Int",
+   "label": "Per User Daily Limit",
+   "default": "0",
+   "depends_on": "eval:doc.enable_billing && doc.billing_mode=='Shared Pool'",
+   "description": "Max tokens per user per day (0 = unlimited)"
+  },
+  {
+   "fieldname": "admin_allocation_only",
+   "fieldtype": "Check",
+   "label": "Admin Allocation Only",
+   "default": "1",
+   "depends_on": "eval:doc.enable_billing && doc.billing_mode=='Per User'"
+  },
+  {
+   "fieldname": "token_cost_input",
+   "fieldtype": "Float",
+   "label": "Cost per 1K Input Tokens",
+   "default": "1"
+  },
+  {
+   "fieldname": "token_cost_output",
+   "fieldtype": "Float",
+   "label": "Cost per 1K Output Tokens",
+   "default": "3"
+  },
+  {
+   "fieldname": "column_break_billing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "payment_currency",
+   "fieldtype": "Data",
+   "label": "Payment Currency",
+   "default": "INR"
+  },
+  {
+   "fieldname": "erp_billing_section",
+   "fieldtype": "Section Break",
+   "label": "Growth Billing",
+   "description": "Connect to Growth System ERPNext for billing. Recharge creates Sales Order. Tokens credited on SO submit via webhook.",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "billing_erp_url",
+   "fieldtype": "Data",
+   "label": "Vendor ERPNext URL",
+   "description": "e.g. https://erp.yourcompany.com"
+  },
+  {
+   "fieldname": "billing_erp_api_key",
+   "fieldtype": "Data",
+   "label": "API Key"
+  },
+  {
+   "fieldname": "billing_erp_api_secret",
+   "fieldtype": "Password",
+   "label": "API Secret"
+  },
+  {
+   "fieldname": "column_break_erp_billing",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "billing_erp_customer",
+   "fieldtype": "Data",
+   "label": "Customer Name",
+   "default": "Niv AI Customer",
+   "description": "Customer name on Growth ERPNext (must exist there)"
+  },
+  {
+   "fieldname": "billing_erp_item",
+   "fieldtype": "Data",
+   "label": "Item Code",
+   "default": "Niv AI Token Recharge",
+   "description": "Item code on Growth ERPNext (must exist there)"
+  },
+  {
+   "fieldname": "billing_erp_webhook_secret",
+   "fieldtype": "Password",
+   "label": "Webhook Secret",
+   "description": "Shared secret for verifying webhook callbacks from vendor ERPNext"
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Data",
+   "label": "Currency (Legacy)",
+   "default": "INR",
+   "hidden": 1
+  },
+  {
+   "fieldname": "voice_section",
+   "fieldtype": "Section Break",
+   "label": "Voice Settings"
+  },
+  {
+   "fieldname": "enable_voice",
+   "fieldtype": "Check",
+   "label": "Enable Voice Features",
+   "default": "1"
+  },
+  {
+   "fieldname": "stt_engine",
+   "fieldtype": "Select",
+   "label": "STT Engine",
+   "options": "auto\nmistral\nwhisper\nbrowser",
+   "default": "auto",
+   "description": "Auto uses Mistral STT if available, falls back to browser"
+  },
+  {
+   "fieldname": "tts_engine",
+   "fieldtype": "Select",
+   "label": "TTS Engine",
+   "options": "auto\nedge\npiper\nopenai\nbrowser",
+   "default": "auto",
+   "description": "Edge TTS (free, best quality), Piper (offline), OpenAI (paid), Browser (fallback)"
+  },
+  {
+   "fieldname": "column_break_voice",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "tts_voice",
+   "fieldtype": "Data",
+   "label": "TTS Voice"
+  },
+  {
+   "fieldname": "tts_language",
+   "fieldtype": "Select",
+   "label": "TTS Language",
+   "options": "en\nhi\nauto",
+   "default": "en"
+  },
+  {
+   "fieldname": "auto_play_response",
+   "fieldtype": "Check",
+   "label": "Auto-Play AI Responses",
+   "default": "0"
+  },
+  {
+   "fieldname": "voice_api_section",
+   "fieldtype": "Section Break",
+   "label": "Voice API (OpenAI TTS/STT)"
+  },
+  {
+   "fieldname": "voice_api_key",
+   "fieldtype": "Password",
+   "label": "Voice API Key",
+   "description": "OpenAI API key for TTS/STT. If blank, uses default provider's key."
+  },
+  {
+   "fieldname": "voice_base_url",
+   "fieldtype": "Data",
+   "label": "Voice API Base URL",
+   "default": "https://api.openai.com/v1",
+   "description": "Base URL for TTS/STT API (OpenAI-compatible)"
+  },
+  {
+   "fieldname": "column_break_voice_api",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "default_voice",
+   "fieldtype": "Select",
+   "label": "Default TTS Voice",
+   "options": "auto\nen-US-JennyNeural\nhi-IN-SwaraNeural\nen-US-lessac-medium\nhi_IN-swara-medium\nalloy\nnova",
+   "default": "auto",
+   "description": "Edge: *Neural, Piper: lang-voice-quality, OpenAI: alloy/nova"
+  },
+  {
+   "fieldname": "tts_model",
+   "fieldtype": "Select",
+   "label": "TTS Model",
+   "options": "tts-1\ntts-1-hd",
+   "default": "tts-1"
+  },
+  {
+   "fieldname": "elevenlabs_section",
+   "fieldtype": "Section Break",
+   "label": "ElevenLabs TTS (Human-like Voice)",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "elevenlabs_api_key",
+   "fieldtype": "Password",
+   "label": "ElevenLabs API Key",
+   "description": "Get from elevenlabs.io \u2192 Profile \u2192 API Keys. When set, ElevenLabs becomes primary TTS."
+  },
+  {
+   "fieldname": "column_break_elevenlabs",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "elevenlabs_voice_en",
+   "fieldtype": "Data",
+   "label": "ElevenLabs Voice ID (English)",
+   "description": "Voice ID for English. Default: Rachel (21m00Tcm4TlvDq8ikWAM)"
+  },
+  {
+   "fieldname": "elevenlabs_voice_hi",
+   "fieldtype": "Data",
+   "label": "ElevenLabs Voice ID (Hindi)",
+   "description": "Voice ID for Hindi. Use multilingual voices. Default: same as English."
+  },
+  {
+   "fieldname": "image_section",
+   "fieldtype": "Section Break",
+   "label": "Vision & Image"
+  },
+  {
+   "fieldname": "enable_vision",
+   "fieldtype": "Check",
+   "label": "Enable Vision (OCR/Image Understanding)",
+   "default": "0",
+   "description": "When enabled, uploaded images are processed by the Vision Model for OCR and understanding before passing to the main AI model."
+  },
+  {
+   "fieldname": "vision_model",
+   "fieldtype": "Data",
+   "label": "Vision Model",
+   "description": "Model for OCR/image understanding (e.g. qwen3-vl:235b). Uses Default Provider's API.",
+   "depends_on": "enable_vision"
+  },
+  {
+   "fieldname": "vision_max_tokens",
+   "fieldtype": "Int",
+   "label": "Vision Max Tokens",
+   "default": "2048",
+   "description": "Max tokens for vision model response",
+   "depends_on": "enable_vision"
+  },
+  {
+   "fieldname": "enable_image_generation",
+   "fieldtype": "Check",
+   "label": "Enable Image Generation",
+   "default": "0"
+  },
+  {
+   "fieldname": "image_api_key",
+   "fieldtype": "Password",
+   "label": "Image API Key",
+   "description": "API key for image generation. If blank, uses default provider's key.",
+   "depends_on": "enable_image_generation"
+  },
+  {
+   "fieldname": "column_break_image",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "image_api_url",
+   "fieldtype": "Data",
+   "label": "Image API URL",
+   "default": "https://api.openai.com/v1",
+   "description": "Base URL for image generation API (OpenAI-compatible)",
+   "depends_on": "enable_image_generation"
+  },
+  {
+   "fieldname": "telegram_section",
+   "fieldtype": "Section Break",
+   "label": "Telegram Bot",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "telegram_bot_token",
+   "fieldtype": "Password",
+   "label": "Bot Token",
+   "description": "Get from @BotFather on Telegram"
+  },
+  {
+   "fieldname": "telegram_webhook_url",
+   "fieldtype": "Data",
+   "label": "Webhook URL",
+   "description": "e.g. https://yoursite.com/api/method/niv_ai.niv_core.api.telegram.webhook"
+  },
+  {
+   "fieldname": "telegram_bot_username",
+   "fieldtype": "Data",
+   "label": "Bot Username",
+   "description": "Without @. e.g. NivAIBot. Needed for group chat @mention detection."
+  },
+  {
+   "fieldname": "column_break_telegram",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "telegram_secret_token",
+   "fieldtype": "Data",
+   "label": "Secret Token",
+   "description": "Optional. Set in BotFather webhook for security validation."
+  },
+  {
+   "fieldname": "telegram_live_stream",
+   "fieldtype": "Check",
+   "label": "Live Stream Responses",
+   "default": "1",
+   "description": "Edit message in real-time as AI generates response (like ChatGPT bots)"
+  },
+  {
+   "fieldname": "advanced_section",
+   "fieldtype": "Section Break",
+   "label": "Advanced",
+   "collapsible": 1,
+   "collapsible_depends_on": "eval:false"
+  },
+  {
+   "fieldname": "advanced_help",
+   "fieldtype": "HTML",
+   "label": "Advanced Help",
+   "options": "<div style='padding:10px;background:var(--bg-light-gray, #f8f9fa);border-radius:8px;font-size:13px;line-height:1.6'><b>\ud83d\udd27 Model Routing</b><br>Set <b>Fast Model</b> in AI Configuration to auto-route simple queries (greetings, thanks) to a lightweight model for instant responses.<br><br><b>\ud83d\udd11 Setup Token (Claude)</b><br>Instead of an API key, you can use a Claude subscription token. In your Niv AI Provider, set Auth Type to <b>Setup Token</b> and paste the token from <code>claude setup-token</code>. No API billing \u2014 uses your Claude subscription.</div>"
+  }
+ ],
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-02-21 14:34:00.000000",
+ "modified_by": "Administrator",
+ "module": "Niv Core",
+ "name": "Niv Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
 }
