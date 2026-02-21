@@ -365,17 +365,23 @@ class NivChat {
         });
 
         // Toggle sidebar
-        this.wrapper.find(".btn-toggle-sidebar").on("click", () => {
+        // mobile-sidebar-fix-v3
+        this.wrapper.find(".btn-toggle-sidebar").on("click touchend", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             this.toggle_sidebar();
         });
 
         // Close sidebar button (inside sidebar)
-        this.wrapper.find(".btn-close-sidebar").on("click", () => {
+        this.wrapper.find(".btn-close-sidebar").on("click touchend", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             this.toggle_sidebar(false);
         });
 
         // Backdrop click to close
-        this.$sidebarBackdrop.on("click", () => {
+        this.$sidebarBackdrop.on("click touchend", (e) => {
+            e.preventDefault();
             this.toggle_sidebar(false);
         });
     }
@@ -893,8 +899,8 @@ class NivChat {
     }
 
     async auto_create_artifact(prompt) {
-        // Auto-open panel
-        if (!this.artifacts_open) {
+        // Auto-open panel (respects setting)
+        if (!this.artifacts_open && this._auto_open_artifacts !== false) {
             this.toggle_artifacts_panel(true);
         }
 
@@ -923,8 +929,8 @@ class NivChat {
     }
 
     async auto_create_artifact_from_response(htmlContent) {
-        // Auto-open panel
-        if (!this.artifacts_open) {
+        // Auto-open panel (respects setting)
+        if (!this.artifacts_open && this._auto_open_artifacts !== false) {
             this.toggle_artifacts_panel(true);
         }
 
@@ -1244,6 +1250,23 @@ ${htmlCode}
 
             // Update badge text
             this.update_model_badge(displayName, providerName || "");
+
+            // Update header title and placeholder dynamically
+            this.widget_name = displayName;
+            this.wrapper.find(".niv-header-title").text(displayName);
+            this.$input.attr("placeholder", "Message " + displayName + "...");
+
+            // Update header logo if set
+            const logoUrl = s.widget_logo;
+            this._bot_logo_url = logoUrl || "";
+            this._auto_open_artifacts = s.auto_open_artifacts !== 0;
+            const $header = this.wrapper.find(".niv-chat-header");
+            $header.find(".niv-header-logo").remove();
+            if (logoUrl) {
+                this.wrapper.find(".niv-header-title").before(
+                    '<img class="niv-header-logo" src="' + logoUrl + '" alt="" style="width:28px;height:28px;border-radius:6px;margin-right:8px;object-fit:cover;" />'
+                );
+            }
 
             if (providerName) {
                 try {
@@ -1700,7 +1723,7 @@ ${htmlCode}
     append_message(role, content, meta = {}) {
         this.hide_empty_state();
         const isUser = role === "user";
-        const avatar = isUser ? this.get_user_avatar() : '<div class="msg-avatar-icon">🛰️</div>';
+        const avatar = isUser ? this.get_user_avatar() : this.get_bot_avatar();
         const time = meta.creation ? frappe.datetime.prettyDate(meta.creation) : "";
         const msgIndex = this.messages_data.length;
 
@@ -1720,6 +1743,14 @@ ${htmlCode}
                 <div class="msg-body">
                     ${modelTag}
                     ${toolsHtml}
+                    ${(meta._attachments && meta._attachments.length) ? `<div class="msg-attachments">${meta._attachments.map(a => {
+                        const ext = (a.file_name || a.file_url || "").split(".").pop().toLowerCase();
+                        const isImg = ["jpg","jpeg","png","gif","webp","bmp"].includes(ext);
+                        if (isImg) {
+                            return `<div class="msg-attach-thumb"><img src="${a.file_url}" alt="${frappe.utils.escape_html(a.file_name || '')}" style="max-width:200px;max-height:150px;border-radius:8px;margin:4px 0;cursor:pointer;" onclick="window.open('${a.file_url}','_blank')"/></div>`;
+                        }
+                        return `<div class="msg-attach-file" style="background:var(--bg-light-gray,#2a2a3e);padding:6px 10px;border-radius:6px;margin:4px 0;font-size:12px;">📎 ${frappe.utils.escape_html(a.file_name || a.file_url)}</div>`;
+                    }).join("")}</div>` : ""}
                     <div class="msg-content">${this.render_markdown(content || "")}</div>
                     <div class="msg-footer">
                         <span class="msg-time">${time}</span>
@@ -1785,7 +1816,7 @@ ${htmlCode}
         console.log('[ART-DBG] append_message', { role, isUser, _isHtml, contentLen: (content||'').length, first80: (content||'').substring(0,80) });
         if (_isHtml) {
             // Open panel WITHOUT loading artifacts from DB (avoids overwriting preview with stale placeholder)
-            if (!this.artifacts_open) {
+            if (!this.artifacts_open && this._auto_open_artifacts !== false) {
                 this.artifacts_open = true;
                 this.wrapper.find(".niv-main").addClass("niv-artifacts-open");
                 this.$artifactPanel.show();
@@ -1916,6 +1947,14 @@ ${htmlCode}
         const fullName = frappe.session.user_fullname || "U";
         const initials = fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
         return `<span class="user-initials">${initials}</span>`;
+    }
+
+    get_bot_avatar() {
+        if (this._bot_logo_url) {
+            return '<img class="msg-avatar-icon" src="' + this._bot_logo_url + '" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />';
+        }
+        const letter = (this.widget_name || "N").charAt(0).toUpperCase();
+        return '<span class="msg-avatar-icon" style="font-size:16px;font-weight:700;">' + letter + '</span>';
     }
 
     // ─── Message Actions ────────────────────────────────────────────
@@ -2070,7 +2109,13 @@ ${htmlCode}
         this.$inputPill.removeClass("has-text");
         localStorage.removeItem("niv_draft");
 
-        this.append_message("user", text);
+        // Capture file previews before clearing
+        const _attachFiles = this.pending_files.map(f => ({
+            file_url: f.file_url,
+            file_name: f.file_name || f.name,
+            _local_file: f._local_file
+        }));
+        this.append_message("user", text, { _attachments: _attachFiles });
         this.scroll_to_bottom();
 
         // Auto-detect artifact prompts and create artifact
@@ -2516,10 +2561,17 @@ ${htmlCode}
         this.$attachPreview.append($uploading);
 
         try {
-            const r = await frappe.call({
-                method: "frappe.client.upload_file",
-                args: { file, is_private: 1, folder: "Home/Niv AI" },
-                file_args: { file },
+            const formData = new FormData();
+            formData.append("file", file, file.name);
+            formData.append("is_private", 1);
+            formData.append("folder", "Home/Niv AI");
+            const r = await $.ajax({
+                url: "/api/method/upload_file",
+                type: "POST",
+                data: formData,
+                processData: false,
+                contentType: false,
+                headers: { "X-Frappe-CSRF-Token": frappe.csrf_token },
             });
             const fileDoc = r.message;
             fileDoc._local_file = file; // keep ref for preview
@@ -2835,9 +2887,9 @@ ${htmlCode}
         if (!this.wrapper.find(".niv-typing-indicator").length) {
             this.$chatArea.append(`
                 <div class="niv-typing-indicator">
-                    <div class="msg-avatar"><span style="font-size:16px;font-weight:700;">N</span></div>
+                    <div class="msg-avatar">${this.get_bot_avatar()}</div>
                     <div class="typing-content">
-                        <span class="typing-text">Niv is thinking</span>
+                        <span class="typing-text">${this.widget_name || "Niv"} is thinking</span>
                         <span class="typing-dots-anim"><span></span><span></span><span></span></span>
                         <span class="typing-elapsed"></span>
                     </div>
@@ -2944,7 +2996,7 @@ ${htmlCode}
                 } else {
                     this.$lowBalanceWarning.hide();
                     this.$credits.css("color", "");
-                    this.$input.prop("disabled", false).attr("placeholder", "Message Niv AI...");
+                    this.$input.prop("disabled", false).attr("placeholder", "Message " + (this.widget_name || "Niv AI") + "...");
                     this.$sendBtn.prop("disabled", false);
                 }
             }
@@ -2961,7 +3013,7 @@ ${htmlCode}
             if (balance < 500 && balance > 0) {
                 this.$lowBalanceWarning.show();
                 this.$credits.css("color", "#f59e0b");
-                this.$input.prop("disabled", false).attr("placeholder", "Message Niv AI...");
+                this.$input.prop("disabled", false).attr("placeholder", "Message " + (this.widget_name || "Niv AI") + "...");
                 this.$sendBtn.prop("disabled", false);
             } else if (balance <= 0) {
                 this.$lowBalanceWarning.show();
@@ -2971,7 +3023,7 @@ ${htmlCode}
             } else {
                 this.$lowBalanceWarning.hide();
                 this.$credits.css("color", "");
-                this.$input.prop("disabled", false).attr("placeholder", "Message Niv AI...");
+                this.$input.prop("disabled", false).attr("placeholder", "Message " + (this.widget_name || "Niv AI") + "...");
                 this.$sendBtn.prop("disabled", false);
             }
         }
@@ -3400,17 +3452,7 @@ ${htmlCode}
 
         this.set_voice_state("processing");
 
-        // FAST PATH: If browser STT captured text, use it immediately (skip server STT = saves 2-3s)
-        const browserText = (this.voiceBrowserTranscript || "").trim();
-        
-        if (browserText) {
-            // Browser STT available — go straight to streaming (fastest path)
-            this.$voiceTranscript.text(browserText);
-            this.voice_send_streaming(browserText);
-            return;
-        }
-        
-        // SLOW PATH: No browser transcript — fall back to server STT
+        // Phase 3: Send audio to server for Faster-Whisper STT (accurate, multilingual)
         try {
             const blob = new Blob(this.voiceAudioChunks, { type: this.voiceAudioChunks[0]?.type || "audio/webm" });
             const reader = new FileReader();
@@ -3420,8 +3462,14 @@ ${htmlCode}
                 reader.readAsDataURL(blob);
             });
             
-            this.$voiceTranscript.html('<span style="opacity:0.6">Listening...</span>');
+            // Show browser transcript as interim while server processes
+            if (this.voiceBrowserTranscript && this.voiceBrowserTranscript.trim()) {
+                this.$voiceTranscript.html(
+                    '<span style="opacity:0.6">' + this.voiceBrowserTranscript + '</span> <span style="font-size:0.8em">⏳</span>'
+                );
+            }
             
+            // Call server STT (Faster-Whisper)
             const sttResult = await frappe.call({
                 method: "niv_ai.niv_core.api.voice.stt_from_base64",
                 args: { audio_base64: base64Data },
@@ -3429,17 +3477,30 @@ ${htmlCode}
             
             const serverTranscript = (sttResult.message && sttResult.message.text) ? sttResult.message.text.trim() : "";
             
-            if (!serverTranscript) {
+            // Use server transcript if available, fall back to browser
+            const transcript = serverTranscript || (this.voiceBrowserTranscript || "").trim();
+            
+            if (!transcript) {
                 this.set_voice_state("error", "Couldn't understand. Try again.");
                 return;
             }
             
-            this.$voiceTranscript.text(serverTranscript);
-            this.voice_send_streaming(serverTranscript);
+            // Show final transcript
+            this.$voiceTranscript.text(transcript);
+            
+            // Use streaming voice mode
+            this.voice_send_streaming(transcript);
             return;
             
         } catch (sttErr) {
             console.warn("Server STT failed:", sttErr);
+            // Fall back to browser transcript
+            const fallback = (this.voiceBrowserTranscript || "").trim();
+            if (fallback) {
+                this.$voiceTranscript.text(fallback);
+                this.voice_send_streaming(fallback);
+                return;
+            }
             this.set_voice_state("error", "STT failed. Try again.");
             return;
         }
