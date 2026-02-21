@@ -1,16 +1,16 @@
-# Niv AI — Intelligent Business Assistant for ERPNext
+# Chanakya Ai — Intelligent Business Assistant for ERPNext
 
-> AI-powered assistant with voice, MCP tools, two-model optimization, smart conversations, Excel/PDF export, PWA, and developer mode
+> AI-powered assistant with voice, MCP tools, two-model optimization, smart conversations, Excel/PDF export, vision/OCR, developer mode, and Telegram bot
 
-[![Version](https://img.shields.io/badge/version-1.2.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
-[![ERPNext](https://img.shields.io/badge/ERPNext-v14%2B-green.svg)](https://erpnext.com)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
+[![ERPNext](https://img.shields.io/badge/ERPNext-v15%2B-green.svg)](https://erpnext.com)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
 ---
 
-## What is Niv AI?
+## What is Chanakya Ai?
 
-Niv AI is a production-ready AI assistant that sits inside your ERPNext system. Users ask questions in natural language — Hindi or English — and Niv fetches real data, generates reports, creates documents, and exports to Excel/CSV/PDF. No coding required for end users.
+Chanakya Ai (formerly Niv AI) is a production-ready AI assistant that sits inside your ERPNext system. Users ask questions in natural language — Hindi or English — and Chanakya fetches real data, generates reports, creates documents, and exports to Excel/CSV/PDF. No coding required for end users.
 
 **Live in production** at MDFC Financiers (NBFC) with 234+ users.
 
@@ -20,112 +20,96 @@ Niv AI is a production-ready AI assistant that sits inside your ERPNext system. 
 
 ### 🧠 Smart Tool Calling
 - **34 MCP Tools** — LLM picks the right tool freely, no hardcoded routing
-- **Two-Model Optimization** — Fast model (mistral-small, ~2s) selects tools → Big model (mistral-large) streams the answer. Total: ~8s
+- **Two-Model Optimization** — Fast model selects tools → Big model streams the answer
 - **Auto-retry** on tool errors — DB connection resilience, field name correction hints
 - **Result processing** — Large results capped at 4KB, intelligently summarized
 
 ### 🎤 Voice Mode
 - **Browser STT** (hi-IN) → Server STT (Voxtral Mini) → LLM → TTS
-- **ElevenLabs** (primary) / **Edge TTS** (free fallback) — Indian accent, Hindi + English
-- **Clause-level chunking** — first audio plays in ~2s, not after full response
-- **Instant voice filler** — browser TTS plays acknowledgment immediately while server processes
+- **ElevenLabs** (primary) / **Edge TTS** (free fallback) — Hindi + English
+- **Optimized pipeline** — Cached config, lightweight text cleaning, fast Edge TTS
+- **Streaming voice** — First audio plays in ~2s, not after full response
+
+### 👁️ Vision & Document Upload
+- **Image OCR** — Upload images, AI reads and understands content
+- **Document upload** — PDF, Excel, Word, images all supported
+- **Two-model vision** — Gemma3:27b (OCR) → Main model (reasoning)
+- **Document generator** — Loan agreements, receipts, SOA, letters as PDF
 
 ### 📊 Data Export
 - **Excel** — Styled headers, auto-width columns, freeze panes, auto-filter
 - **CSV** — UTF-8 BOM for Hindi support
 - **PDF** — Styled tables via wkhtmltopdf, A4 landscape for wide tables
-- Export buttons appear automatically below any table response
 
 ### 🛠️ Developer Mode
 - Create DocTypes, Custom Fields, Client/Server Scripts via chat
-- **Impact analysis** — checks all dependencies before modifications (links, scripts, print formats)
-- **Diff view** — shows old→new values before confirming updates
-- **Bulk operations** — safe batch update/create/delete (max 50, dry-run preview)
+- **API Builder** — Generate whitelisted API endpoints with dry-run preview
 - **Script templates** — 5 Client Script + 4 Server Script ready-to-use patterns
-- **Import/Export customizations** — backup and restore Custom Fields, Property Setters, Scripts
-- **Test data generator** — realistic Indian names, phones, addresses for any DocType
+- **Bulk operations** — Safe batch update/create/delete (max 50, dry-run preview)
+- **Bulk import** — Import data from Excel with auto-field mapping
 - Confirmation required before any create/update/delete
 - Undo support for recently created documents (30 min window)
 
 ### 🧠 Smart Conversations
-- **Sequential tool chaining** — AI calls additional tools based on first results (up to 2 rounds)
-- **Conversation summarization** — 20+ messages auto-summarized, last 10 kept fresh
+- **Sequential tool chaining** — AI calls additional tools based on first results
+- **Conversation summarization** — 20+ messages auto-summarized
 - **Follow-up understanding** — "Show loan X" → "iska status kya hai" works naturally
-- **Smart date parsing** — "pichhle hafte ki collections" understood in Hindi and English
-- **Clarification requests** — ambiguous queries get smart follow-up questions
-
-### 📅 Automation
-- **Scheduled reports** — Daily/Weekly/Monthly auto-generated reports
-- **Smart alerts** — Trigger-based AI actions on document events
-- **Daily digest** — Pre-built business summary templates (NBFC/Sales/General)
+- **Smart date parsing** — "pichhle hafte ki collections" understood in Hindi/English
 
 ### 💬 Multi-Channel
 - **Web Chat** — Full-page chat + floating widget on every ERPNext page
-- **Telegram Bot** — Voice messages, inline buttons, scheduled reports
-- **WhatsApp** — Webhook integration
+- **Telegram Bot** — Voice messages, inline buttons, scheduled reports, group chat
+- **Artifacts Panel** — Live code preview, auto-open toggle, fullscreen mode
 - **Dark Mode** — Premium dark theme with purple accents
 
+### ⚙️ Customizable Branding
+- **Widget Title** — Change name from Niv Settings
+- **Widget Logo** — Upload custom logo for chat header + bot avatar
+- **Auto-Open Artifacts** — Toggle from settings
+- **All branding dynamic** — Header, placeholder, thinking text, avatars
+
+### 🏥 System Health
+- **Health check API** — Quick + deep system diagnosis
+- **Error log scan** — Last 24h errors analyzed
+- **Auto-fix actions** — TTS engine reset, cache cleanup, config fixes
+- **Performance monitoring** — Response time tracking
+
 ### 🔒 Security
-- Per-user conversation isolation (users see only their own chats)
+- Per-user conversation isolation
 - Per-user tool permissions via API key isolation
-- Rate limiting (50 tool calls/min)
+- Rate limiting (configurable per hour/day)
 - Error sanitization — no stack traces exposed to users
-- Atomic token deduction — prevents negative balance race conditions
-
----
-
-### 📱 PWA (Progressive Web App)
-- Install on home screen — works like a native app
-- manifest.json + service worker
-- App icon (192px + 512px)
-- Standalone mode — full screen, no browser chrome
-
-### 🔍 Monitoring & Testing
-- **Sentry** error tracking (Python backend)
-- **Redis cache monitoring** API — track cache keys, sizes, TTLs
-- **Tool accuracy benchmark** — 50 queries, 80% baseline accuracy
-- **E2E tests** — 15 Playwright test cases (chat, features, mobile)
-- **CI/CD** — GitHub Actions (lint + structure check)
 
 ---
 
 ## Architecture
 
 ```
-User Input (Text / Voice / Widget)
+User Input (Text / Voice / File Upload)
          │
          ▼
 ┌─────────────────────────────────┐
-│     SSE Stream (stream.py)      │  Parse request, save user message,
-│                                 │  route simple queries to fast model
+│     SSE Stream (stream.py)      │
 └────────────┬────────────────────┘
              │
              ▼
 ┌─────────────────────────────────┐
 │   Two-Model Optimization        │
 │                                 │
-│  1. Fast Model (mistral-small)  │──→ Tool needed? Which one?
-│     Non-streaming, ~2s          │
+│  1. Fast Model → Tool selection │
+│  2. MCP Tools → Execute         │
+│  3. Big Model → Stream answer   │
 │                                 │
-│  2a. Tools needed:              │
-│      Execute MCP tools (~1s)    │──→ FAC (frappe_assistant_core)
-│      Big Model streams answer   │
-│                                 │
-│  2b. No tools:                  │
-│      Big Model streams directly │
-│                                 │
-│  Fallback: LangGraph ReAct      │──→ Single-model with retry
-│  agent (handles multi-step)     │    capability
+│  Vision: Gemma3 → OCR → Main    │
 └────────────┬────────────────────┘
              │
              ▼
 ┌─────────────────────────────────┐
 │      Response Delivery          │
-│                                 │
-│  • Markdown → rendered HTML     │
-│  • Tables → Excel/CSV/PDF btns  │
+│  • Markdown → HTML              │
+│  • Tables → Excel/CSV/PDF       │
 │  • Voice → Edge TTS / ElevenLabs│
-│  • Save to DB + billing         │
+│  • Telegram → Webhook + Buttons │
 └─────────────────────────────────┘
 ```
 
@@ -134,52 +118,51 @@ User Input (Text / Voice / Widget)
 ## Installation
 
 ### Prerequisites
-- ERPNext v15+ (v14 supported with limitations)
-- `frappe_assistant_core` (FAC) installed
+- ERPNext v15+ 
+- `frappe_assistant_core` (FAC) for MCP tools
 - Python 3.10+
 
-### Quick Setup (One Command)
+### Quick Setup
 
 ```bash
 cd /path/to/frappe-bench
 
-# Get niv_ai first (setup.sh is inside)
-bench get-app https://github.com/kulharir7/niv_ai.git
-
-# Run setup — pick your AI provider:
-
-# Mistral (recommended)
-bash apps/niv_ai/setup.sh yoursite.com https://api.mistral.ai/v1 YOUR_KEY
-
-# OpenAI
-bash apps/niv_ai/setup.sh yoursite.com https://api.openai.com/v1 YOUR_KEY gpt-4o gpt-4o-mini
-
-# Ollama (free, local)
-bash apps/niv_ai/setup.sh yoursite.com http://localhost:11434/v1 ollama llama3.1
-
-# DeepSeek
-bash apps/niv_ai/setup.sh yoursite.com https://api.deepseek.com/v1 YOUR_KEY deepseek-chat
-```
-
-That's it. Open `/app/niv-chat` and start chatting. Provider auto-detected from URL.
-
-### Manual Install
-
-If you prefer step-by-step, see **[INSTALL.md](INSTALL.md)** for the full guide.
-
-```bash
 # 1. Install FAC (MCP tool provider)
 bench get-app https://github.com/AdarshPS1/frappe_assistant_core.git
 bench --site yoursite install-app frappe_assistant_core
 
-# 2. Install Niv AI
+# 2. Install Chanakya Ai
 bench get-app https://github.com/kulharir7/niv_ai.git
 bench --site yoursite install-app niv_ai
 bench --site yoursite migrate
-bench build --app niv_ai
 
-# 3. Configure at /app/niv-settings
+# 3. Setup AI Provider (one command)
+# Mistral (recommended):
+bash apps/niv_ai/setup.sh yoursite https://api.mistral.ai/v1 YOUR_KEY
+
+# Ollama (free, local):
+bash apps/niv_ai/setup.sh yoursite http://localhost:11434/v1 ollama llama3.1
+
+# OpenAI:
+bash apps/niv_ai/setup.sh yoursite https://api.openai.com/v1 YOUR_KEY gpt-4o gpt-4o-mini
 ```
+
+### What's Auto-Configured on Install
+
+| Setting | Default |
+|---------|---------|
+| Widget Title | Chanakya Ai |
+| Logo | Bundled (purple icon) |
+| System Prompt | NBFC/Business expert |
+| Voice (STT/TTS) | Auto-detect |
+| Vision (OCR) | gemma3:27b |
+| Billing | Shared Pool, 1Cr tokens |
+| Rate Limits | 500/hr, 5000/day |
+| Artifacts Auto-Open | ON |
+
+**Only manual setup needed:** AI Provider + API Key (and optionally Telegram Bot Token).
+
+Open `/app/niv-chat` and start chatting! 🚀
 
 ---
 
@@ -200,38 +183,42 @@ niv_ai/
 │   ├── knowledge/                 # System knowledge
 │   │   ├── unified_discovery.py  # Auto-scan DocTypes & relationships
 │   │   ├── memory_service.py     # User memory (preferences, entities)
-│   │   └── domain_nbfc_slim.py   # NBFC domain knowledge
+│   │   └── domain_nbfc.py        # NBFC domain knowledge
 │   │
 │   ├── tools/                     # Tool enhancements
 │   │   ├── tool_descriptions.py  # Enhanced descriptions with field hints
 │   │   ├── result_processor.py   # Cap results at 4KB
 │   │   ├── result_cache.py       # 2min TTL for read-only tools
 │   │   ├── bulk_ops.py           # Bulk update/create/delete helpers
+│   │   ├── bulk_import.py        # Excel data import with auto-mapping
 │   │   ├── script_templates.py   # Client/Server Script patterns
-│   │   ├── customization_io.py   # Import/Export customizations
-│   │   ├── impact_analysis.py    # DocType dependency analysis
-│   │   ├── test_data_gen.py      # Realistic test data generator
-│   │   └── daily_digest.py       # Business summary templates
+│   │   ├── api_builder.py        # API endpoint generator
+│   │   └── doc_generator.py      # PDF document generation
 │   │
 │   ├── api/                       # Endpoints
 │   │   ├── stream.py             # SSE chat streaming
-│   │   ├── voice.py              # STT + TTS
+│   │   ├── voice.py              # STT + TTS (optimized pipeline)
 │   │   ├── export.py             # Excel/CSV/PDF generation
-│   │   ├── telegram.py           # Telegram bot
+│   │   ├── health.py             # System health check + auto-fix
+│   │   ├── artifacts.py          # Artifact CRUD
+│   │   ├── telegram.py           # Telegram bot (webhook + background jobs)
 │   │   └── whatsapp.py           # WhatsApp webhook
 │   │
 │   └── mcp_client.py             # MCP protocol client
 │
 ├── niv_billing/                   # Token billing system
 │   ├── api/billing.py            # Atomic pool deduction
-│   └── api/payment.py            # Demo + Growth Billing modes
+│   └── api/payment.py            # Shared Pool + Growth Billing
 │
 ├── niv_ui/
 │   └── page/niv_chat/            # Chat UI (JS + HTML + CSS)
 │
-└── public/
-    ├── js/niv_widget.js          # Floating widget
-    └── css/niv_chat_premium.css  # Dark mode theme
+├── public/
+│   ├── images/niv_logo.png       # Bundled logo
+│   ├── js/niv_widget.js          # Floating widget
+│   └── css/niv_chat_premium.css  # Dark mode theme
+│
+└── install.py                     # Auto-setup with all defaults
 ```
 
 ---
@@ -240,11 +227,11 @@ niv_ai/
 
 | Provider | Type | Tested Models |
 |----------|------|---------------|
-| **Mistral** | OpenAI-compatible | mistral-large-2512, mistral-small-latest |
+| **Mistral** | OpenAI-compatible | mistral-large, mistral-small |
+| **Ollama** | OpenAI-compatible | Any local/cloud model |
 | OpenAI | Native | gpt-4o, gpt-4-turbo |
 | Anthropic | Native | claude-3.5-sonnet |
 | Google | Native | gemini-1.5-pro |
-| Ollama | OpenAI-compatible | Any local model |
 | Groq | OpenAI-compatible | llama-3, mixtral |
 
 ---
@@ -253,22 +240,11 @@ niv_ai/
 
 | Stage | Engine | Details |
 |-------|--------|---------|
-| **STT** (primary) | Browser Web Speech | `hi-IN`, instant, no upload needed |
-| **STT** (server) | Voxtral Mini Realtime | Mistral API, realtime transcription, Hindi+English |
-| **TTS** (primary) | ElevenLabs | `eleven_multilingual_v2`, auto language |
-| **TTS** (free) | Edge TTS | `en-IN-NeerjaExpressiveNeural` / `hi-IN-SwaraNeural` |
+| **STT** (browser) | Web Speech API | `hi-IN`, instant, no upload |
+| **STT** (server) | Voxtral Mini | Mistral API, Hindi+English |
+| **TTS** (primary) | ElevenLabs | Multilingual, human-like |
+| **TTS** (free) | Edge TTS | Hindi + English voices |
 | **TTS** (offline) | Piper | Local, English only |
-
----
-
-## Billing
-
-Two modes available:
-
-- **Demo Mode** — Free tokens for testing, no payment gateway needed
-- **Growth Billing** — Server-to-server billing via external ERPNext (Sales Invoice based)
-
-Token pool is shared across all users. Atomic SQL deduction prevents negative balance.
 
 ---
 
@@ -276,18 +252,13 @@ Token pool is shared across all users. Atomic SQL deduction prevents negative ba
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **v1.2.0** | 2026-02-20 | Smart Agent — sequential tool chaining, conversation summarization, diff view, bulk ops, script templates, impact analysis, test data generator, daily digest, import/export customizations |
-| **v1.1.0** | 2026-02-20 | Sentry error tracking, PWA support, Redis cache monitoring, CI/CD pipeline, tool accuracy benchmark (80%), E2E Playwright tests, mobile responsive CSS, parallel tool execution, MCP tools empty fix |
-| **v1.0.1** | 2026-02-19 | Voice overhaul — instant filler TTS, Voxtral Realtime STT, voice orb fixes, SSE streaming fixes, one-command setup.sh |
-| v1.0.0 | 2026-02-19 | Stable release — reliable streaming, two-model optimization, tool error resilience, export buttons restored, Razorpay removed |
-| v0.9.2 | 2026-02-19 | Two-model tool optimization, streaming fix, DB resilience, billing accuracy |
-| v0.9.0 | 2026-02-18 | MCP optimization (82% prompt reduction), voice overhaul, Excel/CSV/PDF export |
+| **v1.3.0** | 2026-02-21 | Vision/OCR, document upload, API builder, bulk import, system health doctor, codebase cleanup (~2500 lines dead code removed), dynamic branding (logo/title/avatar from settings), auto-fill defaults on install |
+| **v1.2.0** | 2026-02-20 | Smart Agent — tool chaining, summarization, diff view, bulk ops, script templates |
+| **v1.1.0** | 2026-02-20 | Sentry, PWA, CI/CD, E2E tests, mobile responsive |
+| **v1.0.0** | 2026-02-19 | Stable release — reliable streaming, two-model optimization, export |
+| v0.9.0 | 2026-02-18 | MCP optimization, voice overhaul, Excel/CSV/PDF export |
 | v0.8.0 | 2026-02-17 | Voice pipeline (STT + TTS + VAD) |
-| v0.7.0 | 2026-02-17 | Single agent architecture, unified discovery |
-| v0.6.0 | 2026-02-16 | A2A multi-agent (deprecated), artifact panel |
-| v0.5.0 | 2026-02-14 | Auto-discovery engine, MCP tools |
-| v0.3.0 | 2026-02-11 | LangChain/LangGraph engine, premium UI |
-| v0.1.0 | 2026-02-09 | Initial release |
+| v0.7.0 | 2026-02-17 | Single agent architecture |
 
 See [CHANGELOG.md](CHANGELOG.md) for full history.
 
