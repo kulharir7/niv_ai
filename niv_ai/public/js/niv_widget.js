@@ -72,7 +72,7 @@
             '</div>',
             '<div class="niv-panel-loading" id="niv-loading">',
             '  <div class="niv-loading-spinner"></div>',
-            '  <div>Loading Niv AI...</div>',
+            '  <div>Loading...</div>',
             '</div>',
             '<iframe id="niv-iframe" class="niv-iframe" src="about:blank" allow="microphone"></iframe>'
         ].join('\n');
@@ -125,18 +125,18 @@
                             ".navbar, .page-head, #page-niv-chat > .page-head, .frappe-list-sidebar, .niv-sidebar-footer, .niv-model-badge-wrapper, .niv-model-dropdown, .niv-model-popover, .niv-header-actions, .msg-tokens, .niv-chat-header, .niv-header, .niv-sidebar, .niv-chat-sidebar { display: none !important; }",
                             "",
                             "/* Full viewport reset - FORCE LIGHT THEME */",
-                            "html, body { padding: 0 !important; margin: 0 !important; overflow: hidden !important; width: 100% !important; height: 100% !important; background: #f5f6f8 !important; }",
-                            "body { --niv-bg: #f5f6f8 !important; --niv-text: #1a1a1a !important; --niv-text-muted: #666666 !important; }",
+                            "html, body { padding: 0 !important; margin: 0 !important; overflow: hidden !important; width: 100% !important; height: 100% !important; background: #18181e !important; }",
+                            "body { --niv-bg: #18181e !important; --niv-text: #e5e5e5 !important; --niv-text-muted: #9ca3af !important; }",
                             "",
                             "/* Container reset - remove ALL padding/margins */",
-                            ".container, .container.page-body, .page-container, .main-section, .layout-main, .layout-main-section, .page-body, #page-niv-chat, #page-niv-chat .layout-main-section-wrapper, #page-niv-chat .layout-main-section { padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; height: 100% !important; background: #f5f6f8 !important; border: none !important; }",
+                            ".container, .container.page-body, .page-container, .main-section, .layout-main, .layout-main-section, .page-body, #page-niv-chat, #page-niv-chat .layout-main-section-wrapper, #page-niv-chat .layout-main-section { padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; height: 100% !important; background: #18181e !important; border: none !important; }",
                             "",
                             "/* Chat container - fill completely */",
-                            ".niv-chat-container { --niv-chat-width: 100% !important; height: 100% !important; width: 100% !important; border-radius: 0 !important; display: flex !important; flex-direction: column !important; border: none !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: #f5f6f8 !important; }",
+                            ".niv-chat-container { --niv-chat-width: 100% !important; height: 100% !important; width: 100% !important; border-radius: 0 !important; display: flex !important; flex-direction: column !important; border: none !important; box-shadow: none !important; margin: 0 !important; max-width: 100% !important; background: #18181e !important; }",
                             ".niv-chat-container::before, .niv-chat-container::after { display: none !important; }",
                             "",
                             "/* Main area - flex fill */",
-                            ".niv-main { width: 100% !important; padding: 0 !important; margin: 0 !important; height: 100% !important; display: flex !important; flex-direction: column !important; flex: 1 !important; min-height: 0 !important; background: #f5f6f8 !important; }",
+                            ".niv-main { width: 100% !important; padding: 0 !important; margin: 0 !important; height: 100% !important; display: flex !important; flex-direction: column !important; flex: 1 !important; min-height: 0 !important; background: #18181e !important; }",
                             "",
                             "/* Messages area - scrollable */",
                             ".niv-chat-messages { max-width: 100% !important; width: 100% !important; margin: 0 !important; padding: 16px !important; flex: 1 !important; overflow-y: auto !important; min-height: 0 !important; }",
@@ -145,7 +145,7 @@
                             ".niv-message { max-width: 100% !important; margin: 0 !important; padding: 8px 0 !important; }",
                             "",
                             "/* Input area - fixed at bottom with proper spacing */",
-                            ".niv-input-area { padding: 12px 16px 16px !important; width: 100% !important; flex-shrink: 0 !important; background: #f5f6f8 !important; border-top: 1px solid #e5e5e5 !important; }",
+                            ".niv-input-area { padding: 12px 16px 16px !important; width: 100% !important; flex-shrink: 0 !important; background: #18181e !important; border-top: 1px solid #e5e5e5 !important; }",
                             ".niv-input-pill { max-width: 100% !important; width: 100% !important; margin: 0 !important; }",
                             "",
                             "/* Hide disclaimer in widget */",
@@ -159,17 +159,25 @@
                             ".niv-chat-messages:has(.niv-message) { justify-content: flex-start !important; }",
                             ".niv-empty-state { max-width: 100% !important; width: 100% !important; margin: 0 auto !important; padding: 20px 16px !important; flex-shrink: 0 !important; }",
                             ".niv-empty-state .empty-orb { width: 52px !important; height: 52px !important; margin-bottom: 12px !important; }",
-                            ".niv-empty-state .empty-greeting { color: #1a1a1a !important; font-weight: 600 !important; font-size: 18px !important; margin-bottom: 4px !important; }",
-                            ".niv-empty-state .empty-subtitle { color: #666666 !important; font-size: 13px !important; margin-bottom: 16px !important; }",
+                            ".niv-empty-state .empty-greeting { color: #e5e5e5 !important; font-weight: 600 !important; font-size: 18px !important; margin-bottom: 4px !important; }",
+                            ".niv-empty-state .empty-subtitle { color: #9ca3af !important; font-size: 13px !important; margin-bottom: 16px !important; }",
                             ".empty-suggestions { gap: 6px !important; padding: 0 8px !important; }",
                             "",
                             "/* User message - white text on dark bubble */",
-                            ".niv-message.user .msg-content { background: #1a1a1a !important; color: #ffffff !important; }",
+                            ".niv-message.user .msg-content { background: #7c3aed !important; color: #ffffff !important; }",
                             "",
                             "/* Assistant message - dark text */",
-                            ".niv-message.assistant .msg-content { color: #1a1a1a !important; }",
+                            ".niv-message.assistant .msg-content { color: #e5e5e5 !important; }",
                             "",
-                            "/* Other elements */",
+                                        "/* Other elements */",
+                            "/* Dark theme for widget */",
+                            ".niv-input-pill { background: #2a2a35 !important; border-color: rgba(255,255,255,0.1) !important; }",
+                            ".niv-input-textarea { color: #e5e5e5 !important; background: transparent !important; }",
+                            ".niv-input-textarea::placeholder { color: #6b7280 !important; }",
+                            ".niv-input-right .btn, .btn-attach-file { color: #9ca3af !important; }",
+                            ".msg-content pre, .msg-content code { background: #1e1e2e !important; color: #e5e5e5 !important; border-color: rgba(255,255,255,0.08) !important; }",
+                            ".empty-suggestion-card, .msg-suggestion-chip { background: #2a2a35 !important; color: #e5e5e5 !important; border-color: rgba(255,255,255,0.08) !important; }",
+                            ".niv-scroll-bottom { background: #2a2a35 !important; color: #e5e5e5 !important; border-color: rgba(255,255,255,0.1) !important; }",
                             ".niv-attach-preview, .niv-typing-indicator, .niv-input-footer { max-width: 100% !important; width: 100% !important; margin-left: 0 !important; margin-right: 0 !important; }",
                         ].join("\n");
                         iframeDoc.head.appendChild(style);
@@ -228,6 +236,8 @@
                                 }
                             }
                             if (fab) fab.title = title;
+                            var loadingEl = document.getElementById("niv-loading-text");
+                            if (loadingEl) loadingEl.textContent = "Loading " + title + "...";
                         }
                     }
                 });
