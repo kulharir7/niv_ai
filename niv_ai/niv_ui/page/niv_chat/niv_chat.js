@@ -365,17 +365,23 @@ class NivChat {
         });
 
         // Toggle sidebar
-        this.wrapper.find(".btn-toggle-sidebar").on("click", () => {
+        // mobile-sidebar-fix-v3
+        this.wrapper.find(".btn-toggle-sidebar").on("click touchend", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             this.toggle_sidebar();
         });
 
         // Close sidebar button (inside sidebar)
-        this.wrapper.find(".btn-close-sidebar").on("click", () => {
+        this.wrapper.find(".btn-close-sidebar").on("click touchend", (e) => {
+            e.preventDefault();
+            e.stopPropagation();
             this.toggle_sidebar(false);
         });
 
         // Backdrop click to close
-        this.$sidebarBackdrop.on("click", () => {
+        this.$sidebarBackdrop.on("click touchend", (e) => {
+            e.preventDefault();
             this.toggle_sidebar(false);
         });
     }
