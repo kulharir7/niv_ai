@@ -1250,6 +1250,16 @@ ${htmlCode}
             this.wrapper.find(".niv-header-title").text(displayName);
             this.$input.attr("placeholder", "Message " + displayName + "...");
 
+            // Update header logo if set
+            const logoUrl = s.widget_logo;
+            const $header = this.wrapper.find(".niv-chat-header");
+            $header.find(".niv-header-logo").remove();
+            if (logoUrl) {
+                this.wrapper.find(".niv-header-title").before(
+                    '<img class="niv-header-logo" src="' + logoUrl + '" alt="" style="width:28px;height:28px;border-radius:6px;margin-right:8px;object-fit:cover;" />'
+                );
+            }
+
             if (providerName) {
                 try {
                     const prov = await frappe.call({ method: "frappe.client.get", args: { doctype: "Niv AI Provider", name: providerName } });
