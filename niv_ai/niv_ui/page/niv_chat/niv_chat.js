@@ -2942,9 +2942,10 @@ ${htmlCode}
                     this.$credits.attr("title", `Daily: ${data.daily_used || 0}/${data.daily_limit} tokens`);
                 }
                 this.current_balance = data.balance;
+                this._total_pool = (data.balance + (data.total_used || 0)) || data.balance;
 
                 // Update Token Ring
-                this.update_token_ring(data.balance, data.daily_limit || 100000);
+                this.update_token_ring(data.balance, (data.balance + (data.total_used || 0)) || data.balance);
 
                 // Low balance warning
                 if (data.balance < 500 && data.balance > 0) {
@@ -2977,7 +2978,7 @@ ${htmlCode}
         if (balance !== undefined && balance !== null) {
             this.$credits.text(this.format_credits(balance));
             this.current_balance = balance;
-            this.update_token_ring(balance, 100000); // default limit
+            this.update_token_ring(balance, (this._total_pool || balance)); // use total pool
             if (balance < 500 && balance > 0) {
                 this.$lowBalanceWarning.show();
                 this.$credits.css("color", "#f59e0b");
@@ -2997,12 +2998,22 @@ ${htmlCode}
         }
     }
 
-    update_token_ring(used, limit) {
+    update_token_ring(balance, total) {
         const usage_val = this.wrapper.find(".niv-token-usage-value");
-        usage_val.text(Number(used).toLocaleString() + " / " + Number(limit).toLocaleString());
+        // Show remaining balance / total pool
+        const fmt = (n) => {
+            if (n >= 10000000) return (n / 10000000).toFixed(1) + " Cr";
+            if (n >= 100000) return (n / 100000).toFixed(1) + " L";
+            if (n >= 1000) return (n / 1000).toFixed(1) + "K";
+            return Number(n).toLocaleString();
+        };
+        usage_val.text(fmt(balance) + " / " + fmt(total));
         
-        if (used >= limit * 0.9) {
+        // Red when less than 10% remaining
+        if (balance <= total * 0.1) {
             usage_val.css("color", "#ef4444");
+        } else if (balance <= total * 0.3) {
+            usage_val.css("color", "#f59e0b");
         } else {
             usage_val.css("color", "");
         }
