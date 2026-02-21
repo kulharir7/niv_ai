@@ -1,22 +1,26 @@
 {
-  "name": "Niv AI - Business Assistant",
-  "short_name": "Niv AI",
+  "name": "Chanakya AI - Business Assistant",
+  "short_name": "Chanakya AI",
   "description": "AI-powered business assistant for ERPNext",
   "start_url": "/app/niv-chat",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f5f6f8",
+  "background_color": "#1a1a2e",
   "theme_color": "#7c3aed",
-  "orientation": "portrait",
+  "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
   "icons": [
     {
       "src": "/assets/niv_ai/images/niv-icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "/assets/niv_ai/images/niv-icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
