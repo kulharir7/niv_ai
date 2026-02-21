@@ -1252,6 +1252,7 @@ ${htmlCode}
 
             // Update header logo if set
             const logoUrl = s.widget_logo;
+            this._bot_logo_url = logoUrl || "";
             const $header = this.wrapper.find(".niv-chat-header");
             $header.find(".niv-header-logo").remove();
             if (logoUrl) {
@@ -1715,7 +1716,7 @@ ${htmlCode}
     append_message(role, content, meta = {}) {
         this.hide_empty_state();
         const isUser = role === "user";
-        const avatar = isUser ? this.get_user_avatar() : '<div class="msg-avatar-icon">🛰️</div>';
+        const avatar = isUser ? this.get_user_avatar() : this.get_bot_avatar();
         const time = meta.creation ? frappe.datetime.prettyDate(meta.creation) : "";
         const msgIndex = this.messages_data.length;
 
@@ -1939,6 +1940,14 @@ ${htmlCode}
         const fullName = frappe.session.user_fullname || "U";
         const initials = fullName.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase();
         return `<span class="user-initials">${initials}</span>`;
+    }
+
+    get_bot_avatar() {
+        if (this._bot_logo_url) {
+            return '<img class="msg-avatar-icon" src="' + this._bot_logo_url + '" alt="" style="width:100%;height:100%;border-radius:50%;object-fit:cover;" />';
+        }
+        const letter = (this.widget_name || "N").charAt(0).toUpperCase();
+        return '<span class="msg-avatar-icon" style="font-size:16px;font-weight:700;">' + letter + '</span>';
     }
 
     // ─── Message Actions ────────────────────────────────────────────
@@ -2871,9 +2880,9 @@ ${htmlCode}
         if (!this.wrapper.find(".niv-typing-indicator").length) {
             this.$chatArea.append(`
                 <div class="niv-typing-indicator">
-                    <div class="msg-avatar"><span style="font-size:16px;font-weight:700;">N</span></div>
+                    <div class="msg-avatar">${this.get_bot_avatar()}</div>
                     <div class="typing-content">
-                        <span class="typing-text">Niv is thinking</span>
+                        <span class="typing-text">${this.widget_name || "Niv"} is thinking</span>
                         <span class="typing-dots-anim"><span></span><span></span><span></span></span>
                         <span class="typing-elapsed"></span>
                     </div>
