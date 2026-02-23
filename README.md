@@ -279,4 +279,15 @@ MIT License — see [LICENSE](LICENSE).
 
 ---
 
+## Contributors
+
+<a href="https://github.com/kulharir7">
+  <img src="https://github.com/kulharir7.png" width="60" style="border-radius:50%" alt="Ravindra Kulhari"/>
+</a>
+<a href="https://github.com/parinita22-cyber">
+  <img src="https://github.com/parinita22-cyber.png" width="60" style="border-radius:50%" alt="parinita22-cyber"/>
+</a>
+
+---
+
 <p align="center">Built for ERPNext businesses by <a href="https://github.com/kulharir7">Ravindra Kulhari</a></p>
