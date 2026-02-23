@@ -9,13 +9,28 @@ from niv_ai.niv_core.api._helpers import validate_conversation, save_user_messag
 
 
 @frappe.whitelist()
-def send_message(conversation_id, message, model=None, provider=None):
+def send_message(conversation_id, message, model=None, provider=None, attachments=None):
     """Send message via LangChain agent (non-streaming fallback)."""
+    import json as _json
+
     user = frappe.session.user
     message = (message or "").strip()
 
     if not message:
         frappe.throw(_("Message cannot be empty"))
+
+    # Parse attachments from JSON string
+    parsed_attachments = None
+    if attachments:
+        if isinstance(attachments, str):
+            try:
+                parsed_attachments = _json.loads(attachments)
+            except Exception:
+                parsed_attachments = None
+        elif isinstance(attachments, list):
+            parsed_attachments = attachments
+    if parsed_attachments and not len(parsed_attachments):
+        parsed_attachments = None
 
     validate_conversation(conversation_id, user)
 
@@ -38,6 +53,7 @@ def send_message(conversation_id, message, model=None, provider=None):
         provider_name=provider,
         model=model,
         user=user,
+        attachments=parsed_attachments,
     )
 
     _model_used = model or settings.default_model
