@@ -348,6 +348,7 @@ def run_agent(
     model: str = None,
     user: str = None,
     system_prompt: str = None,
+    attachments: list = None,
 ) -> str:
     """Run agent synchronously — returns final response text."""
     user = user or frappe.session.user
