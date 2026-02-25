@@ -399,22 +399,29 @@ def credit_tokens_external(api_key, user_email, tokens, token_type="purchased",
     if not user:
         frappe.throw(_("User not found: {0}").format(user_email))
     
-    # Get or create wallet
-    wallet = get_or_create_wallet(user)
+    # Credit tokens based on billing mode
+    settings = frappe.get_single("Niv Settings")
     
-    # Credit tokens
-    wallet.balance += tokens
-    wallet.total_allocated = (wallet.total_allocated or 0) + tokens
-    wallet.last_recharged = now_datetime()
-    
-    # Set plan if provided
-    if plan_name and frappe.db.exists("Niv Credit Plan", plan_name):
-        wallet.current_plan = plan_name
-        plan = frappe.get_doc("Niv Credit Plan", plan_name)
-        validity = expiry_days if expiry_days is not None else (plan.validity_days or 30)
-        wallet.plan_expiry = add_days(getdate(), validity)
-    
-    wallet.save(ignore_permissions=True)
+    if settings.billing_mode == "Shared Pool":
+        # Update shared pool balance
+        new_balance = (settings.shared_pool_balance or 0) + tokens
+        db_set_single_value("Niv Settings", "shared_pool_balance", new_balance)
+    else:
+        # Per-user wallet mode
+        wallet = get_or_create_wallet(user)
+        wallet.balance += tokens
+        wallet.total_allocated = (wallet.total_allocated or 0) + tokens
+        wallet.last_recharged = now_datetime()
+        
+        # Set plan if provided
+        if plan_name and frappe.db.exists("Niv Credit Plan", plan_name):
+            wallet.current_plan = plan_name
+            plan = frappe.get_doc("Niv Credit Plan", plan_name)
+            validity = expiry_days if expiry_days is not None else (plan.validity_days or 30)
+            wallet.plan_expiry = add_days(getdate(), validity)
+        
+        wallet.save(ignore_permissions=True)
+        new_balance = wallet.balance
     
     # Map external type to allowed Niv Recharge transaction_type values
     tx_type = "recharge"
@@ -438,7 +445,7 @@ def credit_tokens_external(api_key, user_email, tokens, token_type="purchased",
         frappe.db.set_value("Niv Recharge", pending_recharge_name, {
             "status": "Completed",
             "payment_id": ext_payment_id,
-            "balance_after": wallet.balance,
+            "balance_after": new_balance,
             "remarks": f"Completed via external credit. Ref: {source_ref}",
         }, update_modified=True)
     else:
@@ -451,7 +458,7 @@ def credit_tokens_external(api_key, user_email, tokens, token_type="purchased",
             "status": "Completed",
             "payment_id": ext_payment_id,
             "remarks": f"External credit from billing server. Ref: {source_ref or 'N/A'}",
-            "balance_after": wallet.balance,
+            "balance_after": new_balance,
         }).insert(ignore_permissions=True)
     
     frappe.db.commit()
@@ -462,9 +469,8 @@ def credit_tokens_external(api_key, user_email, tokens, token_type="purchased",
         "user_email": user_email,
         "tokens_credited": tokens,
         "token_type": token_type,
-        "new_balance": wallet.balance,
-        "plan": wallet.current_plan,
-        "plan_expiry": str(wallet.plan_expiry) if wallet.plan_expiry else None,
+        "new_balance": new_balance,
+        "billing_mode": settings.billing_mode,
     }
 
 
