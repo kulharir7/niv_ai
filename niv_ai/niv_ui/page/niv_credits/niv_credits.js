@@ -152,9 +152,9 @@ class NivCredits {
                 this.loadTransactions();
                 return;
             } else if (order.payment_mode === "growth") {
-                frappe.show_alert({ message: order.message || "Order created!", indicator: "green" }, 5);
-                this.loadBalance();
+                frappe.show_alert({ message: order.message || "Recharge request submitted.", indicator: "green" }, 5);
                 this.loadHistory();
+                this.loadBalance();
             } else {
                 this.openDemoCheckout(order);
             }
