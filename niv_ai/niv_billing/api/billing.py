@@ -276,3 +276,228 @@ def cleanup_expired_credits():
 def generate_usage_summary():
     """Weekly scheduler placeholder"""
     pass
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# EXTERNAL INTEGRATION APIs — For Billing Server Connection
+# ══════════════════════════════════════════════════════════════════════════════
+
+@frappe.whitelist(allow_guest=True)
+def credit_tokens_external(api_key, user_email, tokens, token_type="purchased", 
+                           plan_name=None, expiry_days=None, source_ref=None):
+    """
+    External API for billing server to credit tokens to a user.
+    
+    Args:
+        api_key: Secret key for authentication
+        user_email: User's email address
+        tokens: Number of tokens to credit
+        token_type: 'purchased' | 'daily_free' | 'bonus'
+        plan_name: Optional plan name to set
+        expiry_days: For daily_free, how many days until expiry (0 = end of day)
+        source_ref: Reference from billing server (e.g. Sales Order name)
+    
+    Returns:
+        dict with success status and new balance
+    """
+    # Validate API key (uses webhook secret from Growth Billing section)
+    settings = frappe.get_single("Niv Settings")
+    expected_key = settings.get_password('billing_erp_webhook_secret') if settings.billing_erp_webhook_secret else None
+    
+    if not expected_key:
+        frappe.throw(_("Billing webhook secret not configured in Niv Settings → Growth Billing"), frappe.AuthenticationError)
+    
+    if api_key != expected_key:
+        frappe.throw(_("Invalid API key"), frappe.AuthenticationError)
+    
+    # Validate inputs
+    tokens = int(tokens or 0)
+    if tokens <= 0:
+        frappe.throw(_("Tokens must be positive"))
+
+    user_email = (user_email or "").strip().lower()
+
+    # Idempotency guard: prevent duplicate credit for same source_ref
+    ext_payment_id = f"ext_{source_ref}" if source_ref else None
+    if ext_payment_id and frappe.db.exists("Niv Recharge", {"payment_id": ext_payment_id}):
+        existing = frappe.db.get_value(
+            "Niv Recharge",
+            {"payment_id": ext_payment_id},
+            ["name", "user", "balance_after"],
+            as_dict=True,
+        )
+        return {
+            "success": True,
+            "idempotent": True,
+            "message": f"Already credited for source_ref {source_ref}",
+            "recharge": existing.get("name") if existing else None,
+            "user": existing.get("user") if existing else None,
+            "new_balance": existing.get("balance_after") if existing else None,
+        }
+    
+    # Find user by email
+    user = frappe.db.get_value("User", {"email": user_email}, "name")
+    if not user:
+        frappe.throw(_("User not found: {0}").format(user_email))
+    
+    # Get or create wallet
+    wallet = get_or_create_wallet(user)
+    
+    # Credit tokens
+    wallet.balance += tokens
+    wallet.total_allocated = (wallet.total_allocated or 0) + tokens
+    wallet.last_recharged = now_datetime()
+    
+    # Set plan if provided
+    if plan_name and frappe.db.exists("Niv Credit Plan", plan_name):
+        wallet.current_plan = plan_name
+        plan = frappe.get_doc("Niv Credit Plan", plan_name)
+        validity = expiry_days if expiry_days is not None else (plan.validity_days or 30)
+        wallet.plan_expiry = add_days(getdate(), validity)
+    
+    wallet.save(ignore_permissions=True)
+    
+    # Map external type to allowed Niv Recharge transaction_type values
+    tx_type = "recharge"
+    if token_type in ["allocation", "deduction", "recharge", "expiry", "adjustment"]:
+        tx_type = token_type
+    elif token_type in ["purchased", "purchase", "topup"]:
+        tx_type = "recharge"
+
+    # Check if pending recharge row exists for this source_ref (created by create_order)
+    # If found, update it to Completed instead of creating duplicate row
+    pending_recharge_name = None
+    if source_ref:
+        pending_recharge_name = frappe.db.get_value(
+            "Niv Recharge",
+            {"razorpay_order_id": source_ref, "status": "Pending"},
+            "name"
+        )
+    
+    if pending_recharge_name:
+        # Update existing pending row to Completed
+        frappe.db.set_value("Niv Recharge", pending_recharge_name, {
+            "status": "Completed",
+            "payment_id": ext_payment_id,
+            "balance_after": wallet.balance,
+            "remarks": f"Completed via external credit. Ref: {source_ref}",
+        }, update_modified=True)
+    else:
+        # Create new recharge record (fallback for direct API calls without prior pending row)
+        frappe.get_doc({
+            "doctype": "Niv Recharge",
+            "user": user,
+            "tokens": tokens,
+            "transaction_type": tx_type,
+            "status": "Completed",
+            "payment_id": ext_payment_id,
+            "remarks": f"External credit from billing server. Ref: {source_ref or 'N/A'}",
+            "balance_after": wallet.balance,
+        }).insert(ignore_permissions=True)
+    
+    frappe.db.commit()
+    
+    return {
+        "success": True,
+        "user": user,
+        "user_email": user_email,
+        "tokens_credited": tokens,
+        "token_type": token_type,
+        "new_balance": wallet.balance,
+        "plan": wallet.current_plan,
+        "plan_expiry": str(wallet.plan_expiry) if wallet.plan_expiry else None,
+    }
+
+
+@frappe.whitelist(allow_guest=True)
+def get_plans_external(api_key):
+    """
+    External API for billing server to fetch plans.
+    Used to sync plans to billing server.
+    """
+    settings = frappe.get_single("Niv Settings")
+    expected_key = settings.get_password('billing_erp_webhook_secret') if settings.billing_erp_webhook_secret else None
+    
+    if not expected_key or api_key != expected_key:
+        frappe.throw(_("Invalid API key"), frappe.AuthenticationError)
+    
+    plans = frappe.get_all("Niv Credit Plan",
+        fields=["name", "plan_name", "tokens", "price", "currency", 
+                "description", "validity_days", "is_default", "is_active"],
+        filters={"is_active": 1},
+        order_by="price ASC"
+    )
+    return {"success": True, "plans": plans}
+
+
+@frappe.whitelist(allow_guest=True)
+def check_balance_external(api_key, user_email):
+    """
+    External API to check user's token balance.
+    """
+    settings = frappe.get_single("Niv Settings")
+    expected_key = settings.get_password('billing_erp_webhook_secret') if settings.billing_erp_webhook_secret else None
+    
+    if not expected_key or api_key != expected_key:
+        frappe.throw(_("Invalid API key"), frappe.AuthenticationError)
+    
+    user = frappe.db.get_value("User", {"email": user_email}, "name")
+    if not user:
+        return {"success": False, "error": "User not found", "balance": 0}
+    
+    wallet = get_or_create_wallet(user)
+    return {
+        "success": True,
+        "user": user,
+        "user_email": user_email,
+        "balance": wallet.balance,
+        "current_plan": wallet.current_plan,
+        "plan_expiry": str(wallet.plan_expiry) if wallet.plan_expiry else None,
+    }
+
+
+@frappe.whitelist(allow_guest=True) 
+def credit_daily_free_tokens(api_key, user_email, tokens):
+    """
+    Credit daily free tokens that expire at end of day.
+    Called by billing server's daily cron job.
+    """
+    settings = frappe.get_single("Niv Settings")
+    expected_key = settings.get_password('billing_erp_webhook_secret') if settings.billing_erp_webhook_secret else None
+    
+    if not expected_key or api_key != expected_key:
+        frappe.throw(_("Invalid API key"), frappe.AuthenticationError)
+    
+    tokens = int(tokens or 0)
+    if tokens <= 0:
+        return {"success": False, "error": "Tokens must be positive"}
+    
+    user = frappe.db.get_value("User", {"email": user_email}, "name")
+    if not user:
+        return {"success": False, "error": f"User not found: {user_email}"}
+    
+    # For daily free tokens, we add to wallet but track separately
+    # The expiry is handled by a daily cleanup job
+    wallet = get_or_create_wallet(user)
+    wallet.balance += tokens
+    wallet.total_allocated = (wallet.total_allocated or 0) + tokens
+    wallet.save(ignore_permissions=True)
+    
+    # Log using valid transaction type + daily marker in remarks
+    frappe.get_doc({
+        "doctype": "Niv Recharge",
+        "user": user,
+        "tokens": tokens,
+        "transaction_type": "recharge",
+        "remarks": f"Daily free tokens - expires at midnight",
+        "balance_after": wallet.balance,
+    }).insert(ignore_permissions=True)
+    
+    frappe.db.commit()
+    
+    return {
+        "success": True,
+        "user": user,
+        "tokens_credited": tokens,
+        "new_balance": wallet.balance,
+    }
