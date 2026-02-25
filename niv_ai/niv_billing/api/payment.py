@@ -14,7 +14,8 @@ def _get_payment_mode():
     # Growth Billing if configured
     erp_url = getattr(settings, "billing_erp_url", None)
     erp_key = getattr(settings, "billing_erp_api_key", None)
-    if erp_url and erp_key:
+    erp_secret = settings.get_password("billing_erp_api_secret")
+    if erp_url and erp_key and erp_secret:
         return "growth"
 
     return "demo"
@@ -27,20 +28,67 @@ def _is_demo_mode():
 
 @frappe.whitelist(allow_guest=False)
 def get_plans():
-    """List available credit plans for recharge"""
-    plans = frappe.get_all(
-        "Niv Credit Plan",
-        filters={"is_active": 1},
-        fields=["name", "plan_name", "tokens", "price", "validity_days", "description"],
-        order_by="price ASC",
-    )
-    for p in plans:
-        p["credits"] = p.get("tokens", 0)
-        p["currency"] = "INR"
+    """List available credit plans for recharge.
+
+    Priority:
+    1) Billing server Token Plan (single source of truth)
+    2) Local Niv Credit Plan fallback
+    """
+    payment_mode = _get_payment_mode()
+    plans = []
+
+    # Try billing-side plans first when growth billing is configured
+    if payment_mode == "growth":
+        settings = frappe.get_single("Niv Settings")
+        erp_url = (settings.billing_erp_url or "").rstrip("/")
+        api_key = settings.billing_erp_api_key
+        api_secret = settings.get_password("billing_erp_api_secret")
+
+        if erp_url and api_key and api_secret:
+            try:
+                import requests as req
+
+                fields = json.dumps(["name", "plan_name", "tokens", "price", "currency", "description", "is_active", "sort_order"])
+                filters = json.dumps([["Token Plan", "is_active", "=", 1]])
+                order_by = "sort_order asc"
+
+                resp = req.get(
+                    f"{erp_url}/api/resource/Token Plan",
+                    headers={"Authorization": f"token {api_key}:{api_secret}"},
+                    params={"fields": fields, "filters": filters, "order_by": order_by, "limit_page_length": 100},
+                    timeout=20,
+                )
+                resp.raise_for_status()
+                data = (resp.json() or {}).get("data", [])
+
+                for p in data:
+                    plans.append({
+                        "name": p.get("name"),
+                        "plan_name": p.get("plan_name") or p.get("name"),
+                        "tokens": int(p.get("tokens") or 0),
+                        "price": flt(p.get("price") or 0),
+                        "description": p.get("description") or "",
+                        "currency": p.get("currency") or "INR",
+                        "credits": int(p.get("tokens") or 0),
+                    })
+            except Exception as e:
+                frappe.log_error(f"Billing plans fetch failed: {e}", "Niv Growth Billing Plans")
+
+    # Fallback to local plans if billing plans unavailable
+    if not plans:
+        plans = frappe.get_all(
+            "Niv Credit Plan",
+            filters={"is_active": 1},
+            fields=["name", "plan_name", "tokens", "price", "validity_days", "description"],
+            order_by="price ASC",
+        )
+        for p in plans:
+            p["credits"] = p.get("tokens", 0)
+            p["currency"] = p.get("currency") or "INR"
 
     return {
         "plans": plans,
-        "payment_mode": _get_payment_mode(),
+        "payment_mode": payment_mode,
         "demo_mode": _is_demo_mode(),
     }
 
@@ -53,8 +101,31 @@ def create_order(plan_name):
     - growth: Creates Sales Order on vendor's ERPNext via Growth Billing
     - demo: Fake order for testing
     """
-    plan = frappe.get_doc("Niv Credit Plan", plan_name)
-    if not plan.is_active:
+    payment_mode = _get_payment_mode()
+
+    # Resolve plan from local first, then billing-side for growth mode
+    plan = None
+    if frappe.db.exists("Niv Credit Plan", plan_name):
+        plan = frappe.get_doc("Niv Credit Plan", plan_name)
+    elif payment_mode == "growth":
+        # Build a lightweight virtual plan object from billing Token Plan
+        billing_plans = get_plans().get("plans", [])
+        matched = next((p for p in billing_plans if p.get("name") == plan_name or p.get("plan_name") == plan_name), None)
+        if matched:
+            plan = frappe._dict({
+                "name": matched.get("name") or matched.get("plan_name"),
+                "plan_name": matched.get("plan_name") or matched.get("name"),
+                "tokens": int(matched.get("tokens") or 0),
+                "price": flt(matched.get("price") or 0),
+                "description": matched.get("description") or "",
+                "is_active": 1,
+                "currency": matched.get("currency") or "INR",
+            })
+
+    if not plan:
+        frappe.throw(_("Selected plan not found."))
+
+    if not getattr(plan, "is_active", 1):
         frappe.throw(_("This plan is not available."))
 
     user = frappe.session.user
@@ -103,6 +174,7 @@ def _create_growth_order(plan, user, settings, currency):
     erp_url = settings.billing_erp_url.rstrip("/")
     api_key = settings.billing_erp_api_key
     api_secret = settings.get_password("billing_erp_api_secret")
+    user_email = frappe.db.get_value("User", user, "email") or user
     customer = getattr(settings, "billing_erp_customer", None) or "Niv AI Customer"
     item_code = getattr(settings, "billing_erp_item", None) or "Niv AI Token Recharge"
 
@@ -114,16 +186,18 @@ def _create_growth_order(plan, user, settings, currency):
         "transaction_date": frappe.utils.today(),
         "delivery_date": frappe.utils.today(),
         "currency": currency,
+        "contact_email": user_email,
         "items": [{
             "item_code": item_code,
-            "qty": 1,
-            "rate": flt(plan.price),
+            "qty": int(plan.tokens),  # qty itself represents token count
+            "rate": flt(plan.price) / max(int(plan.tokens), 1),
             "description": f"{plan.plan_name} - {plan.tokens:,} tokens",
         }],
         "custom_niv_recharge_tokens": int(plan.tokens),
         "custom_niv_callback_url": f"{site_url}/api/method/niv_ai.niv_billing.api.payment.erpnext_webhook",
         "custom_niv_plan": plan.plan_name,
         "custom_niv_site": frappe.local.site,
+        "custom_niv_user_email": user_email,
     }
 
     try:
@@ -166,6 +240,7 @@ def _create_growth_order(plan, user, settings, currency):
         "tokens": plan.tokens,
         "amount": int(flt(plan.price) * 100),
         "currency": currency,
+        "redirect_url": f"{erp_url}/app/sales-order/{so_name}",
     }
 
 
