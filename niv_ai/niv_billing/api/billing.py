@@ -269,8 +269,67 @@ def admin_allocate_credits(user, amount):
 
 
 def cleanup_expired_credits():
-    """Daily scheduler: placeholder for expired plan handling"""
-    pass
+    """
+    Daily scheduler job: expire daily free tokens from previous days.
+    
+    Runs at midnight (configured in hooks.py).
+    Finds daily free token credits from before today and deducts them from wallet.
+    """
+    from frappe.utils import today, getdate
+    
+    today_date = getdate()
+    
+    # Find all daily free token credits from before today that haven't been expired yet
+    # These have remarks containing "Daily free tokens" and no corresponding expiry record
+    daily_credits = frappe.db.sql("""
+        SELECT name, user, tokens, DATE(creation) as credit_date
+        FROM `tabNiv Recharge`
+        WHERE remarks LIKE '%%Daily free tokens%%'
+        AND DATE(creation) < %(today)s
+        AND status = 'Completed'
+        AND name NOT IN (
+            SELECT REPLACE(payment_id, 'expiry_', '') 
+            FROM `tabNiv Recharge` 
+            WHERE payment_id LIKE 'expiry_%%'
+        )
+    """, {"today": today_date}, as_dict=True)
+    
+    if not daily_credits:
+        return {"expired_count": 0, "message": "No daily tokens to expire"}
+    
+    expired_count = 0
+    for credit in daily_credits:
+        try:
+            user = credit.user
+            tokens_to_expire = credit.tokens
+            
+            # Get wallet and deduct (only up to available balance)
+            wallet = get_or_create_wallet(user)
+            actual_deduct = min(tokens_to_expire, wallet.balance)
+            
+            if actual_deduct > 0:
+                wallet.balance -= actual_deduct
+                wallet.save(ignore_permissions=True)
+            
+            # Create expiry record
+            frappe.get_doc({
+                "doctype": "Niv Recharge",
+                "user": user,
+                "tokens": -actual_deduct,  # negative to show deduction
+                "transaction_type": "expiry",
+                "payment_id": f"expiry_{credit.name}",  # link to original credit
+                "remarks": f"Daily free tokens expired (from {credit.credit_date})",
+                "balance_after": wallet.balance,
+                "status": "Completed",
+            }).insert(ignore_permissions=True)
+            
+            expired_count += 1
+            
+        except Exception as e:
+            frappe.log_error(f"Failed to expire daily tokens for {credit.name}: {e}", "Niv Daily Token Expiry")
+    
+    frappe.db.commit()
+    return {"expired_count": expired_count, "message": f"Expired {expired_count} daily token credits"}
 
 
 def generate_usage_summary():
