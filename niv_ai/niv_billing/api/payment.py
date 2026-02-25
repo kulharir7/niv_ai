@@ -103,12 +103,10 @@ def create_order(plan_name):
     """
     payment_mode = _get_payment_mode()
 
-    # Resolve plan from local first, then billing-side for growth mode
+    # Resolve plan - in growth mode, billing server is source of truth
     plan = None
-    if frappe.db.exists("Niv Credit Plan", plan_name):
-        plan = frappe.get_doc("Niv Credit Plan", plan_name)
-    elif payment_mode == "growth":
-        # Build a lightweight virtual plan object from billing Token Plan
+    if payment_mode == "growth":
+        # Growth mode: fetch from billing server's Token Plan (source of truth)
         billing_plans = get_plans().get("plans", [])
         matched = next((p for p in billing_plans if p.get("name") == plan_name or p.get("plan_name") == plan_name), None)
         if matched:
@@ -121,6 +119,10 @@ def create_order(plan_name):
                 "is_active": 1,
                 "currency": matched.get("currency") or "INR",
             })
+    
+    # Fallback to local Niv Credit Plan (for demo mode or if billing fetch failed)
+    if not plan and frappe.db.exists("Niv Credit Plan", plan_name):
+        plan = frappe.get_doc("Niv Credit Plan", plan_name)
 
     if not plan:
         frappe.throw(_("Selected plan not found."))
