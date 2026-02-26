@@ -121,6 +121,7 @@ class NivChat {
         this.load_models();
         this.setup_keyboard_shortcuts();
         this.setup_scroll_watcher();
+        this._setup_auto_scroll();
         this.setup_mobile_touch();
     }
 
@@ -2525,9 +2526,11 @@ ${htmlCode}
 
     scroll_to_bottom_if_near() {
         const el = this.$chatArea[0];
+        if (!el) return;
         const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
-        if (distFromBottom < 300) {
-            this.scroll_to_bottom();
+        if (distFromBottom < 500) {
+            // During streaming use instant scroll to avoid jank
+            this.scroll_to_bottom(true);
         } else {
             this.unread_count++;
             this.$scrollBottom.find(".scroll-unread-badge").text(this.unread_count).show();
@@ -2942,11 +2945,30 @@ ${htmlCode}
     scroll_to_bottom(instant) {
         const el = this.$chatArea[0];
         if (!el) return;
-        if (instant) {
-            el.scrollTop = el.scrollHeight;
-        } else {
-            el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-        }
+        const doScroll = () => { if (el) el.scrollTop = el.scrollHeight; };
+        doScroll();
+        // Multiple delayed scrolls to catch post-render layout changes
+        // (tables, code blocks, markdown rendering can change height)
+        requestAnimationFrame(doScroll);
+        setTimeout(doScroll, 50);
+        setTimeout(doScroll, 150);
+        setTimeout(doScroll, 300);
+        setTimeout(doScroll, 500);
+    }
+
+    _setup_auto_scroll() {
+        // MutationObserver: auto-scroll when new content is added to chat area
+        if (this._scrollObserver) return;
+        const el = this.$chatArea[0];
+        if (!el) return;
+        this._scrollObserver = new MutationObserver(() => {
+            // Only auto-scroll if user is near bottom
+            const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+            if (dist < 500) {
+                el.scrollTop = el.scrollHeight;
+            }
+        });
+        this._scrollObserver.observe(el, { childList: true, subtree: true, characterData: true });
     }
 
     toggle_fullscreen() {
