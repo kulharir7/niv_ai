@@ -85,7 +85,7 @@ BENCHMARK_CASES = [
 
     # ── Category: General / No Tools ──
     ("Hello", [], "general"),
-    ("What is ERPNext", [], "general"),
+    ("What is Growth System", [], "general"),
     ("Thank you", [], "general"),
 ]
 

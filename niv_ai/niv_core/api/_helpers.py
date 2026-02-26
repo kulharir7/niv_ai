@@ -17,7 +17,7 @@ def get_user_api_key(user: str = None) -> str:
     
     This enables per-user permission isolation:
     - Each user's MCP tool calls use THEIR credentials
-    - ERPNext permission rules apply automatically
+    - Growth System permission rules apply automatically
     - No manual API key setup needed per user
     """
     user = user or frappe.session.user

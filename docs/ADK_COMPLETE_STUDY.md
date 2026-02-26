@@ -172,7 +172,7 @@ return LlmAgent(
     name="frappe_coder",
     model=self.adk_model,
     description=(  # ← CRITICAL for routing
-        "EXPERT in Frappe/ERPNext development. "
+        "EXPERT in Frappe/Growth System development. "
         "Handles: DocType creation, Server Scripts, Client Scripts, "
         "Custom Fields, Workflows, Print Formats, Web Forms. "
         "DO NOT USE for data queries or reports."

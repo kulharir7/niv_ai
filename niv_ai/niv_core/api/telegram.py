@@ -182,7 +182,7 @@ def _cmd_start(chat_id, first_name):
     greeting = f"Hello{(' ' + first_name) if first_name else ''}! I'm *Niv AI* 🤖"
     text = (
         f"{greeting}\n\n"
-        "I can help you with your ERPNext data:\n"
+        "I can help you with your Growth System data:\n"
         "• Query loans, customers, reports\n"
         "• Create and update records\n"
         "• Generate exports (Excel, PDF)\n"
@@ -218,7 +218,7 @@ def _cmd_help(chat_id):
         "/voice — Voice message info\n"
         "/status — Your account status\n\n"
         "*Account:*\n"
-        "/link email — Link your Telegram to ERPNext\n"
+        "/link email — Link your Telegram to Growth System\n"
         "/unlink — Unlink your account\n\n"
         "*Tips:*\n"
         "• Just type any question naturally\n"
@@ -343,12 +343,12 @@ def _cmd_link(chat_id, telegram_user_id, args, message):
     email = args.strip()
 
     if not email or "@" not in email:
-        _send_telegram(chat_id, "Usage: /link your@email.com\n\nThis links your Telegram to your ERPNext account.")
+        _send_telegram(chat_id, "Usage: /link your@email.com\n\nThis links your Telegram to your Growth System account.")
         return
 
     # Check if Frappe user exists
     if not frappe.db.exists("User", email):
-        _send_telegram(chat_id, f"❌ No ERPNext account found for: {email}\nPlease check the email address.")
+        _send_telegram(chat_id, f"❌ No Growth System account found for: {email}\nPlease check the email address.")
         return
 
     # Check if already linked
@@ -389,7 +389,7 @@ def _cmd_link(chat_id, telegram_user_id, args, message):
         doc.insert(ignore_permissions=True)
         frappe.db.commit()
 
-        _send_telegram(chat_id, f"✅ Account linked successfully!\n\nTelegram: {tg_name or telegram_user_id}\nERPNext: {email}\n\nYou can now ask me anything!")
+        _send_telegram(chat_id, f"✅ Account linked successfully!\n\nTelegram: {tg_name or telegram_user_id}\nGrowth System: {email}\n\nYou can now ask me anything!")
 
     except Exception as e:
         frappe.log_error("Telegram Link Error", frappe.get_traceback())

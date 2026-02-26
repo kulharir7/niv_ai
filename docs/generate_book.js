@@ -172,7 +172,7 @@ w(`
   <div class="cover-subtitle">The Complete Documentation Book</div>
   <p style="font-size:12pt; opacity:0.7; max-width:500px; position:relative; line-height:1.6;">
     A comprehensive guide to building, deploying, and mastering<br>
-    the AI-powered assistant for ERPNext &amp; Frappe Framework
+    the AI-powered assistant for Growth System &amp; Frappe Framework
   </p>
   <div class="cover-edition">Second Edition — Version 0.5.1 — February 2026</div>
   <div class="cover-author">By the Niv AI Team</div>
@@ -192,9 +192,9 @@ w(`
   <p style="margin-top:2em;">No part of this publication may be reproduced, distributed, or transmitted in any form or by any means without prior written permission.</p>
   <p style="margin-top:2em;"><strong>Software Version:</strong> Niv AI v0.5.1 (frappe_assistant_core + niv_tools)</p>
   <p><strong>Frappe Framework:</strong> v14 / v15</p>
-  <p><strong>ERPNext:</strong> v14 / v15</p>
+  <p><strong>Growth System:</strong> v14 / v15</p>
   <p style="margin-top:2em; font-size:9pt; color:var(--text-light);">
-    ERPNext and Frappe are registered trademarks of Frappe Technologies Pvt. Ltd.<br>
+    Growth System and Frappe are registered trademarks of Frappe Technologies Pvt. Ltd.<br>
     Telegram is a trademark of Telegram FZ-LLC.<br>
     WhatsApp is a trademark of Meta Platforms, Inc.<br>
     All other trademarks are property of their respective owners.
@@ -285,26 +285,26 @@ function apiEndpoint(method, url) {
 partDivider('1', 'Getting Started', 'Introduction, Installation, and your first conversations with Niv AI');
 
 // ============ CHAPTER 1 ============
-chapterHeader('1', 'Introduction to Niv AI', 'Understanding the AI-powered assistant that transforms how you interact with ERPNext');
+chapterHeader('1', 'Introduction to Niv AI', 'Understanding the AI-powered assistant that transforms how you interact with Growth System');
 
 w(`
 <h2>1.1 What is Niv AI?</h2>
 
-<p>Niv AI is a comprehensive artificial intelligence assistant designed specifically for the ERPNext and Frappe Framework ecosystem. Unlike general-purpose AI chatbots that provide generic responses, Niv AI is deeply integrated with your ERPNext instance, capable of reading, creating, updating, and managing your business data through natural language conversations.</p>
+<p>Niv AI is a comprehensive artificial intelligence assistant designed specifically for the Growth System and Frappe Framework ecosystem. Unlike general-purpose AI chatbots that provide generic responses, Niv AI is deeply integrated with your Growth System instance, capable of reading, creating, updating, and managing your business data through natural language conversations.</p>
 
-<p>At its core, Niv AI bridges the gap between the powerful but complex ERPNext ERP system and the intuitive simplicity of conversational AI. Instead of navigating through dozens of menus, filling out forms, and running reports manually, users can simply ask Niv AI to perform these tasks in plain English (or Hindi, or any supported language).</p>
+<p>At its core, Niv AI bridges the gap between the powerful but complex Growth System ERP system and the intuitive simplicity of conversational AI. Instead of navigating through dozens of menus, filling out forms, and running reports manually, users can simply ask Niv AI to perform these tasks in plain English (or Hindi, or any supported language).</p>
 
 <h3>1.1.1 The Problem Niv AI Solves</h3>
 
-<p>ERPNext is one of the most comprehensive open-source ERP systems available, covering modules from Accounting and Sales to Manufacturing and Human Resources. However, this comprehensiveness comes with complexity:</p>
+<p>Growth System is one of the most comprehensive open-source ERP systems available, covering modules from Accounting and Sales to Manufacturing and Human Resources. However, this comprehensiveness comes with complexity:</p>
 
 <ul>
-  <li><strong>Steep Learning Curve:</strong> New users often take weeks or months to become proficient with ERPNext. The system has over 700 DocTypes (document types), thousands of fields, and complex workflows. A new accountant joining a company might struggle to find where to create a Journal Entry, how to reconcile payments, or how to generate a specific report.</li>
+  <li><strong>Steep Learning Curve:</strong> New users often take weeks or months to become proficient with Growth System. The system has over 700 DocTypes (document types), thousands of fields, and complex workflows. A new accountant joining a company might struggle to find where to create a Journal Entry, how to reconcile payments, or how to generate a specific report.</li>
   <li><strong>Navigation Overhead:</strong> Even experienced users spend significant time navigating between modules. To check a customer's outstanding balance, you might need to navigate to Accounts → Accounts Receivable → set filters → run report. With Niv AI, you simply ask: "What is the outstanding balance for Customer ABC?"</li>
-  <li><strong>Report Complexity:</strong> ERPNext has powerful reporting capabilities, but creating custom reports requires knowledge of Report Builder, Script Reports, or even direct SQL queries. Niv AI can generate reports on the fly from natural language descriptions.</li>
-  <li><strong>Training Costs:</strong> Organizations spend thousands of dollars training employees on ERPNext. Niv AI acts as an always-available assistant that guides users through processes and performs tasks on their behalf.</li>
-  <li><strong>Mobile Limitations:</strong> While ERPNext has a mobile interface, complex operations are cumbersome on small screens. Niv AI's chat interface works beautifully on mobile, and its Telegram/WhatsApp integration means users can manage their ERP from any messaging app.</li>
-  <li><strong>After-Hours Access:</strong> When a sales manager needs to check inventory levels at 10 PM while meeting a client, pulling out a laptop and logging into ERPNext is impractical. A quick Telegram message to Niv AI gets the answer in seconds.</li>
+  <li><strong>Report Complexity:</strong> Growth System has powerful reporting capabilities, but creating custom reports requires knowledge of Report Builder, Script Reports, or even direct SQL queries. Niv AI can generate reports on the fly from natural language descriptions.</li>
+  <li><strong>Training Costs:</strong> Organizations spend thousands of dollars training employees on Growth System. Niv AI acts as an always-available assistant that guides users through processes and performs tasks on their behalf.</li>
+  <li><strong>Mobile Limitations:</strong> While Growth System has a mobile interface, complex operations are cumbersome on small screens. Niv AI's chat interface works beautifully on mobile, and its Telegram/WhatsApp integration means users can manage their ERP from any messaging app.</li>
+  <li><strong>After-Hours Access:</strong> When a sales manager needs to check inventory levels at 10 PM while meeting a client, pulling out a laptop and logging into Growth System is impractical. A quick Telegram message to Niv AI gets the answer in seconds.</li>
 </ul>
 
 <h3>1.1.2 How Niv AI is Different from General AI Assistants</h3>
@@ -314,11 +314,11 @@ w(`
 
 table(['Feature', 'ChatGPT / Copilot', 'Niv AI'],
 [
-  ['ERP Data Access', 'No direct access to your ERPNext data', 'Full read/write access to all DocTypes, fields, and reports'],
+  ['ERP Data Access', 'No direct access to your Growth System data', 'Full read/write access to all DocTypes, fields, and reports'],
   ['Document Creation', 'Can only suggest how to create documents', 'Actually creates Sales Orders, Invoices, Journal Entries, etc.'],
   ['Real-time Reports', 'Cannot query your database', 'Runs live SQL queries and generates reports from your data'],
   ['Workflow Execution', 'No workflow integration', 'Submits, cancels, amends documents; triggers workflows'],
-  ['User Permissions', 'No concept of ERPNext roles', 'Respects Frappe permission model; user sees only their allowed data'],
+  ['User Permissions', 'No concept of Growth System roles', 'Respects Frappe permission model; user sees only their allowed data'],
   ['Custom Fields', 'No awareness of customizations', 'Discovers and works with your Custom Fields and Custom DocTypes'],
   ['Voice Mode', 'Limited voice in ChatGPT', 'Full STT (Voxtral) + TTS (Piper) optimized for ERP conversations'],
   ['Telegram/WhatsApp', 'Not available', 'Native bot integration with progressive updates and table formatting'],
@@ -332,7 +332,7 @@ table(['Feature', 'ChatGPT / Copilot', 'Niv AI'],
 w(`
 <h3>1.1.3 The Vision Behind Niv AI</h3>
 
-<p>Niv AI was born from a simple observation: the most powerful ERP system in the world is useless if people can't use it efficiently. The vision is to make every ERPNext user — from the CEO checking quarterly revenue to the warehouse staff updating stock entries — equally productive, regardless of their technical skill level.</p>
+<p>Niv AI was born from a simple observation: the most powerful ERP system in the world is useless if people can't use it efficiently. The vision is to make every Growth System user — from the CEO checking quarterly revenue to the warehouse staff updating stock entries — equally productive, regardless of their technical skill level.</p>
 
 <p>The name "Niv" (निव) comes from Hindi, meaning "foundation" — reflecting the tool's role as the foundational layer between humans and their ERP system. Just as a strong foundation supports an entire building, Niv AI supports an organization's entire interaction with their business data.</p>
 
@@ -345,7 +345,7 @@ w(`
 <table>
 <thead><tr><th>Feature</th><th>Description</th><th>Status</th></tr></thead>
 <tbody>
-<tr><td>Natural Language Understanding</td><td>Processes user queries in plain English, Hindi, and other languages. Understands context, intent, and entities specific to ERPNext terminology (DocTypes, fields, workflows).</td><td><span class="badge badge-new">Stable</span></td></tr>
+<tr><td>Natural Language Understanding</td><td>Processes user queries in plain English, Hindi, and other languages. Understands context, intent, and entities specific to Growth System terminology (DocTypes, fields, workflows).</td><td><span class="badge badge-new">Stable</span></td></tr>
 <tr><td>Multi-Turn Conversations</td><td>Maintains context across multiple messages. If you ask "Show me Sales Orders for this month" and then "Now filter by Customer ABC", Niv AI understands "this" refers to the previous query.</td><td><span class="badge badge-new">Stable</span></td></tr>
 <tr><td>LangGraph Agent Framework</td><td>Uses LangGraph (from LangChain) for structured agent execution. Supports tool calling, state management, and complex multi-step reasoning.</td><td><span class="badge badge-new">Stable</span></td></tr>
 <tr><td>Streaming Responses</td><td>Responses stream in real-time via Server-Sent Events (SSE). Users see the response being generated word by word, similar to ChatGPT.</td><td><span class="badge badge-new">Stable</span></td></tr>
@@ -356,12 +356,12 @@ w(`
 
 <h3>1.2.2 MCP Tool System (29 Tools)</h3>
 
-<p>The Model Context Protocol (MCP) tool system is the backbone of Niv AI's ability to interact with ERPNext. Each tool is a carefully designed function that the AI can call to perform specific operations.</p>
+<p>The Model Context Protocol (MCP) tool system is the backbone of Niv AI's ability to interact with Growth System. Each tool is a carefully designed function that the AI can call to perform specific operations.</p>
 `);
 
 table(['Tool Name', 'Category', 'Description'],
 [
-  ['create_document', 'CRUD', 'Creates any document in ERPNext — Sales Order, Purchase Invoice, Journal Entry, Employee, etc. Handles child tables, validations, and naming series.'],
+  ['create_document', 'CRUD', 'Creates any document in Growth System — Sales Order, Purchase Invoice, Journal Entry, Employee, etc. Handles child tables, validations, and naming series.'],
   ['get_document', 'CRUD', 'Retrieves a specific document by DocType and name. Returns all fields including child table data.'],
   ['update_document', 'CRUD', 'Updates fields on an existing document. Supports partial updates — only modified fields need to be specified.'],
   ['delete_document', 'CRUD', 'Permanently deletes a document. Respects Frappe permissions and linked document constraints.'],
@@ -370,10 +370,10 @@ table(['Tool Name', 'Category', 'Description'],
   ['search_documents', 'Query', 'Full-text search across documents. More flexible than list_documents for free-form queries.'],
   ['search_doctype', 'Discovery', 'Searches for DocType names matching a pattern. Helps the AI discover the correct DocType when the user uses informal names.'],
   ['search_link', 'Discovery', 'Searches link field values. Used when the AI needs to find valid values for a Link field (e.g., finding a Customer name).'],
-  ['search', 'Discovery', 'General search across the ERPNext instance. Similar to the Awesome Bar search.'],
+  ['search', 'Discovery', 'General search across the Growth System instance. Similar to the Awesome Bar search.'],
   ['fetch', 'Query', 'Fetches specific field values from a document. Lighter than get_document when only a few fields are needed.'],
   ['get_doctype_info', 'Discovery', 'Returns the complete schema of a DocType: all fields, their types, options, and properties. Essential for the AI to understand document structure.'],
-  ['generate_report', 'Reporting', 'Generates reports using ERPNext\'s built-in Report Builder. Supports standard reports like General Ledger, Accounts Receivable, Stock Balance, etc.'],
+  ['generate_report', 'Reporting', 'Generates reports using Growth System\'s built-in Report Builder. Supports standard reports like General Ledger, Accounts Receivable, Stock Balance, etc.'],
   ['report_list', 'Reporting', 'Lists all available reports in the system, filterable by module.'],
   ['report_requirements', 'Reporting', 'Returns the required filters and columns for a specific report. Helps the AI provide correct parameters.'],
   ['run_database_query', 'Advanced', 'Executes raw SQL SELECT queries against the database. Extremely powerful for complex analytical queries.'],
@@ -416,7 +416,7 @@ w(`
 
 <h3>1.2.4 Developer Mode (94 Features)</h3>
 
-<p>Developer Mode transforms Niv AI from a read/query assistant into a full-featured ERPNext development tool. With Developer Mode enabled, Niv AI can create and modify the very structure of your ERPNext instance:</p>
+<p>Developer Mode transforms Niv AI from a read/query assistant into a full-featured Growth System development tool. With Developer Mode enabled, Niv AI can create and modify the very structure of your Growth System instance:</p>
 
 <ul>
   <li><strong>Phase A — Custom Fields (12 features):</strong> Add any field type (Data, Int, Currency, Link, Table, Select, Date, DateTime, Check, Text Editor, Attach, etc.) to any existing DocType. Set properties like required, default value, depends_on visibility, and read_only.</li>
@@ -512,7 +512,7 @@ w(`
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                        DATA & STORAGE LAYER                             │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌────────────┐ │
-│  │   MariaDB    │  │    Redis     │  │  File System │  │  ERPNext   │ │
+│  │   MariaDB    │  │    Redis     │  │  File System │  │  Growth System   │ │
 │  │  (Frappe DB) │  │  (Cache +    │  │  (Attachments│  │  (Business │ │
 │  │              │  │   Undo Store)│  │   + Logs)    │  │   Data)    │ │
 │  └──────────────┘  └──────────────┘  └──────────────┘  └────────────┘ │
@@ -566,10 +566,10 @@ w(`
 
 <h4>Data & Storage Layer</h4>
 <ul>
-  <li><strong>MariaDB:</strong> The primary database for all Frappe/ERPNext data, including Niv AI's conversations, messages, settings, and triggers.</li>
+  <li><strong>MariaDB:</strong> The primary database for all Frappe/Growth System data, including Niv AI's conversations, messages, settings, and triggers.</li>
   <li><strong>Redis:</strong> Used for caching, real-time pub/sub, background job queuing, and the Developer Mode undo system (30-minute expiry).</li>
   <li><strong>File System:</strong> Stores file attachments, voice recordings, and log files.</li>
-  <li><strong>ERPNext:</strong> The business data layer — all DocTypes, workflows, reports, and permissions managed by ERPNext.</li>
+  <li><strong>Growth System:</strong> The business data layer — all DocTypes, workflows, reports, and permissions managed by Growth System.</li>
 </ul>
 
 <h2>1.4 Technology Stack</h2>
@@ -581,7 +581,7 @@ table(['Technology', 'Role', 'Version', 'Why Chosen'],
 [
   ['Python', 'Backend language', '3.10+', 'Frappe Framework is Python-based; rich AI/ML ecosystem'],
   ['Frappe Framework', 'Web framework', 'v14/v15', 'Full-featured framework with ORM, REST API, permissions, UI'],
-  ['ERPNext', 'ERP platform', 'v14/v15', 'Target platform — the ERP system Niv AI integrates with'],
+  ['Growth System', 'ERP platform', 'v14/v15', 'Target platform — the ERP system Niv AI integrates with'],
   ['LangGraph', 'Agent framework', '0.2+', 'Structured agent execution with state management, tool routing, and streaming'],
   ['LangChain', 'LLM toolchain', '0.3+', 'Foundational library for LLM interaction, prompt templates, and chain-of-thought'],
   ['MCP', 'Tool protocol', '1.0', 'Standardized protocol for tool discovery, calling, and result handling'],
@@ -605,7 +605,7 @@ w(`
 
 <h3>1.5.1 Manufacturing</h3>
 
-<p>Manufacturing companies using ERPNext's Manufacturing module can leverage Niv AI for:</p>
+<p>Manufacturing companies using Growth System's Manufacturing module can leverage Niv AI for:</p>
 
 <ul>
   <li><strong>Production Planning Queries:</strong> "What's the production plan for next week?" — Niv AI queries Work Orders, checks material availability, and summarizes the production schedule.</li>
@@ -638,7 +638,7 @@ w(`
 
 <h3>1.5.3 Healthcare</h3>
 
-<p>Healthcare organizations using ERPNext Healthcare module can leverage Niv AI for:</p>
+<p>Healthcare organizations using Growth System Healthcare module can leverage Niv AI for:</p>
 
 <ul>
   <li><strong>Patient Records:</strong> "Show me Patient John Doe's recent appointments" — quick access to patient history.</li>
@@ -651,7 +651,7 @@ w(`
 
 <h3>1.5.4 Education</h3>
 
-<p>Educational institutions using ERPNext Education module:</p>
+<p>Educational institutions using Growth System Education module:</p>
 
 <ul>
   <li><strong>Student Information:</strong> "How many students are enrolled in Batch 2026-A?" — enrollment statistics.</li>
@@ -663,7 +663,7 @@ w(`
 
 <h3>1.5.5 NBFC / Lending (Non-Banking Financial Companies)</h3>
 
-<p>This is one of Niv AI's most specialized and detailed integrations. NBFCs using Growth System (a lending-focused ERPNext fork) get access to 34 specialized tools for:</p>
+<p>This is one of Niv AI's most specialized and detailed integrations. NBFCs using Growth System (a lending-focused Growth System fork) get access to 34 specialized tools for:</p>
 
 <ul>
   <li><strong>Loan Origination:</strong> Process loan applications through natural conversation — "Create a new loan application for Applicant Rajesh Kumar, loan amount 5 lakhs, tenure 24 months"</li>
@@ -705,7 +705,7 @@ w(`
 
 <h4>Sidebar Elements (Top to Bottom)</h4>
 <ol>
-  <li><strong>App Title:</strong> "Niv AI" displayed in white with the 🤖 emoji. Below it, a subtitle "AI Assistant for ERPNext" in muted text.</li>
+  <li><strong>App Title:</strong> "Niv AI" displayed in white with the 🤖 emoji. Below it, a subtitle "AI Assistant for Growth System" in muted text.</li>
   <li><strong>New Chat Button:</strong> A prominent button with gradient background (primary purple to blue). Clicking creates a new conversation and clears the chat area.</li>
   <li><strong>Search Bar:</strong> An input field with search icon. Filters conversations as you type. Searches conversation titles.</li>
   <li><strong>Conversation List:</strong> Scrollable list of conversations, each showing:
@@ -849,7 +849,7 @@ w(`
 </ul>
 `);
 
-tipBox(`For the best experience in Hindi, set the system prompt to include instructions like: "Respond in Hindi when the user writes in Hindi. Use Devanagari script. Translate ERPNext technical terms to Hindi where natural, but keep DocType names in English for accuracy."`);
+tipBox(`For the best experience in Hindi, set the system prompt to include instructions like: "Respond in Hindi when the user writes in Hindi. Use Devanagari script. Translate Growth System technical terms to Hindi where natural, but keep DocType names in English for accuracy."`);
 
 w(`
 <h2>1.9 Licensing and Pricing</h2>
@@ -866,7 +866,7 @@ w(`
 
 <p>In this chapter, you learned:</p>
 <ul>
-  <li>What Niv AI is and why it exists — bridging the gap between ERPNext complexity and conversational simplicity</li>
+  <li>What Niv AI is and why it exists — bridging the gap between Growth System complexity and conversational simplicity</li>
   <li>The complete feature set: 29 tools, voice mode, Telegram/WhatsApp bots, Developer Mode with 94 features, Auto-Pilot Triggers</li>
   <li>The architecture: Client Layer → API Gateway → Agent Engine → MCP Tools → Data Layer</li>
   <li>Technology stack: Python, Frappe, LangGraph, MCP, Mistral AI, Piper TTS, Redis</li>
@@ -875,7 +875,7 @@ w(`
   <li>Request processing flow: from user input to streamed response</li>
 </ul>
 
-<p>In the next chapter, we'll install Niv AI and configure it for your ERPNext instance.</p>
+<p>In the next chapter, we'll install Niv AI and configure it for your Growth System instance.</p>
 `);
 endChapter();
 
@@ -885,7 +885,7 @@ chapterHeader('2', 'Installation & Setup', 'Complete guide to installing Niv AI 
 w(`
 <h2>2.1 System Requirements</h2>
 
-<p>Before installing Niv AI, ensure your system meets the following requirements. Niv AI runs as a Frappe application alongside ERPNext, so the requirements include both the base Frappe/ERPNext stack and Niv AI's additional dependencies.</p>
+<p>Before installing Niv AI, ensure your system meets the following requirements. Niv AI runs as a Frappe application alongside Growth System, so the requirements include both the base Frappe/Growth System stack and Niv AI's additional dependencies.</p>
 
 <h3>2.1.1 Hardware Requirements</h3>
 `);
@@ -893,8 +893,8 @@ w(`
 table(['Component', 'Minimum', 'Recommended', 'Notes'],
 [
   ['CPU', '2 cores', '4+ cores', 'More cores improve concurrent request handling'],
-  ['RAM', '4 GB', '8+ GB', 'ERPNext alone needs ~2GB; Niv AI adds ~1GB for the agent runtime'],
-  ['Storage', '20 GB', '50+ GB', 'Includes OS, ERPNext, Niv AI, and database. More if storing file attachments.'],
+  ['RAM', '4 GB', '8+ GB', 'Growth System alone needs ~2GB; Niv AI adds ~1GB for the agent runtime'],
+  ['Storage', '20 GB', '50+ GB', 'Includes OS, Growth System, Niv AI, and database. More if storing file attachments.'],
   ['Network', '10 Mbps', '100 Mbps', 'AI API calls require stable internet; local Ollama eliminates this need'],
 ]);
 
@@ -1001,7 +1001,7 @@ sudo systemctl status docker
 w(`
 <h3>2.2.2 Setting Up frappe_docker</h3>
 
-<p>Niv AI uses the official <code>frappe_docker</code> repository as a base. This provides a Docker Compose setup for Frappe and ERPNext, to which we add Niv AI's applications.</p>
+<p>Niv AI uses the official <code>frappe_docker</code> repository as a base. This provides a Docker Compose setup for Frappe and Growth System, to which we add Niv AI's applications.</p>
 `);
 
 codeBlock('bash — Clone and Configure frappe_docker', `# Clone the frappe_docker repository
@@ -1009,7 +1009,7 @@ git clone https://github.com/frappe/frappe_docker.git
 cd frappe_docker
 
 # Check out a stable version (recommended)
-git checkout v15  # or v14 for older ERPNext versions
+git checkout v15  # or v14 for older Growth System versions
 
 # List the directory contents
 ls -la
@@ -1023,14 +1023,14 @@ ls -la
 w(`
 <h4>Understanding the Docker Compose File</h4>
 
-<p>The <code>docker-compose.yml</code> file defines all the services that make up the ERPNext + Niv AI stack. Let's examine each service:</p>
+<p>The <code>docker-compose.yml</code> file defines all the services that make up the Growth System + Niv AI stack. Let's examine each service:</p>
 `);
 
 codeBlock('yaml — docker-compose.yml (annotated)', `version: "3.8"
 
 services:
   # === BACKEND SERVICE ===
-  # The main Frappe/ERPNext application server
+  # The main Frappe/Growth System application server
   backend:
     image: frappe/erpnext:v15
     # Custom image with Niv AI apps (see build section below)
@@ -1191,7 +1191,7 @@ w(`
 <h3>2.2.4 Creating and Configuring the Site</h3>
 `);
 
-codeBlock('bash — Create ERPNext Site with Niv AI', `# Start the infrastructure services first
+codeBlock('bash — Create Growth System Site with Niv AI', `# Start the infrastructure services first
 docker compose up -d db redis-cache redis-queue redis-socketio
 
 # Wait for MariaDB to be ready (important!)
@@ -1209,7 +1209,7 @@ docker compose run --rm backend \\
 # The site creation process:
 # 1. Creates the database "erp_example_com" (dots replaced with underscores)
 # 2. Runs database migrations for Frappe framework
-# 3. Installs ERPNext app and runs its migrations
+# 3. Installs Growth System app and runs its migrations
 # 4. Installs frappe_assistant_core and creates:
 #    - Niv Settings (singleton)
 #    - Niv AI Provider DocType
@@ -1404,7 +1404,7 @@ bench init frappe-bench \\
 
 cd frappe-bench
 
-# Get ERPNext
+# Get Growth System
 bench get-app erpnext --branch version-15
 
 # Get Frappe Assistant Core (Niv AI)
@@ -1426,7 +1426,7 @@ bench new-site erp.local \\
   --mariadb-root-password YourMariaDBRootPassword \\
   --admin-password YourAdminPassword
 
-# Install ERPNext
+# Install Growth System
 bench --site erp.local install-app erpnext
 
 # Install Frappe Assistant Core
@@ -1483,7 +1483,7 @@ wget https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/priyamvad
 wget https://huggingface.co/rhasspy/piper-voices/resolve/main/hi/hi_IN/priyamvada/medium/hi_IN-priyamvada-medium.onnx.json
 
 # Test Piper
-echo "Hello, I am Niv AI, your ERPNext assistant." | \\
+echo "Hello, I am Niv AI, your Growth System assistant." | \\
   ./piper --model en_US-lessac-medium.onnx --output_file test.wav
 
 # Play the test file (if you have aplay)
@@ -1613,9 +1613,9 @@ w(`
   <li>Add credits (minimum $5). For testing, $5 is sufficient for thousands of conversations.</li>
 </ol>
 
-<h4>Step 4: Create Niv AI Provider in ERPNext</h4>
+<h4>Step 4: Create Niv AI Provider in Growth System</h4>
 <ol>
-  <li>Navigate to <code>/app/niv-ai-provider/new</code> in your ERPNext instance</li>
+  <li>Navigate to <code>/app/niv-ai-provider/new</code> in your Growth System instance</li>
   <li>Fill in the following fields:</li>
 </ol>
 `);
@@ -1667,7 +1667,7 @@ w(`
   <li>Copy the key (starts with "sk-")</li>
 </ol>
 
-<h4>Step 2: Create Provider in ERPNext</h4>
+<h4>Step 2: Create Provider in Growth System</h4>
 `);
 
 table(['Field', 'Value'],
@@ -1825,7 +1825,7 @@ w(`
       <li>Your message appear as a right-aligned blue bubble</li>
       <li>A typing indicator (three dots) appear</li>
       <li>The AI's response stream in word by word</li>
-      <li>The response should mention being Niv AI, an ERPNext assistant</li>
+      <li>The response should mention being Niv AI, an Growth System assistant</li>
     </ul>
   </li>
 </ol>

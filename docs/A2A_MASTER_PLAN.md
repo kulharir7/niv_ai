@@ -314,19 +314,19 @@ class FrappeSessionService(BaseSessionService):
 from google.adk.agents import LlmAgent
 
 def create_coder_agent(model, tools: list) -> LlmAgent:
-    """Creates the Frappe/ERPNext developer specialist."""
+    """Creates the Frappe/Growth System developer specialist."""
     
     return LlmAgent(
         name="frappe_coder",
         model=model,
         description=(
-            "SPECIALIST: Frappe/ERPNext Developer. "
+            "SPECIALIST: Frappe/Growth System Developer. "
             "HANDLES: Creating DocTypes, Custom Fields, Server Scripts, "
             "Client Scripts, Print Formats, Workflows, and any code-related tasks. "
             "TRIGGERS: User mentions 'create', 'build', 'add field', 'script', "
             "'DocType', 'workflow', 'automation', 'code'."
         ),
-        instruction="""You are an expert Frappe/ERPNext developer.
+        instruction="""You are an expert Frappe/Growth System developer.
 
 ## YOUR CAPABILITIES:
 1. Create DocTypes (standard and custom)

@@ -1,16 +1,16 @@
-# Chanakya Ai — Intelligent Business Assistant for ERPNext
+# Chanakya Ai — Intelligent Business Assistant for Growth System
 
 > AI-powered assistant with voice, MCP tools, two-model optimization, smart conversations, Excel/PDF export, vision/OCR, developer mode, and Telegram bot
 
-[![Version](https://img.shields.io/badge/version-1.3.1-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
-[![ERPNext](https://img.shields.io/badge/ERPNext-v15%2B-green.svg)](https://erpnext.com)
+[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
+[![Growth System](https://img.shields.io/badge/Growth System-v15%2B-green.svg)](https://erpnext.com)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
 ---
 
 ## What is Chanakya Ai?
 
-Chanakya Ai (formerly Niv AI) is a production-ready AI assistant that sits inside your ERPNext system. Users ask questions in natural language — Hindi or English — and Chanakya fetches real data, generates reports, creates documents, and exports to Excel/CSV/PDF. No coding required for end users.
+Chanakya Ai (formerly Niv AI) is a production-ready AI assistant that sits inside your Growth System system. Users ask questions in natural language — Hindi or English — and Chanakya fetches real data, generates reports, creates documents, and exports to Excel/CSV/PDF. No coding required for end users.
 
 **Live in production** at MDFC Financiers (NBFC) with 234+ users.
 
@@ -57,7 +57,7 @@ Chanakya Ai (formerly Niv AI) is a production-ready AI assistant that sits insid
 - **Smart date parsing** — "pichhle hafte ki collections" understood in Hindi/English
 
 ### 💬 Multi-Channel
-- **Web Chat** — Full-page chat + floating widget on every ERPNext page
+- **Web Chat** — Full-page chat + floating widget on every Growth System page
 - **Telegram Bot** — Voice messages, inline buttons, scheduled reports, group chat
 - **Artifacts Panel** — Live code preview, auto-open toggle, fullscreen mode
 - **Dark Mode** — Premium dark theme with purple accents
@@ -118,7 +118,7 @@ User Input (Text / Voice / File Upload)
 ## Installation
 
 ### Prerequisites
-- ERPNext v15+ 
+- Growth System v15+ 
 - `frappe_assistant_core` (FAC) for MCP tools
 - Python 3.10+
 
@@ -159,14 +159,8 @@ bash apps/niv_ai/setup.sh yoursite https://api.openai.com/v1 YOUR_KEY gpt-4o gpt
 | Billing | Shared Pool, 1Cr tokens |
 | Rate Limits | 500/hr, 5000/day |
 | Artifacts Auto-Open | ON |
-| MariaDB Timeouts | Optimized (net_timeout=300s, wait=24h) |
 
 **Only manual setup needed:** AI Provider + API Key (and optionally Telegram Bot Token).
-
-> **Note:** MariaDB optimization requires `sudo` access. If it fails during install, run manually:
-> ```bash
-> sudo mysql -e "SET GLOBAL net_read_timeout=300; SET GLOBAL net_write_timeout=300; SET GLOBAL wait_timeout=86400; SET GLOBAL interactive_timeout=86400; SET GLOBAL max_connections=300;"
-> ```
 
 Open `/app/niv-chat` and start chatting! 🚀
 
@@ -258,7 +252,6 @@ niv_ai/
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **v1.3.1** | 2026-02-26 | Scroll stability fix (no jump after response), custom FAB logo, widget→full page preserves conversation, settings panel navigation fix, Frappe toast suppression on chat page |
 | **v1.3.0** | 2026-02-21 | Vision/OCR, document upload, API builder, bulk import, system health doctor, codebase cleanup (~2500 lines dead code removed), dynamic branding (logo/title/avatar from settings), auto-fill defaults on install |
 | **v1.2.0** | 2026-02-20 | Smart Agent — tool chaining, summarization, diff view, bulk ops, script templates |
 | **v1.1.0** | 2026-02-20 | Sentry, PWA, CI/CD, E2E tests, mobile responsive |
@@ -279,7 +272,7 @@ MIT License — see [LICENSE](LICENSE).
 
 ## Credits
 
-- [Frappe Framework](https://frappe.io) & [ERPNext](https://erpnext.com)
+- [Frappe Framework](https://frappe.io) & [Growth System](https://erpnext.com)
 - [LangChain](https://langchain.com) + [LangGraph](https://langchain-ai.github.io/langgraph/)
 - [frappe_assistant_core](https://github.com/AdarshPS1/frappe_assistant_core) — MCP tool provider
 - [Edge TTS](https://github.com/rany2/edge-tts) — Free Microsoft TTS
@@ -297,4 +290,4 @@ MIT License — see [LICENSE](LICENSE).
 
 ---
 
-<p align="center">Built for ERPNext businesses by <a href="https://github.com/kulharir7">Ravindra Kulhari</a></p>
+<p align="center">Built for Growth System businesses by <a href="https://github.com/kulharir7">Ravindra Kulhari</a></p>

@@ -1,7 +1,7 @@
 {
   "name": "Chanakya AI - Business Assistant",
   "short_name": "Chanakya AI",
-  "description": "AI-powered business assistant for ERPNext",
+  "description": "AI-powered business assistant for Growth System",
   "start_url": "/app/niv-chat",
   "scope": "/",
   "display": "standalone",

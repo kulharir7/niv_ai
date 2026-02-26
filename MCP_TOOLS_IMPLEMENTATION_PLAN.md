@@ -37,7 +37,7 @@ Usage: Called by langchain/tools.py during get_langchain_tools()
 TOOL_ENHANCEMENTS = {
     "list_documents": {
         "description": (
-            "Search and list Frappe/ERPNext documents with filtering, sorting, and pagination.\n\n"
+            "Search and list Frappe/Growth System documents with filtering, sorting, and pagination.\n\n"
             "USE THIS WHEN:\n"
             "- User wants to find records matching criteria (e.g., 'show all overdue loans')\n"
             "- User wants a list of documents (e.g., 'list all customers in Mumbai')\n"

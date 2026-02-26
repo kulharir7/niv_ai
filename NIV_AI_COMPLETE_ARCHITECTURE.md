@@ -1,7 +1,7 @@
 # Niv AI - Complete Architecture & Workflow Guide
 
 ## 📋 Project Overview
-**Niv AI v0.6.1** - Multi-Agent AI System for ERPNext/Frappe
+**Niv AI v0.6.1** - Multi-Agent AI System for Growth System/Frappe
 - **Multi-Provider LLM Support** via LiteLLM (OpenAI, Anthropic, Google, Ollama, custom)
 - **Google ADK A2A** (Agent-to-Agent) for multi-agent collaboration
 - **MCP Protocol** for tool execution via Frappe Assistant Core
@@ -565,7 +565,7 @@ bench --site frontend execute niv_ai.niv_core.knowledge.system_map.update_knowle
 3. Tracks usage and billing per-user or shared pool
 4. Supports Telegram & WhatsApp bots
 5. Creates HTML artifacts with versioning
-6. Builds knowledge graphs of ERPNext DocTypes
+6. Builds knowledge graphs of Growth System DocTypes
 
 **Key Technologies:**
 - Google ADK (Agent Development Kit)

@@ -1,5 +1,5 @@
 """
-Frappe/ERPNext Developer Knowledge for RAG — Developer Mode.
+Frappe/Growth System Developer Knowledge for RAG — Developer Mode.
 
 Indexes Frappe framework internals, DocType creation patterns,
 Client/Server Script APIs, field types, and development best practices.
@@ -12,7 +12,7 @@ import frappe
 
 
 def index_all_dev(force=False):
-    """Index all Frappe/ERPNext developer knowledge."""
+    """Index all Frappe/Growth System developer knowledge."""
     from .rag import delete_by_source, _reset_vectorstore
 
     sources = [
@@ -2507,8 +2507,8 @@ def index_phase_ijkl_recipes():
                 "Same as above — Webhook DocType sends data OUT when event fires.\n"
                 "Events: after_insert, on_update, on_submit, on_cancel, on_trash\n\n"
                 "K5 — PAYMENT GATEWAY:\n"
-                "Guide user to Payment Gateway setup in ERPNext settings.\n"
-                "Razorpay/PayPal/Stripe configured via ERPNext's built-in Payment Gateway DocType.\n\n"
+                "Guide user to Payment Gateway setup in Growth System settings.\n"
+                "Razorpay/PayPal/Stripe configured via Growth System's built-in Payment Gateway DocType.\n\n"
                 "K3 — GOOGLE SHEETS SYNC:\n"
                 "Use Server Script (Scheduler Event) + Google Sheets API:\n"
                 "- Install gspread via pip\n"

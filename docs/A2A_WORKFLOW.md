@@ -57,7 +57,7 @@
                   │
                   ▼
 ┌─────────────────────────────────────────────────────┐
-│              📦 ERPNext (Frappe Database)             │
+│              📦 Growth System (Frappe Database)             │
 │         DocTypes, Reports, Workflows, Scripts         │
 └─────────────────────────────────────────────────────┘
 ```
