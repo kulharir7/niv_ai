@@ -2,7 +2,7 @@
 
 > AI-powered assistant with voice, MCP tools, two-model optimization, smart conversations, Excel/PDF export, vision/OCR, developer mode, and Telegram bot
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
+[![Version](https://img.shields.io/badge/version-1.3.1-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
 [![ERPNext](https://img.shields.io/badge/ERPNext-v15%2B-green.svg)](https://erpnext.com)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
@@ -252,6 +252,7 @@ niv_ai/
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **v1.3.1** | 2026-02-26 | Scroll stability fix (no jump after response), custom FAB logo, widget→full page preserves conversation, settings panel navigation fix, Frappe toast suppression on chat page |
 | **v1.3.0** | 2026-02-21 | Vision/OCR, document upload, API builder, bulk import, system health doctor, codebase cleanup (~2500 lines dead code removed), dynamic branding (logo/title/avatar from settings), auto-fill defaults on install |
 | **v1.2.0** | 2026-02-20 | Smart Agent — tool chaining, summarization, diff view, bulk ops, script templates |
 | **v1.1.0** | 2026-02-20 | Sentry, PWA, CI/CD, E2E tests, mobile responsive |
