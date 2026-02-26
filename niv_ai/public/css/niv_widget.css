@@ -13,6 +13,8 @@
     border: none;
     background: transparent;
     background-size: auto;
+    padding: 0;
+    overflow: hidden;
     color: #fff;
     font-size: 24px;
     font-weight: 700;

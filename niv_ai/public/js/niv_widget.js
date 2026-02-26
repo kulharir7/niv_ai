@@ -56,7 +56,7 @@
         fab.id = "niv-fab";
         fab.className = "niv-fab";
         fab.title = "Niv AI";
-        fab.innerHTML = '<img src="/assets/niv_ai/images/niv_fab_logo.png" style="width:36px;height:36px;border-radius:50%;object-fit:cover;" alt="Niv AI" />';
+        fab.innerHTML = '<img src="/assets/niv_ai/images/niv_fab_logo.png" style="width:56px;height:56px;border-radius:50%;object-fit:cover;" alt="Niv AI" />';
 
         // Panel
         var panel = document.createElement("div");
