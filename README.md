@@ -159,8 +159,14 @@ bash apps/niv_ai/setup.sh yoursite https://api.openai.com/v1 YOUR_KEY gpt-4o gpt
 | Billing | Shared Pool, 1Cr tokens |
 | Rate Limits | 500/hr, 5000/day |
 | Artifacts Auto-Open | ON |
+| MariaDB Timeouts | Optimized (net_timeout=300s, wait=24h) |
 
 **Only manual setup needed:** AI Provider + API Key (and optionally Telegram Bot Token).
+
+> **Note:** MariaDB optimization requires `sudo` access. If it fails during install, run manually:
+> ```bash
+> sudo mysql -e "SET GLOBAL net_read_timeout=300; SET GLOBAL net_write_timeout=300; SET GLOBAL wait_timeout=86400; SET GLOBAL interactive_timeout=86400; SET GLOBAL max_connections=300;"
+> ```
 
 Open `/app/niv-chat` and start chatting! 🚀
 

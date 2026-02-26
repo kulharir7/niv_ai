@@ -12,6 +12,7 @@ def after_install():
     frappe.db.commit()
     _preload_piper_voice()
     _run_auto_discovery()
+    _optimize_mariadb()
     print("✅ Niv AI installed successfully!")
     print("  → Connect an MCP server in Niv Settings to enable tools")
 
@@ -212,6 +213,55 @@ def _preload_piper_voice():
         print("  → Piper TTS not installed (optional), skipping voice pre-download")
     except Exception as e:
         print(f"  → Piper voice pre-download skipped: {e}")
+
+
+def _optimize_mariadb():
+    """Optimize MariaDB settings for long-running AI streams.
+    Creates /etc/mysql/mariadb.conf.d/99-niv-ai.cnf and applies settings live."""
+    import subprocess
+    import os
+
+    cnf_path = "/etc/mysql/mariadb.conf.d/99-niv-ai.cnf"
+    cnf_content = """[mysqld]
+# Niv AI — prevent DB connection drops during long SSE streams
+net_read_timeout = 300
+net_write_timeout = 300
+wait_timeout = 86400
+interactive_timeout = 86400
+max_connections = 300
+"""
+
+    try:
+        # Write config file (needs sudo)
+        if not os.path.exists(cnf_path):
+            result = subprocess.run(
+                ["sudo", "tee", cnf_path],
+                input=cnf_content, capture_output=True, text=True, timeout=10
+            )
+            if result.returncode == 0:
+                print("  → MariaDB config created: 99-niv-ai.cnf")
+            else:
+                print(f"  → MariaDB config skipped (no sudo): {result.stderr.strip()}")
+                return
+        else:
+            print("  → MariaDB config already exists: 99-niv-ai.cnf")
+
+        # Apply live (without restart)
+        sql = (
+            "SET GLOBAL net_read_timeout=300; "
+            "SET GLOBAL net_write_timeout=300; "
+            "SET GLOBAL wait_timeout=86400; "
+            "SET GLOBAL interactive_timeout=86400; "
+            "SET GLOBAL max_connections=300;"
+        )
+        subprocess.run(
+            ["sudo", "mysql", "-e", sql],
+            capture_output=True, text=True, timeout=10
+        )
+        print("  → MariaDB timeouts optimized (net_timeout=300s, wait=24h, max_conn=300)")
+    except Exception as e:
+        print(f"  → MariaDB optimization skipped: {e}")
+        print("    Run manually: sudo mysql -e \"SET GLOBAL net_read_timeout=300; SET GLOBAL net_write_timeout=300; SET GLOBAL wait_timeout=86400; SET GLOBAL interactive_timeout=86400; SET GLOBAL max_connections=300;\"")
 
 
 # ─── Default Data ────────────────────────────────────────────────────────
