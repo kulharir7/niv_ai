@@ -205,6 +205,16 @@
         document.getElementById("niv-close").addEventListener("click", closePanel);
         document.getElementById("niv-fullscreen").addEventListener("click", function() {
             closePanel();
+            // Pass current conversation ID to full page chat
+            try {
+                var iframeWin = document.getElementById("niv-iframe").contentWindow;
+                var nivChat = iframeWin.cur_niv_chat || (iframeWin.cur_page && iframeWin.cur_page.page && iframeWin.cur_page.page.niv_chat);
+                var convId = nivChat ? nivChat.current_conversation : null;
+                if (convId) {
+                    frappe.set_route("niv-chat", convId);
+                    return;
+                }
+            } catch(e) {}
             frappe.set_route("niv-chat");
         });
 

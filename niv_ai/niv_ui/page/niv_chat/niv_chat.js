@@ -1502,6 +1502,11 @@ ${htmlCode}
     // ─── Conversations ──────────────────────────────────────────────
 
     async load_conversations() {
+        // Check if a conversation ID was passed in the URL (from widget expand)
+        const routeParts = frappe.get_route();
+        if (routeParts.length > 1 && routeParts[1] && !this._route_conv_loaded) {
+            this._route_conv_id = routeParts[1];
+        }
         try {
             const r = await frappe.call({
                 method: "niv_ai.niv_core.api.conversation.list_conversations",
@@ -1510,6 +1515,15 @@ ${htmlCode}
             this.conversations = r.message || [];
             this.render_conversation_list();
 
+            // If conversation ID from URL (widget expand), select that
+            if (this._route_conv_id && !this._route_conv_loaded) {
+                this._route_conv_loaded = true;
+                const targetConv = this.conversations.find(c => c.name === this._route_conv_id);
+                if (targetConv) {
+                    this.select_conversation(targetConv.name);
+                    return;
+                }
+            }
             if (this.conversations.length === 0 || !this.current_conversation) {
                 // Always start fresh like ChatGPT — show welcome screen
                 this.show_empty_state();
