@@ -2529,9 +2529,16 @@ ${htmlCode}
     }
 
     stop_generation() {
+        // Abort via _abortController (legacy)
         if (this._abortController) {
             this._abortController.abort();
             this._abortController = null;
+        }
+        // Abort via active_streams (current conv)
+        const conv_id = this.current_conversation;
+        if (conv_id && this.active_streams[conv_id]) {
+            this.active_streams[conv_id].abort();
+            delete this.active_streams[conv_id];
         }
         this.hide_typing();
         this.is_streaming = false;
