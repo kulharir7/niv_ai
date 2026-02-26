@@ -2963,15 +2963,32 @@ ${htmlCode}
     }
 
     _setup_auto_scroll() {
-        // Simple interval-based auto-scroll during streaming
-        // Checks every 200ms if streaming and scrolls to bottom
+        // Interval-based auto-scroll during streaming + brief post-stream scroll
         if (this._autoScrollInterval) return;
         const self = this;
+        let wasStreaming = false;
+        let postStreamScrollUntil = 0;
         this._autoScrollInterval = setInterval(() => {
-            if (!self.is_streaming) return;
             const el = self.$chatArea ? self.$chatArea[0] : null;
-            if (el) el.scrollTop = el.scrollHeight;
-        }, 200);
+            if (!el) return;
+            if (self.is_streaming) {
+                wasStreaming = true;
+                el.scrollTop = el.scrollHeight;
+            } else if (wasStreaming) {
+                // Streaming just ended — keep scrolling for 2 seconds
+                // to catch the final HTML re-render that resets scrollTop
+                wasStreaming = false;
+                postStreamScrollUntil = Date.now() + 3000;
+            }
+            if (postStreamScrollUntil && Date.now() < postStreamScrollUntil) {
+                // Only scroll if content exists (scrollHeight > clientHeight)
+                if (el.scrollHeight > el.clientHeight + 10) {
+                    el.scrollTop = el.scrollHeight;
+                }
+            } else if (postStreamScrollUntil && Date.now() >= postStreamScrollUntil) {
+                postStreamScrollUntil = 0;
+            }
+        }, 50);
     }
 
     toggle_fullscreen() {
@@ -3799,7 +3816,7 @@ ${htmlCode}
                 } else {
                     this.voiceSpeechDetectedAt = null;
                 }
-            }, 100);
+            }, 50);
         } catch (e) {
             console.warn("Voice monitor failed:", e);
         }
