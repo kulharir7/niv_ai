@@ -3869,3 +3869,13 @@ body.niv-widget-mode .niv-message.user .msg-content { max-width: 90% !important;
         max-width: 100vw !important;
     }
 }
+
+/* Hide Frappe system alerts/toasts on chat page - they interfere with chat UI */
+.page-container[data-page-container="niv-chat"] .msgprint,
+.page-container[data-page-container="niv-chat"] .alert.desk-alert,
+body[data-route="niv-chat"] .msgprint,
+body[data-route="niv-chat"] .desk-alert,
+.niv-chat-container ~ .msgprint,
+.niv-chat-container ~ .alert {
+    display: none !important;
+}
