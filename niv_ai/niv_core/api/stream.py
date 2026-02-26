@@ -58,6 +58,8 @@ def _is_simple_query(message: str) -> bool:
 def _ensure_db(site_name=None):
     """Ensure DB connection is alive, reconnect if dead."""
     try:
+        if not frappe.db or getattr(frappe.db, '_conn', None) is None:
+            raise Exception("No DB connection")
         frappe.db.sql("SELECT 1")
     except Exception:
         try:
@@ -65,7 +67,12 @@ def _ensure_db(site_name=None):
                 frappe.init(site=site_name)
             frappe.connect()
         except Exception:
-            pass
+            # Last resort — full reinit
+            try:
+                frappe.init(site=site_name or getattr(frappe.local, 'site', None))
+                frappe.connect()
+            except Exception:
+                pass
 
 
 # ─── SSE Formatting ────────────────────────────────────────────────
@@ -167,7 +174,7 @@ def stream_chat(**kwargs):
             """Keep DB alive during long streams."""
             nonlocal _last_db_check
             now = _time.time()
-            if now - _last_db_check > 10:
+            if now - _last_db_check > 5:
                 _ensure_db(_site_name)
                 _last_db_check = now
 
@@ -195,6 +202,7 @@ def stream_chat(**kwargs):
                         yield _sse(event)
 
                 elif event_type == "tool_call":
+                    _ensure_db(_site_name)  # DB must be alive before tool execution
                     tool_calls_data.append({
                         "tool": event.get("tool", ""),
                         "arguments": event.get("arguments", {})
