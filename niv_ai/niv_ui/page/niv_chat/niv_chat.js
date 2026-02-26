@@ -2939,9 +2939,14 @@ ${htmlCode}
         this.wrapper.find(".niv-empty-state").remove();
     }
 
-    scroll_to_bottom() {
+    scroll_to_bottom(instant) {
         const el = this.$chatArea[0];
-        if (el) el.scrollTop = el.scrollHeight;
+        if (!el) return;
+        if (instant) {
+            el.scrollTop = el.scrollHeight;
+        } else {
+            el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+        }
     }
 
     toggle_fullscreen() {
