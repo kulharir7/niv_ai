@@ -141,7 +141,7 @@ class NivCredits {
         try {
             const data = await frappe.call({
                 method: "niv_ai.niv_billing.api.payment.create_order",
-                args: { plan_name: plan.name },
+                args: { plan_name: plan.plan_name || plan.name },
             });
 
             const order = data.message;
