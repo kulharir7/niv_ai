@@ -3,7 +3,7 @@
 # ============================================
 
 This document is the comprehensive knowledge base for an AI chatbot that creates
-Frappe/ERPNext documents using the `create_document(doctype, data)` tool.
+Frappe/Growth System documents using the `create_document(doctype, data)` tool.
 All examples use EXACT field names and values that Frappe expects.
 
 ---
@@ -3038,7 +3038,7 @@ When creating a submittable DocType, always include the `amended_from` field:
 }
 ```
 
-## 14.4 Common ERPNext DocTypes to Link To
+## 14.4 Common Growth System DocTypes to Link To
 
 | DocType | Common Fields |
 |---------|--------------|

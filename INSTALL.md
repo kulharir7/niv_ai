@@ -1,6 +1,6 @@
 # Niv AI — Complete Installation & Setup Guide
 
-> Step-by-step guide to get Niv AI running on your ERPNext instance.
+> Step-by-step guide to get Niv AI running on your Growth System instance.
 
 ---
 
@@ -8,7 +8,7 @@
 
 | Requirement | Version |
 |-------------|---------|
-| **ERPNext** | v15+ (v14 partially supported) |
+| **Growth System** | v15+ (v14 partially supported) |
 | **Frappe** | v15+ |
 | **Python** | 3.10+ |
 | **MariaDB** | 10.6+ |
@@ -25,7 +25,7 @@ You also need an AI API key from one of:
 
 ## Step 1: Install frappe_assistant_core (FAC)
 
-FAC provides the MCP tools that Niv AI uses to read/write ERPNext data.
+FAC provides the MCP tools that Niv AI uses to read/write Growth System data.
 
 ```bash
 cd /path/to/frappe-bench
@@ -109,11 +109,11 @@ Niv AI tracks token usage per request. Two billing modes:
 ### Option B: Growth Billing (Production)
 - Set **Payment Mode** → `growth`
 - Configure Growth Billing fields:
-  - **Growth Billing URL** — Your billing ERPNext instance URL
+  - **Growth Billing URL** — Your billing Growth System instance URL
   - **Growth API Key** / **Growth API Secret** — API credentials for the billing site
   - **Growth Billing Customer** — Default customer name (e.g., `Niv AI Customer`)
   - **Growth Billing Item** — Item code for token recharge (e.g., `Niv AI Token Recharge`)
-- Set up a Server Script on the billing ERPNext to handle callbacks (see Growth Billing Setup section below)
+- Set up a Server Script on the billing Growth System to handle callbacks (see Growth Billing Setup section below)
 
 ---
 
@@ -138,7 +138,7 @@ To enable for a user:
 ### Enable widget globally:
 In Niv Settings → **Enable Widget** → ✅
 
-This adds a floating chat button on every ERPNext page.
+This adds a floating chat button on every Growth System page.
 
 ---
 
@@ -224,13 +224,13 @@ sudo nginx -t && sudo nginx -s reload
    ```bash
    curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://yoursite.com/api/method/niv_ai.niv_core.api.telegram.webhook"
    ```
-5. Users link their Telegram to ERPNext account via `/link` command in the bot
+5. Users link their Telegram to Growth System account via `/link` command in the bot
 
 ---
 
 ## Optional: Developer Mode
 
-For ERPNext developers who want to create DocTypes, scripts, and workflows via chat:
+For Growth System developers who want to create DocTypes, scripts, and workflows via chat:
 
 1. In Niv Settings → **Enable Developer Mode** → ✅
 2. In chat, type: `/dev` to toggle developer mode per conversation
@@ -277,9 +277,9 @@ bench restart
 
 ## Growth Billing Setup (for production)
 
-If you want to charge users for token usage via a separate ERPNext instance:
+If you want to charge users for token usage via a separate Growth System instance:
 
-### On the billing ERPNext:
+### On the billing Growth System:
 
 1. Create an **Item**: `Niv AI Token Recharge` (non-stock)
 2. Create a **Customer**: `Niv AI Customer`
@@ -301,7 +301,7 @@ if doc.custom_niv_callback_url and doc.docstatus == 1:
         pass
 ```
 
-### On the Niv AI ERPNext:
+### On the Niv AI Growth System:
 
 1. In Niv Settings, set:
    - Payment Mode: `growth`

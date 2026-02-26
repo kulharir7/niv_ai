@@ -1,5 +1,5 @@
 """
-RAG Auto-Indexer — indexes DocType schemas, workflows, and ERPNext knowledge
+RAG Auto-Indexer — indexes DocType schemas, workflows, and Growth System knowledge
 into the FAISS vectorstore for context-aware AI responses.
 
 Usage:
@@ -14,7 +14,7 @@ from typing import List, Dict
 
 
 def index_all(force=False):
-    """Index everything: DocTypes + ERPNext knowledge + workflows.
+    """Index everything: DocTypes + Growth System knowledge + workflows.
     
     Args:
         force: If True, delete existing index and rebuild from scratch.
@@ -296,16 +296,16 @@ def _build_create_guide(dt_info: dict) -> str:
 
 
 def index_erpnext_knowledge():
-    """Index general ERPNext knowledge — common workflows, tips, concepts."""
+    """Index general Growth System knowledge — common workflows, tips, concepts."""
     from .rag import add_documents, delete_by_source
 
     delete_by_source("erpnext_knowledge")
 
     knowledge = [
         {
-            "title": "ERPNext Document Lifecycle",
+            "title": "Growth System Document Lifecycle",
             "content": (
-                "ERPNext documents follow a lifecycle: Draft → Saved → Submitted → Cancelled → Amended.\n"
+                "Growth System documents follow a lifecycle: Draft → Saved → Submitted → Cancelled → Amended.\n"
                 "Draft: Initial state, can be freely edited.\n"
                 "Submitted: Finalized, creates GL entries/stock ledger. Cannot be edited directly.\n"
                 "Cancelled: Reverses all ledger entries. Creates 'Amended From' link.\n"
@@ -316,9 +316,9 @@ def index_erpnext_knowledge():
             ),
         },
         {
-            "title": "ERPNext Selling Workflow",
+            "title": "Growth System Selling Workflow",
             "content": (
-                "Standard selling flow in ERPNext:\n"
+                "Standard selling flow in Growth System:\n"
                 "1. Lead → Opportunity → Quotation → Sales Order → Delivery Note → Sales Invoice → Payment Entry\n"
                 "Key relationships:\n"
                 "- Sales Order: customer (Link to Customer), items (child table Sales Order Item with item_code, qty, rate)\n"
@@ -329,9 +329,9 @@ def index_erpnext_knowledge():
             ),
         },
         {
-            "title": "ERPNext Buying Workflow",
+            "title": "Growth System Buying Workflow",
             "content": (
-                "Standard buying flow in ERPNext:\n"
+                "Standard buying flow in Growth System:\n"
                 "1. Material Request → Supplier Quotation → Purchase Order → Purchase Receipt → Purchase Invoice → Payment Entry\n"
                 "Key relationships:\n"
                 "- Purchase Order: supplier (Link to Supplier), items (child table Purchase Order Item with item_code, qty, rate)\n"
@@ -341,9 +341,9 @@ def index_erpnext_knowledge():
             ),
         },
         {
-            "title": "ERPNext Stock/Inventory",
+            "title": "Growth System Stock/Inventory",
             "content": (
-                "Stock management in ERPNext:\n"
+                "Stock management in Growth System:\n"
                 "- Item: Master for all products/services. item_code is the primary key.\n"
                 "- Warehouse: Stock location. Default warehouse in Stock Settings.\n"
                 "- Stock Entry: Transfer, receipt, manufacture. Types: Material Receipt, Material Transfer, Manufacture.\n"
@@ -354,9 +354,9 @@ def index_erpnext_knowledge():
             ),
         },
         {
-            "title": "ERPNext Accounting Basics",
+            "title": "Growth System Accounting Basics",
             "content": (
-                "Accounting in ERPNext:\n"
+                "Accounting in Growth System:\n"
                 "- Chart of Accounts: Tree structure. Account types: Asset, Liability, Income, Expense, Equity.\n"
                 "- Journal Entry: Manual accounting entry. Debit and Credit rows must balance.\n"
                 "- Payment Entry: Receive/pay against invoices. payment_type: Receive/Pay/Internal Transfer.\n"
@@ -366,9 +366,9 @@ def index_erpnext_knowledge():
             ),
         },
         {
-            "title": "ERPNext HR Module",
+            "title": "Growth System HR Module",
             "content": (
-                "HR management in ERPNext:\n"
+                "HR management in Growth System:\n"
                 "- Employee: Master record. employee_name, company, department, designation required.\n"
                 "- Leave Application: employee, leave_type, from_date, to_date required.\n"
                 "- Attendance: employee, attendance_date, status (Present/Absent/Half Day/Work From Home).\n"
@@ -378,9 +378,9 @@ def index_erpnext_knowledge():
             ),
         },
         {
-            "title": "ERPNext Common Patterns",
+            "title": "Growth System Common Patterns",
             "content": (
-                "Useful patterns for querying ERPNext data:\n"
+                "Useful patterns for querying Growth System data:\n"
                 "1. Count documents: list_documents with doctype, limit=0, then check total\n"
                 "2. Filter by date range: filters={'date_field': ['between', ['2025-01-01', '2025-12-31']]}\n"
                 "3. Filter by status: filters={'status': 'Draft'} or {'docstatus': 0} (0=draft, 1=submitted, 2=cancelled)\n"
@@ -397,7 +397,7 @@ def index_erpnext_knowledge():
     metadatas = [{"source": "erpnext_knowledge", "title": k["title"]} for k in knowledge]
 
     count = add_documents(texts, metadatas)
-    print(f"[RAG Indexer] ERPNext Knowledge: {count} chunks indexed")
+    print(f"[RAG Indexer] Growth System Knowledge: {count} chunks indexed")
     return count
 
 

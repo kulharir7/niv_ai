@@ -43,7 +43,7 @@
 
 #### Billing & Payment
 - **Razorpay completely removed** — only Demo + Growth Billing modes
-- **Growth Billing** (renamed from ERPNext Billing) with default customer/item
+- **Growth Billing** (renamed from Growth System Billing) with default customer/item
 - **Atomic pool deduction** — SQL `UPDATE...WHERE balance >= tokens` prevents negative balance
 - **Model name tracked** in usage logs for cost analysis
 - **Accurate token estimation** — uses full prompt text (system + history + message)
@@ -142,7 +142,7 @@
 
 #### System Discovery (Auto-Scan)
 - **Unified discovery**: Single source of truth for system knowledge
-- **Auto-scan**: Automatically discovers DocTypes, fields, workflows on any ERPNext
+- **Auto-scan**: Automatically discovers DocTypes, fields, workflows on any Growth System
 - **585 DocTypes, 31 workflows** discovered and injected into agent context
 - **Zero tool calls** for system info queries - agent already knows!
 
@@ -237,7 +237,7 @@
 
 ## v0.5.0 (2026-02-14)
 ### Added
-- **Auto-Discovery Engine** — Scans ERPNext on install, builds knowledge
+- **Auto-Discovery Engine** — Scans Growth System on install, builds knowledge
 - **Niv Health System** — Self-healing and auto-setup
 - Router + Dev-mode safety improvements
 - NBFC domain knowledge injection
@@ -267,9 +267,9 @@
 ## v0.3.1 (2026-02-11)
 ### Added
 - **Per-User Tool Permissions** — automatic permission isolation for AI tool calls
-  - When enabled, each user's MCP tool calls use their **own** ERPNext API credentials
+  - When enabled, each user's MCP tool calls use their **own** Growth System API credentials
   - API keys are **auto-generated** on first chat — zero manual setup per user
-  - Tool results respect ERPNext role permissions (e.g., Sales User only sees their Sales Orders)
+  - Tool results respect Growth System role permissions (e.g., Sales User only sees their Sales Orders)
   - Thread-safe via `threading.local()` — multiple concurrent users fully isolated
   - Graceful fallback: if key generation fails, falls back to admin key (never breaks chat)
   - New toggle in Niv Settings: **"Per-User Tool Permissions"** (default: OFF for backward compatibility)
@@ -347,7 +347,7 @@
 
 ## v0.1.0 (2026-02-09)
 ### Initial Release
-- Complete AI chat assistant for ERPNext
+- Complete AI chat assistant for Growth System
 - 26 built-in tools (documents, search, reports, workflows, database, email, utilities)
 - SSE streaming responses
 - Voice mode (Piper TTS + browser STT)

@@ -12,7 +12,7 @@ def get_mcp_servers():
         "is_active": 1,
         "status": "Connected",
         "transport_type": "direct",
-        "description": "Built-in ERPNext tools via Frappe Assistant Core",
+        "description": "Built-in Growth System tools via Frappe Assistant Core",
     }]
 
 

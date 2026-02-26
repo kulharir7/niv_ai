@@ -1,5 +1,5 @@
 """
-Auto-Discovery Engine — Scans the ERPNext instance and builds system knowledge.
+Auto-Discovery Engine — Scans the Growth System instance and builds system knowledge.
 Runs on install and periodically to keep knowledge updated.
 """
 import frappe

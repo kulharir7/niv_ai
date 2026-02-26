@@ -106,7 +106,7 @@
    "fieldname": "system_prompt",
    "fieldtype": "Text",
    "label": "Default System Prompt",
-   "default": "You are Niv AI, a helpful assistant integrated with ERPNext. You can help users with their business data, create documents, generate reports, and answer questions. Be concise and helpful."
+   "default": "You are Niv AI, a helpful assistant integrated with Growth System. You can help users with their business data, create documents, generate reports, and answer questions. Be concise and helpful."
   },
   {
    "fieldname": "max_tokens_per_message",
@@ -161,7 +161,7 @@
    "fieldtype": "Check",
    "label": "Per-User Tool Permissions",
    "default": "0",
-   "description": "When enabled, AI tool calls use each user's own API credentials. Tool results will respect ERPNext role permissions \u2014 users only see data they have access to. API keys are auto-generated on first chat."
+   "description": "When enabled, AI tool calls use each user's own API credentials. Tool results will respect Growth System role permissions \u2014 users only see data they have access to. API keys are auto-generated on first chat."
   },
   {
    "fieldname": "rate_limit_section",
@@ -310,13 +310,13 @@
    "fieldname": "erp_billing_section",
    "fieldtype": "Section Break",
    "label": "Growth Billing",
-   "description": "Connect to Growth System ERPNext for billing. Recharge creates Sales Order. Tokens credited on SO submit via webhook.",
+   "description": "Connect to Growth System Growth System for billing. Recharge creates Sales Order. Tokens credited on SO submit via webhook.",
    "collapsible": 1
   },
   {
    "fieldname": "billing_erp_url",
    "fieldtype": "Data",
-   "label": "Vendor ERPNext URL",
+   "label": "Vendor Growth System URL",
    "description": "e.g. https://erp.yourcompany.com"
   },
   {
@@ -338,20 +338,20 @@
    "fieldtype": "Data",
    "label": "Customer Name",
    "default": "Niv AI Customer",
-   "description": "Customer name on Growth ERPNext (must exist there)"
+   "description": "Customer name on Growth Growth System (must exist there)"
   },
   {
    "fieldname": "billing_erp_item",
    "fieldtype": "Data",
    "label": "Item Code",
    "default": "Niv AI Token Recharge",
-   "description": "Item code on Growth ERPNext (must exist there)"
+   "description": "Item code on Growth Growth System (must exist there)"
   },
   {
    "fieldname": "billing_erp_webhook_secret",
    "fieldtype": "Password",
    "label": "Webhook Secret",
-   "description": "Shared secret for verifying webhook callbacks from vendor ERPNext"
+   "description": "Shared secret for verifying webhook callbacks from vendor Growth System"
   },
   {
    "fieldname": "currency",

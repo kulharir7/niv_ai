@@ -1,6 +1,6 @@
 # 🗺️ Niv AI — Roadmap to v1.0.0
 
-> The journey from AI chat assistant to enterprise-grade AI platform for ERPNext.
+> The journey from AI chat assistant to enterprise-grade AI platform for Growth System.
 > 
 > **Current Version**: v0.3.1 | **Target**: v1.0.0 | **Total Features**: 160+
 
@@ -15,7 +15,7 @@ The beginning. Pure Frappe app with AI chat, MCP tool calling, and billing.
 - [x] 12 DocTypes (Settings, Conversations, Messages, Billing, Tools)
 - [x] OpenAI-compatible API (works with Mistral, GPT, Claude, Ollama)
 - [x] MCP protocol for tool discovery & execution
-- [x] FAC integration — 23 ERPNext tools via MCP
+- [x] FAC integration — 23 Growth System tools via MCP
 - [x] SSE streaming chat
 - [x] Dual billing (Shared Pool + Per User)
 - [x] Razorpay payments (demo mode when keys empty)
@@ -53,10 +53,10 @@ Complete engine rewrite — LangChain/LangGraph powers everything.
 - [x] 20 DocTypes total
 
 ### v0.3.1 — "Permission Isolation" (2026-02-11)
-Per-user tool permissions — AI respects ERPNext roles.
+Per-user tool permissions — AI respects Growth System roles.
 
 - [x] Auto-generate API keys on first chat (zero manual setup)
-- [x] MCP tool calls use user's own ERPNext credentials
+- [x] MCP tool calls use user's own Growth System credentials
 - [x] Tool results respect user's role permissions
 - [x] Thread-safe via `threading.local()`
 - [x] Toggle in Niv Settings (default OFF, backward compatible)
@@ -151,13 +151,13 @@ Per-user tool permissions — AI respects ERPNext roles.
 | 54 | Wikipedia integration (quick facts) | 🔴 |
 | 55 | Calculator / math solver (complex formulas) | 🔴 |
 | 56 | Date/time/calendar awareness ("kal ka meeting kab hai") | 🔴 |
-| 57 | ERPNext context awareness (knows user's role, department, recent activity) | 🔴 |
+| 57 | Growth System context awareness (knows user's role, department, recent activity) | 🔴 |
 | 58 | Smart suggestions based on user's work pattern | 🔴 |
 | 59 | Auto-detect intent (question vs command vs casual chat) | 🔴 |
 | 60 | Conversation branching (fork chat from any message) | 🔴 |
 | 61 | Related conversations suggestion ("you asked about this before") | 🔴 |
 | 62 | Typo correction ("did you mean Sales Order?") | 🔴 |
-| 63 | Fact-checking against ERPNext data (verify AI claims) | 🔴 |
+| 63 | Fact-checking against Growth System data (verify AI claims) | 🔴 |
 | 64 | Multi-turn reasoning chains (show AI thinking process) | 🔴 |
 | 65 | Confidence score on answers (low confidence → suggests verification) | 🔴 |
 
@@ -182,7 +182,7 @@ Per-user tool permissions — AI respects ERPNext roles.
 | 75 | **Scheduled reports** ("har Monday subah sales summary bhejo") | 🔴 |
 | 76 | **Email integration** (AI reads inbox, drafts replies) | 🔴 |
 | 77 | Webhook triggers (AI response → trigger external action) | 🔴 |
-| 78 | ERPNext workflow triggers (AI starts approval workflows) | 🔴 |
+| 78 | Growth System workflow triggers (AI starts approval workflows) | 🔴 |
 | 79 | **Custom MCP Tool Builder** (no-code: name + API endpoint + params → tool ready) | 🔴 |
 | 80 | MCP server health monitoring (status page, auto-reconnect) | 🔴 |
 | 81 | Auto-retry failed tool calls (configurable retries) | 🔴 |
@@ -208,7 +208,7 @@ Per-user tool permissions — AI respects ERPNext roles.
 | 91 | Code "Copy" + "Run" buttons (Python/JS execution) | 🔴 |
 | 92 | **Artifacts/Canvas panel** (long outputs open in side panel — Claude-style) | 🔴 |
 | 93 | Table sorting & filtering in chat (click column to sort) | 🔴 |
-| 94 | **Clickable links in tables** (Sales Order name → opens in ERPNext) | 🔴 |
+| 94 | **Clickable links in tables** (Sales Order name → opens in Growth System) | 🔴 |
 | 95 | Mermaid diagram rendering (flowcharts, sequence diagrams) | 🔴 |
 | 96 | LaTeX/math formula rendering | 🔴 |
 | 97 | **Keyboard shortcuts** (Ctrl+K palette, Ctrl+N new chat, Ctrl+/ help) | 🔴 |

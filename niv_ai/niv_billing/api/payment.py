@@ -98,7 +98,7 @@ def create_order(plan_name):
     """Create a payment order for a credit plan.
 
     Supports 2 modes:
-    - growth: Creates Sales Order on vendor's ERPNext via Growth Billing
+    - growth: Creates Sales Order on vendor's Growth System via Growth Billing
     - demo: Fake order for testing
     """
     payment_mode = _get_payment_mode()
@@ -170,7 +170,7 @@ def create_order(plan_name):
 
 
 def _create_growth_order(plan, user, settings, currency):
-    """Create Sales Order on vendor's ERPNext via Growth Billing."""
+    """Create Sales Order on vendor's Growth System via Growth Billing."""
     import requests as req
 
     erp_url = settings.billing_erp_url.rstrip("/")
@@ -286,9 +286,9 @@ def _create_demo_order(plan, user, currency):
 
 @frappe.whitelist(allow_guest=True)
 def erpnext_webhook(**kwargs):
-    """Webhook callback from vendor's ERPNext (Growth Billing) when Sales Order is submitted.
+    """Webhook callback from vendor's Growth System (Growth Billing) when Sales Order is submitted.
 
-    Called via ERPNext Webhook (DocType: Sales Order, Event: on_submit).
+    Called via Growth System Webhook (DocType: Sales Order, Event: on_submit).
     Verifies the request and credits tokens to the shared pool.
     """
     data = frappe.form_dict

@@ -1,5 +1,5 @@
 """
-Module Templates — Pre-built blueprints for common ERPNext modules.
+Module Templates — Pre-built blueprints for common Growth System modules.
 AI uses these as reference when user asks to create a complete module.
 Injected into dev system prompt alongside dev_quick_reference.
 """
@@ -254,7 +254,7 @@ FOR LINKING TO EXISTING DocTypes:
 
 === DOCUMENT FLOW MAP ===
 
-ERPNext standard flows — AI must understand these connections:
+Growth System standard flows — AI must understand these connections:
 
 SELLING FLOW:
 Lead → Opportunity → Quotation → Sales Order → Delivery Note → Sales Invoice → Payment Entry

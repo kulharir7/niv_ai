@@ -1,6 +1,6 @@
 """Bulk Data Import from Excel for Niv AI.
 
-User uploads Excel file in chat → AI reads it → validates → creates documents in ERPNext.
+User uploads Excel file in chat → AI reads it → validates → creates documents in Growth System.
 Usage via run_python_code MCP tool:
     from niv_ai.niv_core.tools.bulk_import import preview_import, execute_import
 
@@ -142,7 +142,7 @@ def preview_import(file_url: str, doctype: str, field_mapping: Optional[dict] = 
 
 def execute_import(file_url: str, doctype: str, field_mapping: Optional[dict] = None, 
                    skip_errors: bool = False) -> dict:
-    """Actually import data from Excel into ERPNext.
+    """Actually import data from Excel into Growth System.
     
     Args:
         file_url: Same file URL used in preview

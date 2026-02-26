@@ -25,9 +25,9 @@ And Niv AI:
 ---
 
 ## 📦 PHASE 1: Foundation Intelligence (Week 1-2)
-### "Teaching the AI to understand ERPNext deeply"
+### "Teaching the AI to understand Growth System deeply"
 
-### 1.1 ERPNext Relationship Graph
+### 1.1 Growth System Relationship Graph
 **What:** AI needs to know how DocTypes connect — which links to which, what creates what.
 
 **Implementation:**
@@ -44,7 +44,7 @@ And Niv AI:
 
 **Why it matters:** Without this, AI creates orphan DocTypes that don't connect to anything.
 
-### 1.2 ERPNext Module Templates
+### 1.2 Growth System Module Templates
 **What:** Pre-built blueprints for common modules.
 
 **Templates:**
@@ -77,7 +77,7 @@ And Niv AI:
 **What:** When creating a DocType, AI suggests relevant fields based on:
 - DocType name/purpose
 - Industry context
-- ERPNext conventions (naming_series, company, amended_from)
+- Growth System conventions (naming_series, company, amended_from)
 - Required fields (name, owner, creation, modified)
 
 **Example:**
@@ -425,7 +425,7 @@ All: "✅ CRM Module complete! 100% tests passing."
 
 | Week | Phase | Deliverable | Impact |
 |------|-------|-------------|--------|
-| 1 | Foundation | Relationship graph + field suggestions | AI understands ERPNext structure |
+| 1 | Foundation | Relationship graph + field suggestions | AI understands Growth System structure |
 | 2 | Foundation + Blueprint | Module templates + blueprint generator | AI can plan modules |
 | 3 | Blueprint + Domain | Step executor + NBFC knowledge pack | AI builds complete modules |
 | 4 | Domain | More domain packs + context suggestions | AI is industry-smart |
@@ -441,7 +441,7 @@ All: "✅ CRM Module complete! 100% tests passing."
 ### v0.6 (Week 2)
 - [ ] AI can show blueprint before building
 - [ ] AI suggests related components
-- [ ] AI knows ERPNext DocType relationships
+- [ ] AI knows Growth System DocType relationships
 
 ### v0.7 (Week 4)  
 - [ ] AI builds complete NBFC Loan Module from single command

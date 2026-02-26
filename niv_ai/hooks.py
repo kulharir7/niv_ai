@@ -1,11 +1,11 @@
 app_name = "niv_ai"
 app_title = "Niv AI"
 app_publisher = "Ravindra Kulhari"
-app_description = "Complete AI Chat Assistant for ERPNext"
+app_description = "Complete AI Chat Assistant for Growth System"
 app_email = "kulharir7@gmail.com"
 app_license = "MIT"
 app_version = "1.3.0"
-# Works with Frappe/ERPNext v14 and v15
+# Works with Frappe/Growth System v14 and v15
 required_apps = ["frappe", "erpnext"]
 
 # Includes in <head>

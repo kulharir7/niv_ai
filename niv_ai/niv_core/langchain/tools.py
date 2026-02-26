@@ -4,7 +4,7 @@ Reuses existing mcp_client.py — no changes to MCP layer.
 
 Per-user permission isolation:
   When user_api_key is set via set_current_user_api_key(),
-  all MCP tool calls use the user's own ERPNext API credentials.
+  all MCP tool calls use the user's own Growth System API credentials.
   This means tool results respect the user's roles/permissions —
   e.g., a Sales User only sees their own Sales Orders.
 """

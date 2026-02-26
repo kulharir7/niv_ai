@@ -107,7 +107,7 @@ test.describe('Niv Chat — Features', () => {
 
   // Test 13: Widget mode (iframe)
   test('widget opens in iframe', async ({ page }) => {
-    // Navigate to a regular ERPNext page
+    // Navigate to a regular Growth System page
     await page.goto('/app/home');
     await page.waitForTimeout(2000);
 

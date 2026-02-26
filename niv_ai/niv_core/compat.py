@@ -54,7 +54,7 @@ def check_min_version():
     """Check that Frappe version is >= 14. Call from install.py."""
     if FRAPPE_VERSION < 14:
         frappe.throw(
-            "Niv AI requires Frappe/ERPNext v14 or later. "
+            "Niv AI requires Frappe/Growth System v14 or later. "
             f"You are running v{frappe.__version__}. "
             "Please upgrade before installing."
         )

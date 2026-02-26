@@ -169,7 +169,7 @@
 - [ ] **RAG improvement:** Better chunking strategy for uploaded documents
 - [ ] **Auto-index:** New DocType created → auto-index schema for LLM
 - [ ] **FAQ learning:** Common queries + good answers → auto-learn for faster response
-- [ ] **Frappe Help integration:** "How to create a loan?" → search Frappe/ERPNext docs
+- [ ] **Frappe Help integration:** "How to create a loan?" → search Frappe/Growth System docs
 
 ---
 

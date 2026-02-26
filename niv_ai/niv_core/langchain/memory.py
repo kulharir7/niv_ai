@@ -284,7 +284,7 @@ def get_system_prompt(conversation_id: str = None) -> str:
 
     Priority: conversation.system_prompt → settings.system_prompt (text field) → built-in default
     """
-    # Dynamic branding — never say ERPNext/Frappe, use configured name
+    # Dynamic branding — never say Growth System/Frappe, use configured name
     try:
         _settings = get_niv_settings()
         _brand = getattr(_settings, "brand_name", "") or "Niv"
@@ -302,7 +302,7 @@ def get_system_prompt(conversation_id: str = None) -> str:
         "1. Never fabricate data. Always use tools to get real data.\n"
         "2. For financial metrics (WRR, interest rates), read from document fields — never guess.\n"
         "3. After tool results, write a clear summary for the user.\n"
-        "4. Never say 'ERPNext' or 'Frappe' — say '{brand}'.\n"
+        "4. Never say 'Growth System' or 'Frappe' — say '{brand}'.\n"
         "5. If a tool fails, try a different approach once. Then tell the user.\n"
         "6. FORMATTING: Use proper markdown tables with header separator row for structured data. "
         "Example:\n"
@@ -434,8 +434,8 @@ def get_dev_system_prompt() -> str:
         "- Create Print Formats (Jinja HTML templates)\n"
         "- Create Script Reports and Query Reports\n"
         "- Explain system architecture, field types, APIs, hooks, permissions\n\n"
-        "BRANDING RULE (CRITICAL): NEVER say 'ERPNext', 'Frappe', or 'Frappe Framework' to the user. "
-        "Always refer to the system as '" + _brand + "'. Say '" + _brand + " system' not 'ERPNext'.\n\n"
+        "BRANDING RULE (CRITICAL): NEVER say 'Growth System', 'Frappe', or 'Frappe Framework' to the user. "
+        "Always refer to the system as '" + _brand + "'. Say '" + _brand + " system' not 'Growth System'.\n\n"
         "RULES:\n"
         "1. ALWAYS check RAG context first — it has field types, API references, patterns.\n"
         "2. For Custom Fields: fieldname MUST start with 'custom_'. Use insert_after for position.\n"
@@ -451,7 +451,7 @@ def get_dev_system_prompt() -> str:
         "Workflow, Print Format, Notification — these apply INSTANTLY.\n"
         "12. Only NEW DocType creation needs 'bench migrate' (creates DB table).\n"
         "13. PREFER no-code approach: Use Custom Field (not direct DocType edit) to add fields. "
-        "Use Property Setter to change field properties. This is ERPNext's official no-code way.\n\n"
+        "Use Property Setter to change field properties. This is Growth System's official no-code way.\n\n"
         "TOOL USAGE — CRITICAL PARAMETER FORMAT:\n"
         "The create_document tool takes TWO parameters: 'doctype' and 'data'.\n"
         "ALL document fields go INSIDE the 'data' object. NEVER pass them as top-level params.\n\n"
