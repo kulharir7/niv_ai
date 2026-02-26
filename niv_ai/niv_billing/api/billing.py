@@ -280,13 +280,15 @@ def cleanup_expired_credits():
     today_date = getdate()
     
     # Find all daily free token credits from before today that haven't been expired yet
-    # These have remarks containing "Daily free tokens" and no corresponding expiry record
+    # Filter: only positive recharge rows with daily free remarks
     daily_credits = frappe.db.sql("""
         SELECT name, user, tokens, DATE(creation) as credit_date
         FROM `tabNiv Recharge`
         WHERE remarks LIKE '%%Daily free tokens%%'
         AND DATE(creation) < %(today)s
         AND status = 'Completed'
+        AND transaction_type = 'recharge'
+        AND tokens > 0
         AND name NOT IN (
             SELECT REPLACE(payment_id, 'expiry_', '') 
             FROM `tabNiv Recharge` 
@@ -301,23 +303,23 @@ def cleanup_expired_credits():
     for credit in daily_credits:
         try:
             user = credit.user
-            tokens_to_expire = credit.tokens
+            tokens_to_expire = abs(credit.tokens)  # Always positive
             
             # Get wallet and deduct (only up to available balance)
             wallet = get_or_create_wallet(user)
-            actual_deduct = min(tokens_to_expire, wallet.balance)
+            actual_deduct = min(tokens_to_expire, max(wallet.balance, 0))
             
             if actual_deduct > 0:
                 wallet.balance -= actual_deduct
                 wallet.save(ignore_permissions=True)
             
-            # Create expiry record
+            # Create expiry record - tokens always negative
             frappe.get_doc({
                 "doctype": "Niv Recharge",
                 "user": user,
-                "tokens": -actual_deduct,  # negative to show deduction
+                "tokens": -abs(actual_deduct),  # Always negative for expiry
                 "transaction_type": "expiry",
-                "payment_id": f"expiry_{credit.name}",  # link to original credit
+                "payment_id": f"expiry_{credit.name}",
                 "remarks": f"Daily free tokens expired (from {credit.credit_date})",
                 "balance_after": wallet.balance,
                 "status": "Completed",
