@@ -2959,30 +2959,19 @@ ${htmlCode}
     scroll_to_bottom(instant) {
         const el = this.$chatArea[0];
         if (!el) return;
-        const doScroll = () => { if (el) el.scrollTop = el.scrollHeight; };
-        doScroll();
-        // Multiple delayed scrolls to catch post-render layout changes
-        // (tables, code blocks, markdown rendering can change height)
-        requestAnimationFrame(doScroll);
-        setTimeout(doScroll, 50);
-        setTimeout(doScroll, 150);
-        setTimeout(doScroll, 300);
-        setTimeout(doScroll, 500);
+        el.scrollTop = el.scrollHeight;
     }
 
     _setup_auto_scroll() {
-        // MutationObserver: auto-scroll when new content is added to chat area
-        if (this._scrollObserver) return;
-        const el = this.$chatArea[0];
-        if (!el) return;
-        this._scrollObserver = new MutationObserver(() => {
-            // Only auto-scroll if user is near bottom
-            const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-            if (dist < 500) {
-                el.scrollTop = el.scrollHeight;
-            }
-        });
-        this._scrollObserver.observe(el, { childList: true, subtree: true, characterData: true });
+        // Simple interval-based auto-scroll during streaming
+        // Checks every 200ms if streaming and scrolls to bottom
+        if (this._autoScrollInterval) return;
+        const self = this;
+        this._autoScrollInterval = setInterval(() => {
+            if (!self.is_streaming) return;
+            const el = self.$chatArea ? self.$chatArea[0] : null;
+            if (el) el.scrollTop = el.scrollHeight;
+        }, 200);
     }
 
     toggle_fullscreen() {
