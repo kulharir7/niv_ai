@@ -310,13 +310,13 @@
    "fieldname": "erp_billing_section",
    "fieldtype": "Section Break",
    "label": "Growth Billing",
-   "description": "Connect to Growth System Growth System for billing. Recharge creates Sales Order. Tokens credited on SO submit via webhook.",
+   "description": "Connect to Growth System for billing. Recharge creates Sales Order. Tokens credited on SO submit via webhook.",
    "collapsible": 1
   },
   {
    "fieldname": "billing_erp_url",
    "fieldtype": "Data",
-   "label": "Vendor Growth System URL",
+   "label": "Vendor ERP URL",
    "description": "e.g. https://erp.yourcompany.com"
   },
   {
@@ -338,14 +338,14 @@
    "fieldtype": "Data",
    "label": "Customer Name",
    "default": "Niv AI Customer",
-   "description": "Customer name on Growth Growth System (must exist there)"
+   "description": "Customer name on Growth System (must exist there)"
   },
   {
    "fieldname": "billing_erp_item",
    "fieldtype": "Data",
    "label": "Item Code",
    "default": "Niv AI Token Recharge",
-   "description": "Item code on Growth Growth System (must exist there)"
+   "description": "Item code on Growth System (must exist there)"
   },
   {
    "fieldname": "billing_erp_webhook_secret",
