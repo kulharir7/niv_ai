@@ -219,18 +219,24 @@ def _create_growth_order(plan, user, settings, currency):
         frappe.log_error(f"Growth Billing order creation failed: {e}", "Niv Growth Billing")
         frappe.throw(_("Failed to create recharge order. Please try again."))
 
-    recharge = frappe.get_doc({
+    # Don't set plan Link field for billing-server plans (no local Niv Credit Plan doc)
+    recharge_data = {
         "doctype": "Niv Recharge",
         "user": user,
         "tokens": int(plan.tokens),
         "transaction_type": "recharge",
-        "plan": plan.name,
         "amount": plan.price,
         "currency": currency,
         "razorpay_order_id": so_name,
         "status": "Pending",
         "remarks": f"Recharge: {plan.plan_name} | SO: {so_name} (Growth Billing)",
-    })
+    }
+    # Only set plan Link if local Niv Credit Plan exists
+    if frappe.db.exists("Niv Credit Plan", plan.name):
+        recharge_data["plan"] = plan.name
+    elif frappe.db.exists("Niv Credit Plan", plan.plan_name):
+        recharge_data["plan"] = plan.plan_name
+    recharge = frappe.get_doc(recharge_data)
     recharge.insert(ignore_permissions=True)
     frappe.db.commit()
 
