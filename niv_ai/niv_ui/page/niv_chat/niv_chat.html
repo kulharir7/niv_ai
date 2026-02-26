@@ -60,7 +60,7 @@
                                         <span class="credit-amount">--</span>
                                         <span class="credit-label">credits remaining</span>
                                     </div>
-                                    <button class="btn btn-sm btn-recharge" onclick="frappe.set_route(&quot;niv-credits&quot;);">Recharge</button>
+                                    <button class="btn btn-sm btn-recharge" onclick="if(window.cur_niv_chat)cur_niv_chat.close_settings_panel();frappe.set_route(&quot;niv-credits&quot;);">Recharge</button>
                                 </div>
                                 <div class="niv-low-balance-warning" style="display:none;">
                                     <i class="fa fa-exclamation-triangle"></i>

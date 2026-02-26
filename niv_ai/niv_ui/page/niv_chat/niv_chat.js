@@ -49,7 +49,7 @@ frappe.pages["niv-chat"].on_page_load = function (wrapper) {
         }
         try {
             if (typeof NivChat === 'function') {
-                new NivChat(page);
+                window.cur_niv_chat = new NivChat(page);
             } else {
                 console.error("Niv AI: NivChat class not found");
             }
@@ -3055,6 +3055,7 @@ ${htmlCode}
     }
 
     async show_recharge_dialog() {
+        this.close_settings_panel();
         frappe.set_route("niv-credits");
     }
 
