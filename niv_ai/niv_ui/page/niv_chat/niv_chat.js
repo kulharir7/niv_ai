@@ -118,6 +118,8 @@ class NivChat {
         this.setup_settings_panel();
         this.load_conversations();
         this.load_balance();
+        // Auto-refresh token balance every 60 seconds
+        this._balance_interval = setInterval(() => this.load_balance(), 60000);
         this.load_models();
         this.setup_keyboard_shortcuts();
         this.setup_scroll_watcher();
@@ -3081,24 +3083,15 @@ ${htmlCode}
     }
 
     update_token_ring(balance, total) {
-        const usage_val = this.wrapper.find(".niv-token-usage-value");
-        // Show remaining balance / total pool
         const fmt = (n) => {
             if (n >= 10000000) return (n / 10000000).toFixed(1) + " Cr";
             if (n >= 100000) return (n / 100000).toFixed(1) + " L";
             if (n >= 1000) return (n / 1000).toFixed(1) + "K";
             return Number(n).toLocaleString();
         };
-        usage_val.text(fmt(balance) + " / " + fmt(total));
-        
-        // Red when less than 10% remaining
-        if (balance <= total * 0.1) {
-            usage_val.css("color", "#ef4444");
-        } else if (balance <= total * 0.3) {
-            usage_val.css("color", "#f59e0b");
-        } else {
-            usage_val.css("color", "");
-        }
+        const used = Math.max(0, total - balance);
+        this.wrapper.find(".niv-token-usage-used").text("Used: " + fmt(used));
+        this.wrapper.find(".niv-token-usage-remaining").text("Remaining: " + fmt(balance));
     }
 
     async show_recharge_dialog() {
