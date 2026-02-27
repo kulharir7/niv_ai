@@ -11,7 +11,7 @@ from typing import Optional
 
 
 # Maximum characters to allow in a tool result before summarization kicks in
-MAX_RESULT_CHARS = 4000
+MAX_RESULT_CHARS = 32000
 
 # Tools whose results should never be truncated (schema/metadata tools)
 _NO_TRUNCATE_TOOLS = {
