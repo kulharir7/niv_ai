@@ -51,15 +51,19 @@ def deduct_tokens(user=None, input_tokens=0, output_tokens=0,
         if settings.per_user_daily_limit:
             daily_used = _get_user_daily_usage(user)
             if daily_used + total_tokens > settings.per_user_daily_limit:
-                frappe.throw(_("Daily limit reached ({0}/{1} tokens). Try again tomorrow.").format(
-                    daily_used, settings.per_user_daily_limit
-                ))
+                remaining_daily = max(0, settings.per_user_daily_limit - daily_used)
+                if remaining_daily <= 0:
+                    return {"success": True, "deducted": 0, "remaining_balance": 0}
+                total_tokens = remaining_daily  # deduct what's allowed
 
         # Atomic deduction — prevents race condition when multiple users query simultaneously
         # Uses SQL UPDATE with balance check in WHERE clause
         pool_balance = settings.shared_pool_balance or 0
         if pool_balance < total_tokens:
-            frappe.throw(_("Company credit pool exhausted. Contact admin to recharge."))
+            # Deduct whatever is available, don't block mid-stream
+            if pool_balance <= 0:
+                return {"success": True, "deducted": 0, "remaining_balance": 0}
+            total_tokens = pool_balance  # deduct what's left
 
         affected = frappe.db.sql("""
             UPDATE `tabSingles`
@@ -70,7 +74,7 @@ def deduct_tokens(user=None, input_tokens=0, output_tokens=0,
         rows_affected = frappe.db.sql("SELECT ROW_COUNT()")[0][0]
 
         if rows_affected == 0:
-            frappe.throw(_("Company credit pool exhausted. Contact admin to recharge."))
+            return {"success": True, "deducted": 0, "remaining_balance": 0}
 
         # Update used counter (not critical if slightly off)
         frappe.db.sql("""
@@ -84,9 +88,10 @@ def deduct_tokens(user=None, input_tokens=0, output_tokens=0,
         # Per-user wallet
         wallet = get_or_create_wallet(user)
         if wallet.balance < total_tokens:
-            frappe.throw(_("Insufficient credits. Balance: {0}, Required: {1}").format(
-                wallet.balance, total_tokens
-            ))
+            # Not enough tokens — deduct whatever is left (don't block mid-stream)
+            total_tokens = max(wallet.balance, 0)  # deduct only what's available
+            if total_tokens <= 0:
+                return {"success": True, "deducted": 0, "remaining_balance": 0}
         wallet.balance -= total_tokens
         wallet.total_used = (wallet.total_used or 0) + total_tokens
         wallet.save(ignore_permissions=True)
@@ -543,28 +548,51 @@ def credit_daily_free_tokens(api_key, user_email, tokens):
     if not user:
         return {"success": False, "error": f"User not found: {user_email}"}
     
-    # For daily free tokens, we add to wallet but track separately
-    # The expiry is handled by a daily cleanup job
-    wallet = get_or_create_wallet(user)
-    wallet.balance += tokens
-    wallet.total_allocated = (wallet.total_allocated or 0) + tokens
-    wallet.save(ignore_permissions=True)
+    # Respect billing mode: Shared Pool or Per User
+    settings = frappe.get_single("Niv Settings")
     
-    # Log using valid transaction type + daily marker in remarks
-    frappe.get_doc({
-        "doctype": "Niv Recharge",
-        "user": user,
-        "tokens": tokens,
-        "transaction_type": "recharge",
-        "remarks": f"Daily free tokens - expires at midnight",
-        "balance_after": wallet.balance,
-    }).insert(ignore_permissions=True)
-    
-    frappe.db.commit()
-    
-    return {
-        "success": True,
-        "user": user,
-        "tokens_credited": tokens,
-        "new_balance": wallet.balance,
-    }
+    if settings.billing_mode == "Shared Pool":
+        # Add to shared pool
+        from niv_ai.niv_core.compat import db_set_single_value
+        new_balance = (settings.shared_pool_balance or 0) + tokens
+        db_set_single_value("Niv Settings", "shared_pool_balance", new_balance)
+        
+        frappe.get_doc({
+            "doctype": "Niv Recharge",
+            "user": user,
+            "tokens": tokens,
+            "transaction_type": "recharge",
+            "remarks": f"Daily free tokens - expires at midnight",
+            "balance_after": new_balance,
+        }).insert(ignore_permissions=True)
+        
+        frappe.db.commit()
+        return {
+            "success": True,
+            "user": user,
+            "tokens_credited": tokens,
+            "new_balance": new_balance,
+        }
+    else:
+        # Per-user wallet
+        wallet = get_or_create_wallet(user)
+        wallet.balance += tokens
+        wallet.total_allocated = (wallet.total_allocated or 0) + tokens
+        wallet.save(ignore_permissions=True)
+        
+        frappe.get_doc({
+            "doctype": "Niv Recharge",
+            "user": user,
+            "tokens": tokens,
+            "transaction_type": "recharge",
+            "remarks": f"Daily free tokens - expires at midnight",
+            "balance_after": wallet.balance,
+        }).insert(ignore_permissions=True)
+        
+        frappe.db.commit()
+        return {
+            "success": True,
+            "user": user,
+            "tokens_credited": tokens,
+            "new_balance": wallet.balance,
+        }

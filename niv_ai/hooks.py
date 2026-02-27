@@ -70,8 +70,12 @@ doc_events = {
 
 # Scheduled Tasks
 scheduler_events = {
+    "cron": {
+        "30 14 * * *": [
+            "niv_ai.niv_billing.api.billing.cleanup_expired_credits",
+        ],
+    },
     "daily": [
-        "niv_ai.niv_billing.api.billing.cleanup_expired_credits",
         "niv_ai.niv_core.api.scheduler.run_scheduled_reports",
         "niv_ai.niv_core.api.automation.run_daily_auto_actions",
         "niv_ai.niv_core.knowledge.auditor_service.run_daily_audit",
