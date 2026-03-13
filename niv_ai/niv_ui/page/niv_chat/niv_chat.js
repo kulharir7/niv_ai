@@ -1244,7 +1244,7 @@ ${htmlCode}
 
     async load_models() {
         try {
-            const settings = await frappe.call({ method: "frappe.client.get", args: { doctype: "Niv Settings", name: "Niv Settings" } });
+            const settings = await frappe.call({ method: "niv_ai.niv_core.api.chat.get_chat_config" });
             const s = settings.message;
             const defaultModel = s.default_model || "";
             const providerName = s.default_provider;
@@ -1277,7 +1277,7 @@ ${htmlCode}
 
             if (providerName) {
                 try {
-                    const prov = await frappe.call({ method: "frappe.client.get", args: { doctype: "Niv AI Provider", name: providerName } });
+                    const prov = { message: { models: s.models || [] } };
                     const models = prov.message.models || [];
                     for (const m of models) {
                         const name = m.model_name || m.model_id || m.name;
@@ -3012,7 +3012,7 @@ ${htmlCode}
     async load_balance() {
         try {
             // Check if billing is enabled
-            const settings = await frappe.call({ method: "frappe.client.get", args: { doctype: "Niv Settings", name: "Niv Settings" } });
+            const settings = await frappe.call({ method: "niv_ai.niv_core.api.chat.get_chat_config" });
             if (!settings.message || !settings.message.enable_billing) {
                 // Billing disabled — hide billing UI
                 this.wrapper.find(".niv-settings-credits-row").hide();
