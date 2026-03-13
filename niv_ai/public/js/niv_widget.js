@@ -228,8 +228,8 @@
         (function loadWidgetBranding() {
             if (typeof frappe !== "undefined" && frappe.call) {
                 frappe.call({
-                    method: "frappe.client.get_value",
-                    args: { doctype: "Niv Settings", fieldname: ["widget_title", "widget_logo"] },
+                    method: "niv_ai.niv_core.api.chat.get_chat_config",
+                    args: {},
                     async: true,
                     callback: function(r) {
                         if (r && r.message) {

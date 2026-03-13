@@ -95,3 +95,29 @@ def save_reaction(message_name, reaction=""):
 
     msg.db_set("reactions_json", json.dumps(reactions), update_modified=False)
     return {"ok": True}
+
+@frappe.whitelist()
+def get_chat_config():
+    """Return chat UI config without needing Niv Settings permission."""
+    fields = [
+        "widget_title", "widget_logo", "default_model", "default_provider",
+        "auto_open_artifacts", "enable_billing"
+    ]
+    s = {}
+    for f in fields:
+        s[f] = frappe.db.get_single_value("Niv Settings", f)
+
+    # Also fetch provider models if default_provider is set
+    models = []
+    if s.get("default_provider"):
+        try:
+            provider_doc = frappe.get_doc("Niv AI Provider", s["default_provider"])
+            for m in (provider_doc.get("models") or []):
+                models.append({
+                    "model_name": m.get("model_name") or m.get("model_id") or m.get("name"),
+                })
+        except Exception:
+            pass
+
+    s["models"] = models
+    return s
