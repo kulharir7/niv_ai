@@ -1928,6 +1928,15 @@ ${htmlCode}
         this.$chatArea.append($msg);
         this.messages_data.push({ role, content: content || "", meta, $el: $msg });
 
+        // Add language labels to code blocks
+        $msg.find("pre code").each(function() {
+            const cls = $(this).attr("class") || "";
+            const langMatch = cls.match(/language-(\w+)/);
+            if (langMatch) {
+                $(this).closest("pre").attr("data-lang", langMatch[1]);
+            }
+        });
+
         // Load saved reactions
         if (meta.reactions_json) {
             try {
