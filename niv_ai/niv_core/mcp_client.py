@@ -166,7 +166,8 @@ def _get_fac_server():
     """Get the FAC MCPServer instance with tools registered.
     
     Cached for 5 minutes to allow tool updates without worker restart.
-    Works on any FAC version that has mcp.server.MCPServer.
+    Tries multiple import paths to support different FAC versions.
+    Returns None if FAC is not installed.
     """
     global _fac_mcp_server, _fac_mcp_server_time
     
@@ -174,16 +175,52 @@ def _get_fac_server():
     if _fac_mcp_server is not None and time.time() - _fac_mcp_server_time < _FAC_CACHE_TTL:
         return _fac_mcp_server
 
-    _ensure_db_alive()  # DB must be alive before FAC reads tool registry
-    from frappe_assistant_core.api.fac_endpoint import mcp, _import_tools
-    _import_tools()  # Register all enabled tools (re-imports on cache refresh)
+    _ensure_db_alive()
 
-    # Verify MCPServer has the methods we need (future-proofing)
-    if not hasattr(mcp, "_handle_tools_list") or not hasattr(mcp, "_handle_tools_call"):
+    mcp = None
+
+    # Try import paths (supports current + future FAC versions)
+    import_attempts = [
+        # Current FAC version
+        ("frappe_assistant_core.api.fac_endpoint", "mcp", "_import_tools"),
+        # Possible future paths
+        ("frappe_assistant_core.mcp.server", "mcp_server", None),
+        ("frappe_assistant_core.api.assistant_api", "mcp", None),
+    ]
+
+    for module_path, server_attr, import_func_name in import_attempts:
+        try:
+            import importlib
+            mod = importlib.import_module(module_path)
+            mcp = getattr(mod, server_attr, None)
+            if import_func_name:
+                import_func = getattr(mod, import_func_name, None)
+                if import_func:
+                    import_func()
+            if mcp:
+                break
+        except (ImportError, AttributeError) as e:
+            frappe.logger().debug(f"Niv MCP: Import attempt {module_path} failed: {e}")
+            continue
+
+    if not mcp:
         raise MCPError(
-            "FAC version too old — MCPServer missing _handle_tools_list/_handle_tools_call. "
-            "Please update frappe_assistant_core."
+            "FAC (frappe_assistant_core) not found or import failed. "
+            "Please install or update FAC."
         )
+
+    # Verify MCPServer has the methods we need
+    if not hasattr(mcp, "_handle_tools_list") or not hasattr(mcp, "_handle_tools_call"):
+        # Try alternate method names for newer FAC versions
+        if hasattr(mcp, "handle_tools_list") and hasattr(mcp, "handle_tools_call"):
+            # Patch: map public method names to expected private names
+            mcp._handle_tools_list = mcp.handle_tools_list
+            mcp._handle_tools_call = mcp.handle_tools_call
+        else:
+            raise MCPError(
+                "FAC version incompatible — MCPServer missing tools_list/tools_call methods. "
+                "Please update frappe_assistant_core to a compatible version."
+            )
 
     _fac_mcp_server = mcp
     _fac_mcp_server_time = time.time()
@@ -493,12 +530,25 @@ def discover_tools(server_name, use_cache=True):
     """Discover tools from an MCP server.
 
     Resolution:
-    1. Worker memory cache
-    2. Redis shared cache
-    3. SAME-SERVER → Direct Python import (no deps, no network)
+    1. Check if server is active (from DocType)
+    2. Worker memory cache
+    3. Redis shared cache
+    4. SAME-SERVER → Direct Python import (no deps, no network)
        REMOTE → Official SDK (optional dep)
-    4. DB fallback (tools_discovered JSON field)
+    5. DB fallback (tools_discovered JSON field)
     """
+    # 0. Check if server is active
+    try:
+        config = _get_server_config(server_name)
+        if not config.get("is_active", 1):
+            # Server disabled — return empty, clear cache
+            with _cache_lock:
+                _tools_cache.pop(server_name, None)
+            _redis_set(f"tools:{server_name}", [])
+            return []
+    except Exception:
+        pass
+
     # 1. Worker cache
     if use_cache:
         with _cache_lock:
@@ -650,8 +700,22 @@ def warm_cache():
 
 
 def get_all_mcp_tools_cached():
-    """Get all MCP tools in OpenAI function format. Cached."""
+    """Get all MCP tools in OpenAI function format. Cached.
+    Returns empty list if no active servers.
+    Active check reads from DB every time (not cached) to respect toggle."""
     global _openai_tools_cache
+
+    # ALWAYS check active servers from DB (bypasses cache)
+    # This ensures toggle OFF immediately stops tools
+    try:
+        if frappe.db.exists("DocType", "Niv MCP Server"):
+            active_count = frappe.db.count("Niv MCP Server", {"is_active": 1})
+            if active_count == 0:
+                with _cache_lock:
+                    _openai_tools_cache = {"tools": [], "expires": 0}
+                return []
+    except Exception:
+        pass
 
     with _cache_lock:
         if _openai_tools_cache["expires"] > time.time() and _openai_tools_cache["tools"]:
@@ -730,8 +794,8 @@ def call_tool(server_name, tool_name, arguments):
 
 
 def clear_cache(server_name=None):
-    """Clear all caches."""
-    global _tool_index_expires, _openai_tools_cache
+    """Clear all caches — worker memory, Redis, and LangChain tools."""
+    global _tool_index_expires, _openai_tools_cache, _fac_mcp_server, _fac_mcp_server_time
     with _cache_lock:
         if server_name:
             _tools_cache.pop(server_name, None)
@@ -740,13 +804,27 @@ def clear_cache(server_name=None):
         _tool_index.clear()
         _tool_index_expires = 0
         _openai_tools_cache = {"tools": [], "expires": 0}
+    # Clear FAC server cache (force re-import on next call)
+    _fac_mcp_server = None
+    _fac_mcp_server_time = 0
+    # Clear Redis
     try:
         if server_name:
             frappe.cache().delete_value(f"{REDIS_KEY_PREFIX}tools:{server_name}")
         else:
             for key in ("openai_tools", "tool_index"):
                 frappe.cache().delete_value(f"{REDIS_KEY_PREFIX}{key}")
-            for sn in get_all_active_servers():
-                frappe.cache().delete_value(f"{REDIS_KEY_PREFIX}tools:{sn}")
+            # Clear all server tool caches
+            try:
+                for sn in get_all_active_servers():
+                    frappe.cache().delete_value(f"{REDIS_KEY_PREFIX}tools:{sn}")
+            except Exception:
+                pass
+    except Exception:
+        pass
+    # Also clear LangChain tools cache
+    try:
+        from niv_ai.niv_core.langchain.tools import clear_tools_cache
+        clear_tools_cache()
     except Exception:
         pass

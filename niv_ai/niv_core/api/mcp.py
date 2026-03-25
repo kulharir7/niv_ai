@@ -62,10 +62,19 @@ def toggle_server(server_name, is_active):
             is_active_val = 1 if (is_active and str(is_active) not in ("0", "false", "False")) else 0
             frappe.db.set_value("Niv MCP Server", doc_name, "is_active", is_active_val)
             frappe.db.commit()
-            # Clear MCP cache
+            # Clear ALL MCP caches (worker + redis + langchain tools)
             try:
                 from niv_ai.niv_core.mcp_client import clear_cache
                 clear_cache()
+            except Exception:
+                pass
+            # Clear Redis caches (shared across all workers)
+            try:
+                import frappe as _f
+                for key in ["niv_mcp_tools:openai_tools", "niv_mcp_tools:tool_index"]:
+                    _f.cache().delete_value(key)
+                # Clear all server-specific caches
+                _f.cache().delete_value(f"niv_mcp_tools:tools:{doc_name}")
             except Exception:
                 pass
             return {"success": True, "is_active": is_active_val}
