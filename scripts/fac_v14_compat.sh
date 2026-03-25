@@ -50,11 +50,14 @@ done
 
 echo "  Done!"
 
-# Step 2: Fix site_cache(ttl=...) → site_cache()
+# Step 2: Fix @redis_cache(...) → @redis_cache() and @site_cache(...) → @site_cache()
+# Frappe v14 redis_cache/site_cache don't accept ANY kwargs
 echo ""
-echo "Step 2: Fixing site_cache(ttl=...)..."
+echo "Step 2: Fixing @redis_cache and @site_cache decorators..."
 find "$FAC_PATH/frappe_assistant_core/" -name "*.py" -not -path "*__pycache__*" \
-    -exec sed -i 's/@site_cache(ttl=[^)]*)/@site_cache()/g' {} \;
+    -exec sed -i 's/@redis_cache([^)]*)/@redis_cache()/g' {} \;
+find "$FAC_PATH/frappe_assistant_core/" -name "*.py" -not -path "*__pycache__*" \
+    -exec sed -i 's/@site_cache([^)]*)/@site_cache()/g' {} \;
 echo "  Done!"
 
 # Step 3: Verify
