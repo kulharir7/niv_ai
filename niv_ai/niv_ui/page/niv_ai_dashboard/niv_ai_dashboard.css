@@ -152,3 +152,18 @@
 
 /* Dark mode */
 [data-theme="dark"] .bi-fin-card, [data-theme="dark"] .bi-card { background: #1e1e1e; border-color: #2a2a2a; }
+
+/* ── Scroll Fix — Override Frappe page containers ── */
+#page-niv-ai-dashboard .page-container,
+#page-niv-ai-dashboard .main-section,
+#page-niv-ai-dashboard .layout-main,
+#page-niv-ai-dashboard .layout-main-section,
+#page-niv-ai-dashboard .layout-main-section-wrapper,
+#page-niv-ai-dashboard .row.layout-main,
+#page-niv-ai-dashboard .col-md-12 {
+    overflow: visible !important;
+}
+#page-niv-ai-dashboard .page-body {
+    overflow-y: auto !important;
+    height: calc(100vh - 60px) !important;
+}
