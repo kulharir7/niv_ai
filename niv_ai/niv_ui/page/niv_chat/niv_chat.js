@@ -3031,16 +3031,60 @@ ${htmlCode}
         if (this.wrapper.find(".niv-empty-state").length) return;
         const greeting = this.get_greeting();
         const firstName = this.get_first_name();
+        const widgetName = this.widget_name || "Niv AI";
         this.$chatArea.html(`
             <div class="niv-empty-state">
-                <div class="empty-orb">
-                    <div class="empty-orb-inner"></div>
-                    <div class="empty-orb-ring"></div>
+                <div class="empty-morph-wrap">
+                    <div class="empty-morph">
+                        <div class="empty-morph-blob"></div>
+                        <div class="empty-morph-blob b2"></div>
+                        <div class="empty-morph-blob b3"></div>
+                    </div>
+                    <div class="empty-morph-icon">✦</div>
                 </div>
-                <div class="empty-greeting">${greeting}, ${frappe.utils.escape_html(firstName)}</div>
-                <div class="empty-subtitle">How can I help you today?</div>
+                <div class="empty-greeting">${greeting}, <span class="empty-name-gradient">${frappe.utils.escape_html(firstName)}</span></div>
+                <div class="empty-subtitle">What would you like to explore today?</div>
+                <div class="empty-caps">
+                    <div class="empty-cap" data-prompt="Analyze my business data and show insights">
+                        <div class="empty-cap-icon">📊</div>
+                        <div class="empty-cap-text">
+                            <div class="empty-cap-title">Analyze Data</div>
+                            <div class="empty-cap-desc">Reports & insights</div>
+                        </div>
+                    </div>
+                    <div class="empty-cap" data-prompt="Help me create a new document">
+                        <div class="empty-cap-icon">📝</div>
+                        <div class="empty-cap-text">
+                            <div class="empty-cap-title">Create Docs</div>
+                            <div class="empty-cap-desc">Orders, invoices & more</div>
+                        </div>
+                    </div>
+                    <div class="empty-cap" data-prompt="Search and find information across the system">
+                        <div class="empty-cap-icon">🔍</div>
+                        <div class="empty-cap-text">
+                            <div class="empty-cap-title">Search</div>
+                            <div class="empty-cap-desc">Find anything fast</div>
+                        </div>
+                    </div>
+                    <div class="empty-cap" data-prompt="Explain how this feature works">
+                        <div class="empty-cap-icon">💡</div>
+                        <div class="empty-cap-text">
+                            <div class="empty-cap-title">Learn</div>
+                            <div class="empty-cap-desc">How-to & guides</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         `);
+
+        // Capability card click → auto-send prompt
+        this.wrapper.find(".empty-cap").on("click", (e) => {
+            const prompt = $(e.currentTarget).data("prompt");
+            if (prompt) {
+                this.$input.val(prompt);
+                this.send_message();
+            }
+        });
     }
 
     hide_empty_state() {
