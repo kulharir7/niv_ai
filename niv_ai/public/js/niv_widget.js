@@ -64,15 +64,25 @@
         panel.className = "niv-panel";
         panel.innerHTML = [
             '<div class="niv-panel-header">',
-            '  <div class="niv-panel-title"><span class="niv-panel-avatar" id="niv-panel-avatar-el">N</span> <span id="niv-panel-title-text">Niv AI</span></div>',
+            '  <div class="niv-panel-title">',
+            '    <span class="niv-panel-avatar" id="niv-panel-avatar-el">N</span>',
+            '    <div class="niv-panel-title-wrap">',
+            '      <span id="niv-panel-title-text">Niv AI</span>',
+            '      <span class="niv-panel-status"><span class="niv-panel-status-dot"></span>Online</span>',
+            '    </div>',
+            '  </div>',
             '  <div class="niv-panel-actions">',
-            '    <button class="niv-panel-btn" id="niv-fullscreen" title="Full page"><i class="fa fa-external-link"></i></button>',
-            '    <button class="niv-panel-btn" id="niv-close" title="Close"><i class="fa fa-times"></i></button>',
+            '    <button class="niv-panel-btn" id="niv-fullscreen" title="Open full page">',
+            '      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
+            '    </button>',
+            '    <button class="niv-panel-btn" id="niv-close" title="Close">',
+            '      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+            '    </button>',
             '  </div>',
             '</div>',
             '<div class="niv-panel-loading" id="niv-loading">',
             '  <div class="niv-loading-spinner"></div>',
-            '  <div>Loading...</div>',
+            '  <div id="niv-loading-text">Loading...</div>',
             '</div>',
             '<iframe id="niv-iframe" class="niv-iframe" src="about:blank" allow="microphone"></iframe>'
         ].join('\n');
@@ -89,13 +99,58 @@
 
         function getParentContext() {
             var route = frappe.get_route() || [];
-            var ctx = { route: route };
+            var ctx = { route: route, timestamp: Date.now() };
             if (route[0] === "Form" && route.length >= 3) {
                 ctx.doctype = route[1];
                 ctx.docname = route[2];
+                // Rich form context
+                try {
+                    if (cur_frm && cur_frm.doc) {
+                        ctx.status = cur_frm.doc.status || cur_frm.doc.workflow_state || cur_frm.doc.docstatus;
+                        ctx.docstatus = cur_frm.doc.docstatus; // 0=draft, 1=submitted, 2=cancelled
+                        ctx.is_new = cur_frm.is_new() ? 1 : 0;
+                        ctx.is_dirty = cur_frm.is_dirty() ? 1 : 0;
+                        // Empty mandatory fields
+                        var emptyMandatory = [];
+                        (cur_frm.fields || []).forEach(function(f) {
+                            if (f.df && f.df.reqd && !cur_frm.doc[f.df.fieldname]) {
+                                emptyMandatory.push(f.df.label || f.df.fieldname);
+                            }
+                        });
+                        if (emptyMandatory.length) ctx.empty_mandatory = emptyMandatory;
+                        // Current errors/invalid fields
+                        var invalidFields = [];
+                        (cur_frm.fields || []).forEach(function(f) {
+                            if (f.df && f.$wrapper && f.$wrapper.hasClass("has-error")) {
+                                invalidFields.push(f.df.label || f.df.fieldname);
+                            }
+                        });
+                        if (invalidFields.length) ctx.invalid_fields = invalidFields;
+                        // Key field values (first 8 important fields)
+                        var keyFields = {};
+                        var count = 0;
+                        (cur_frm.meta.fields || []).forEach(function(df) {
+                            if (count >= 8) return;
+                            if (["Link", "Select", "Currency", "Int", "Float", "Date"].indexOf(df.fieldtype) > -1 && cur_frm.doc[df.fieldname]) {
+                                keyFields[df.label || df.fieldname] = cur_frm.doc[df.fieldname];
+                                count++;
+                            }
+                        });
+                        if (Object.keys(keyFields).length) ctx.key_fields = keyFields;
+                    }
+                } catch(e) {}
             } else if (route[0] === "List" && route.length >= 2) {
                 ctx.doctype = route[1];
                 ctx.view = "list";
+                try {
+                    if (cur_list) {
+                        ctx.total_count = cur_list.total_count || 0;
+                        ctx.filters = cur_list.filter_area ? cur_list.filter_area.get() : [];
+                    }
+                } catch(e) {}
+            } else if (route[0] === "dashboard-view" || route[0] === "query-report") {
+                ctx.doctype = route[1];
+                ctx.view = route[0];
             }
             return ctx;
         }
@@ -254,13 +309,129 @@
             }
         })();
 
+        // ─── Notification Badge ───
+        var badge = document.createElement("span");
+        badge.id = "niv-fab-badge";
+        badge.className = "niv-fab-badge";
+        badge.style.display = "none";
+        fab.appendChild(badge);
+
+        var _badgeCount = 0;
+        function showBadge(count) {
+            _badgeCount = count || 0;
+            if (_badgeCount > 0) {
+                badge.textContent = _badgeCount > 9 ? "9+" : _badgeCount;
+                badge.style.display = "flex";
+            } else {
+                badge.style.display = "none";
+            }
+        }
+
+        // ─── Proactive Error Detection ───
+        var _lastErrorCount = 0;
+        var _errorCheckTimer = null;
+
+        function checkFormErrors() {
+            try {
+                if (!cur_frm) return;
+                var errors = 0;
+                // Check mandatory empty
+                (cur_frm.fields || []).forEach(function(f) {
+                    if (f.df && f.df.reqd && !cur_frm.doc[f.df.fieldname]) errors++;
+                    if (f.df && f.$wrapper && f.$wrapper.hasClass("has-error")) errors++;
+                });
+                // Check if save/submit just failed
+                var msgBox = document.querySelector(".msgprint");
+                if (msgBox && msgBox.offsetParent !== null) errors++;
+
+                if (errors > 0 && errors !== _lastErrorCount) {
+                    fab.classList.add("niv-fab-alert");
+                    showBadge(errors);
+                } else if (errors === 0) {
+                    fab.classList.remove("niv-fab-alert");
+                    if (_badgeCount > 0 && !_hasProactiveMsg) showBadge(0);
+                }
+                _lastErrorCount = errors;
+            } catch(e) {}
+        }
+
+        // Check errors every 3 seconds when on form page
+        function startErrorWatch() {
+            if (_errorCheckTimer) return;
+            _errorCheckTimer = setInterval(checkFormErrors, 3000);
+        }
+        function stopErrorWatch() {
+            if (_errorCheckTimer) { clearInterval(_errorCheckTimer); _errorCheckTimer = null; }
+            fab.classList.remove("niv-fab-alert");
+        }
+
+        // ─── Idle Detection ───
+        var _idleTimer = null;
+        var _idleNotified = false;
+        var _hasProactiveMsg = false;
+
+        function resetIdleTimer() {
+            _idleNotified = false;
+            if (_idleTimer) clearTimeout(_idleTimer);
+            _idleTimer = setTimeout(function() {
+                // User idle for 45 seconds on a form page
+                try {
+                    var route = frappe.get_route() || [];
+                    if (route[0] === "Form" && cur_frm && !_idleNotified && !isOpen) {
+                        _idleNotified = true;
+                        // Check if form has issues
+                        var emptyReqd = 0;
+                        (cur_frm.fields || []).forEach(function(f) {
+                            if (f.df && f.df.reqd && !cur_frm.doc[f.df.fieldname]) emptyReqd++;
+                        });
+                        if (emptyReqd > 0 || cur_frm.is_new()) {
+                            fab.classList.add("niv-fab-nudge");
+                            _hasProactiveMsg = true;
+                            showBadge(1);
+                            setTimeout(function() { fab.classList.remove("niv-fab-nudge"); }, 3000);
+                        }
+                    }
+                } catch(e) {}
+            }, 45000);
+        }
+
+        // Track user activity
+        ["mousemove", "keydown", "click", "scroll"].forEach(function(evt) {
+            document.addEventListener(evt, resetIdleTimer, { passive: true });
+        });
+        resetIdleTimer();
+
+        // ─── Clear badge when panel opens ───
+        var _origOpen = openPanel;
+        openPanel = function() {
+            showBadge(0);
+            _hasProactiveMsg = false;
+            fab.classList.remove("niv-fab-alert", "niv-fab-nudge");
+            _origOpen();
+        };
+
+        // ─── Listen for AI proactive messages ───
+        window.addEventListener("message", function(e) {
+            if (e.data && e.data.type === "niv_proactive_badge") {
+                showBadge(e.data.count || 1);
+                _hasProactiveMsg = true;
+            }
+        });
+
         function checkRoute() {
             var onChat = window.location.pathname.indexOf("/app/niv-chat") === 0;
             root.style.display = onChat ? "none" : "block";
             if (onChat && isOpen) closePanel();
-            // Safety: remove niv-chat-active from body when NOT on chat page
             if (!onChat) {
                 document.body.classList.remove("niv-chat-active");
+            }
+            // Start/stop error watching based on page type
+            var route = frappe.get_route() || [];
+            if (route[0] === "Form" && !onChat) {
+                startErrorWatch();
+            } else {
+                stopErrorWatch();
+                showBadge(0);
             }
         }
         // Check immediately on init
