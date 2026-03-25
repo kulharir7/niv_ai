@@ -1,19 +1,16 @@
 """
-MCP Client for Niv AI — Bulletproof Implementation
+MCP Client for Niv AI — SDK-Only Implementation
 
 Architecture:
-  SAME-SERVER (FAC on localhost): Direct Python import ONLY.
-    - Zero external dependencies. No SDK, no HTTP, no pip packages needed.
-    - Cannot fail unless FAC itself is broken.
-    - This is 99% of real usage (FAC runs on same Frappe instance).
-
-  REMOTE SERVER: Official MCP SDK (langchain-mcp-adapters).
-    - Only used when server_url points to a different host.
-    - SDK is an OPTIONAL dependency — gracefully degrades to DB fallback.
+  ALL SERVERS: Official MCP SDK (mcp + langchain-mcp-adapters).
+    - Standard MCP protocol over Streamable HTTP.
+    - No hardcoded imports — server URL from Niv MCP Server DocType.
     - Async SDK bridged to sync via background thread event loop.
+    - Works with any MCP-compatible server (FAC, custom, remote).
 
-Caching: Worker memory → Redis → Live discovery → DB fallback.
-v14 + v15 compatible.
+  Caching: Worker memory → Redis → Live SDK discovery.
+  Config: Niv MCP Server DocType (UI-managed).
+  v14 + v15 compatible.
 """
 
 import json
@@ -153,10 +150,8 @@ def _is_same_server(server_name, url):
     return result
 
 
-# ─── Direct Python Call (Same-Server) ─────────────────────────────
-# This is the PRIMARY path. No HTTP, no SDK, no external deps.
-# Calls FAC's MCPServer internals directly — bypasses HTTP auth layer.
-
+# ─── MCP SDK Tool Discovery & Execution ──────────────────────────
+# Uses official MCP SDK — standard protocol, no hardcoded imports.
 
 
 def _ensure_db_alive():
@@ -452,22 +447,6 @@ def _sdk_call_tool(doc, tool_name, arguments, user_api_key=None):
     return _run_async(_sdk_call_tool_async(conn, tool_name, arguments))
 
 
-# ─── DB Fallback ──────────────────────────────────────────────────
-
-def _db_get_tools(server_name):
-    """Get tools via direct FAC discovery. No DocType needed."""
-    try:
-        tools = []  # Removed — using SDK now
-        if tools:
-            return tools
-        # Fallback: empty list
-        tools = []
-        return tools if tools else None
-    except Exception as e:
-        frappe.logger().warning(f"Niv MCP: DB fallback failed for '{server_name}': {e}")
-        return None
-
-
 # ─── Server Config Helper ─────────────────────────────────────────
 
 def _get_server_config(server_name):
@@ -526,8 +505,8 @@ def get_all_active_servers():
                 return [s.server_name for s in servers]
     except Exception:
         pass
-    # Fallback — old behavior
-    return ["Frappe Assistant Core"]
+    # No servers configured
+    return []
 
 
 def discover_tools(server_name, use_cache=True):
@@ -537,9 +516,7 @@ def discover_tools(server_name, use_cache=True):
     1. Check if server is active (from DocType)
     2. Worker memory cache
     3. Redis shared cache
-    4. SAME-SERVER → Direct Python import (no deps, no network)
-       REMOTE → Official SDK (optional dep)
-    5. DB fallback (tools_discovered JSON field)
+    4. MCP SDK — standard protocol for all servers
     """
     # 0. Check if server is active
     try:
@@ -599,10 +576,9 @@ def discover_tools(server_name, use_cache=True):
             except Exception as e:
                 frappe.logger().error(f"Niv MCP: SDK discovery failed for '{server_name}': {e}")
 
-    # 4. DB fallback
+    # No tools found
     if not tools:
-        frappe.logger().warning(f"Niv MCP: Live discovery failed for '{server_name}', using DB fallback")
-        tools = _db_get_tools(server_name) or []
+        frappe.logger().warning(f"Niv MCP: Discovery failed for '{server_name}'")
 
     # Cache results — NEVER cache empty tools (would hide real tools for 5 min)
     if tools:
@@ -656,10 +632,7 @@ def find_tool_server(tool_name):
 
 
 def call_tool_fast(server_name, tool_name, arguments, user_api_key=None):
-    """Execute a tool. Same-server uses direct Python. Remote uses SDK.
-
-    GUARANTEE: Same-server calls NEVER touch SDK/pip packages.
-    """
+    """Execute a tool via MCP SDK. All servers use SDK protocol."""
     # Circuit breaker check
     if not _check_circuit_breaker(server_name):
         raise MCPError(f"Server '{server_name}' is temporarily unavailable (circuit breaker open). Retry in ~60s.")
