@@ -2515,47 +2515,7 @@ body.niv-dark-mode .niv-empty-state .empty-greeting {
     border-color: #fff;
     box-shadow: 0 0 0 2px var(--niv-primary);
 }
-.niv-theme-dot[data-theme-id="default"]  { background: #7c3aed; }
-.niv-theme-dot[data-theme-id="ocean"]    { background: #0ea5e9; }
-.niv-theme-dot[data-theme-id="forest"]   { background: #22c55e; }
-.niv-theme-dot[data-theme-id="sunset"]   { background: #f97316; }
-.niv-theme-dot[data-theme-id="rose"]     { background: #ec4899; }
-.niv-theme-dot[data-theme-id="midnight"] { background: #3b82f6; }
 
-/* Ocean */
-.niv-chat-container[data-theme="ocean"] {
-    --niv-primary: #0ea5e9; --niv-primary-hover: #0284c7; --niv-input-focus: #0ea5e9; --niv-user-msg-bg: #e0f2fe;
-}
-.niv-chat-container[data-theme="ocean"] .niv-message.assistant .msg-avatar { background: linear-gradient(135deg, #0ea5e9, #38bdf8); }
-[data-theme="dark"] .niv-chat-container[data-theme="ocean"] { --niv-user-msg-bg: #1e3a5f; --niv-primary: #38bdf8; --niv-primary-hover: #0ea5e9; }
-
-/* Forest */
-.niv-chat-container[data-theme="forest"] {
-    --niv-primary: #22c55e; --niv-primary-hover: #16a34a; --niv-input-focus: #22c55e; --niv-user-msg-bg: #dcfce7;
-}
-.niv-chat-container[data-theme="forest"] .niv-message.assistant .msg-avatar { background: linear-gradient(135deg, #22c55e, #4ade80); }
-[data-theme="dark"] .niv-chat-container[data-theme="forest"] { --niv-user-msg-bg: #1a3a2a; --niv-primary: #4ade80; --niv-primary-hover: #22c55e; }
-
-/* Sunset */
-.niv-chat-container[data-theme="sunset"] {
-    --niv-primary: #f97316; --niv-primary-hover: #ea580c; --niv-input-focus: #f97316; --niv-user-msg-bg: #fff7ed;
-}
-.niv-chat-container[data-theme="sunset"] .niv-message.assistant .msg-avatar { background: linear-gradient(135deg, #f97316, #fb923c); }
-[data-theme="dark"] .niv-chat-container[data-theme="sunset"] { --niv-user-msg-bg: #3d2414; --niv-primary: #fb923c; --niv-primary-hover: #f97316; }
-
-/* Rose */
-.niv-chat-container[data-theme="rose"] {
-    --niv-primary: #ec4899; --niv-primary-hover: #db2777; --niv-input-focus: #ec4899; --niv-user-msg-bg: #fce7f3;
-}
-.niv-chat-container[data-theme="rose"] .niv-message.assistant .msg-avatar { background: linear-gradient(135deg, #ec4899, #f472b6); }
-[data-theme="dark"] .niv-chat-container[data-theme="rose"] { --niv-user-msg-bg: #3d1a2e; --niv-primary: #f472b6; --niv-primary-hover: #ec4899; }
-
-/* Midnight */
-.niv-chat-container[data-theme="midnight"] {
-    --niv-primary: #3b82f6; --niv-primary-hover: #2563eb; --niv-input-focus: #3b82f6; --niv-user-msg-bg: #dbeafe;
-}
-.niv-chat-container[data-theme="midnight"] .niv-message.assistant .msg-avatar { background: linear-gradient(135deg, #3b82f6, #60a5fa); }
-[data-theme="dark"] .niv-chat-container[data-theme="midnight"] { --niv-user-msg-bg: #1e2a4a; --niv-primary: #60a5fa; --niv-primary-hover: #3b82f6; }
 
 /* ══════════════════════════════════════════════════════════
    DARK MODE
