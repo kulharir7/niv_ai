@@ -1615,6 +1615,17 @@ ${htmlCode}
         }
     }
 
+    _timeAgo(dateStr) {
+        const now = Date.now();
+        const d = new Date(dateStr).getTime();
+        const diff = Math.floor((now - d) / 1000);
+        if (diff < 60) return "now";
+        if (diff < 3600) return Math.floor(diff / 60) + "m";
+        if (diff < 86400) return Math.floor(diff / 3600) + "h";
+        if (diff < 604800) return Math.floor(diff / 86400) + "d";
+        return Math.floor(diff / 604800) + "w";
+    }
+
     render_conversation_list() {
         this.$convList.empty();
 
@@ -1640,13 +1651,26 @@ ${htmlCode}
                 const isActive = conv.name === this.current_conversation;
                 const isStreaming = this.active_streams[conv.name];
                 const title = conv.title || "New Chat";
+                const timeAgo = this._timeAgo(conv.modified);
                 const $item = $(`
                     <div class="niv-conv-item ${isActive ? "active" : ""} ${isStreaming ? "streaming" : ""}" data-name="${conv.name}">
-                        <i class="fa fa-comment-o conv-icon"></i>
-                        <span class="conv-title">${frappe.utils.escape_html(title)}</span>
+                        <div class="conv-main">
+                            <span class="conv-title">${frappe.utils.escape_html(title)}</span>
+                            <span class="conv-time">${timeAgo}</span>
+                        </div>
+                        <div class="conv-actions">
+                            <button class="conv-act-btn conv-act-del" title="Delete">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/></svg>
+                            </button>
+                        </div>
                     </div>
                 `);
-                $item.on("click", () => this.select_conversation(conv.name));
+                $item.find(".conv-main").on("click", () => this.select_conversation(conv.name));
+                $item.find(".conv-act-del").on("click", (e) => {
+                    e.stopPropagation();
+                    this.current_conversation = conv.name;
+                    this.delete_conversation();
+                });
                 this.$convList.append($item);
             }
         };
