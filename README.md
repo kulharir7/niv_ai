@@ -118,53 +118,53 @@ User Input (Text / Voice / File Upload)
 ## Installation
 
 ### Prerequisites
-- Growth System v15+ 
-- `frappe_assistant_core` (FAC) for MCP tools
-- Python 3.10+
+- Frappe/ERPNext v14 or v15+
+- [Frappe Assistant Core (FAC)](https://github.com/buildswithpaul/Frappe_Assistant_Core) v2.2+
 
-### Quick Setup
-
+### Step 1: Install FAC (MCP Tool Server)
 ```bash
-cd /path/to/frappe-bench
-
-# 1. Install FAC (MCP tool provider)
-bench get-app https://github.com/AdarshPS1/frappe_assistant_core.git
-bench --site yoursite install-app frappe_assistant_core
-
-# 2. Install Chanakya Ai
-bench get-app https://github.com/kulharir7/niv_ai.git
-bench --site yoursite install-app niv_ai
-bench --site yoursite migrate
-
-# 3. Setup AI Provider (one command)
-# Mistral (recommended):
-bash apps/niv_ai/setup.sh yoursite https://api.mistral.ai/v1 YOUR_KEY
-
-# Ollama (free, local):
-bash apps/niv_ai/setup.sh yoursite http://localhost:11434/v1 ollama llama3.1
-
-# OpenAI:
-bash apps/niv_ai/setup.sh yoursite https://api.openai.com/v1 YOUR_KEY gpt-4o gpt-4o-mini
+cd frappe-bench
+bench get-app https://github.com/buildswithpaul/Frappe_Assistant_Core
+bench --site your-site install-app frappe_assistant_core
 ```
 
-### What's Auto-Configured on Install
+### Step 2: Install Niv AI
+```bash
+bench get-app https://github.com/kulharir7/niv_ai
+bench --site your-site install-app niv_ai
+bench --site your-site migrate
+sudo supervisorctl restart all
+```
 
-| Setting | Default |
-|---------|---------|
-| Widget Title | Chanakya Ai |
-| Logo | Bundled (purple icon) |
-| System Prompt | NBFC/Business expert |
-| Voice (STT/TTS) | Auto-detect |
-| Vision (OCR) | gemma3:27b |
-| Billing | Shared Pool, 1Cr tokens |
-| Rate Limits | 500/hr, 5000/day |
-| Artifacts Auto-Open | ON |
+### Step 3: Frappe v14 Fix (Skip if v15+)
+FAC v2.3+ uses `frappe.cache.` syntax which requires Frappe v15+. For **Frappe v14**, run this one-time fix:
+```bash
+bash apps/niv_ai/scripts/fac_v14_compat.sh /path/to/frappe-bench
+sudo supervisorctl restart all
+```
+This fixes `frappe.cache.` → `frappe.cache().` across all FAC files. Safe to run multiple times.
 
-**Only manual setup needed:** AI Provider + API Key (and optionally Telegram Bot Token).
-
-Open `/app/niv-chat` and start chatting! 🚀
+### Step 4: Configure
+1. **Niv Settings** (`/app/niv-settings`) → Set AI Provider + Model
+2. **Niv MCP Server** (`/app/niv-mcp-server`) → Verify FAC connected (click "Test Connection")
+3. **Niv Chat** (`/app/niv-chat`) → Start chatting!
 
 ---
+
+## MCP Server Management
+
+Niv AI connects to MCP-compatible tool servers via the **Niv MCP Server** DocType (`/app/niv-mcp-server`).
+
+| Feature | Description |
+|---------|-------------|
+| **Add servers** | New → Enter Server Name, URL, API Key → Save |
+| **Test Connection** | Click "Test Connection" button → Discovers tools |
+| **Toggle ON/OFF** | Enable/disable servers — tools instantly appear/disappear |
+| **Multiple servers** | Connect FAC + any other MCP server simultaneously |
+| **No hardcode** | All server configs stored in DB, not code |
+
+After install, a default FAC server record is auto-created pointing to `localhost:8000`.
+
 
 ## Project Structure
 
