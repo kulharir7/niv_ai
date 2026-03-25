@@ -168,27 +168,36 @@ body.niv-chat-active .col-lg-12 {
 }
 .niv-sidebar-header .btn-new-chat {
     flex: 1;
-    background: transparent;
-    border: 1px solid var(--niv-sidebar-border);
+    background: linear-gradient(135deg, rgba(124,58,237,0.12) 0%, rgba(167,139,250,0.08) 100%);
+    border: 1px solid rgba(124,58,237,0.2);
     border-radius: 10px;
-    padding: 10px 14px;
-    font-weight: 500;
-    font-size: 13.5px;
+    padding: 9px 14px;
+    font-weight: 600;
+    font-size: 13px;
     color: var(--niv-sidebar-text);
     display: flex;
     align-items: center;
-    gap: 10px;
-    transition: all 0.2s ease;
+    gap: 8px;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     cursor: pointer;
     letter-spacing: -0.01em;
 }
 .niv-sidebar-header .btn-new-chat:hover {
-    background: var(--niv-sidebar-hover);
-    border-color: rgba(255,255,255,0.15);
+    background: linear-gradient(135deg, rgba(124,58,237,0.2) 0%, rgba(167,139,250,0.15) 100%);
+    border-color: rgba(124,58,237,0.35);
+    box-shadow: 0 2px 12px rgba(124,58,237,0.15);
+    transform: translateY(-1px);
 }
-.niv-sidebar-header .btn-new-chat i {
-    font-size: 13px;
+.niv-sidebar-header .btn-new-chat:active {
+    transform: translateY(0);
+}
+.niv-sidebar-header .btn-new-chat svg {
     opacity: 0.7;
+    transition: transform 0.2s;
+}
+.niv-sidebar-header .btn-new-chat:hover svg {
+    opacity: 1;
+    transform: rotate(-15deg);
 }
 
 .btn-close-sidebar {
@@ -221,7 +230,7 @@ body.niv-chat-active .col-lg-12 {
 
 /* Sidebar Search */
 .niv-sidebar-search {
-    padding: 4px 12px 10px;
+    padding: 4px 12px 8px;
     position: relative;
 }
 .niv-sidebar-search .niv-search-icon {
@@ -235,15 +244,14 @@ body.niv-chat-active .col-lg-12 {
 }
 .niv-sidebar-search input {
     width: 100%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.06);
     border-radius: 8px;
-    border: 1px solid transparent;
-    background: rgba(255,255,255,0.06);
-    font-size: 13px;
+    padding: 8px 12px 8px 30px;
+    font-size: 12px;
     color: var(--niv-sidebar-text);
-    padding: 8px 12px 8px 32px;
     outline: none;
     transition: all 0.2s ease;
-    font-family: var(--niv-font);
 }
 .niv-sidebar-search input::placeholder {
     color: var(--niv-sidebar-text-muted);
@@ -952,11 +960,33 @@ body.niv-chat-active .col-lg-12 {
 /* Header title */
 .niv-header-title {
     flex: 1;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
     font-size: 14px;
     font-weight: 600;
     color: var(--niv-text);
     letter-spacing: -0.02em;
+}
+.niv-ht-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 8px rgba(16,185,129,0.5);
+    animation: htDotPulse 3s ease-in-out infinite;
+    flex-shrink: 0;
+}
+@keyframes htDotPulse {
+    0%, 100% { opacity: 1; box-shadow: 0 0 8px rgba(16,185,129,0.5); }
+    50% { opacity: 0.6; box-shadow: 0 0 4px rgba(16,185,129,0.3); }
+}
+.niv-ht-text {
+    background: linear-gradient(135deg, var(--niv-text) 0%, var(--niv-text-secondary) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
 }
 .niv-header-actions .btn svg {
     display: block;
