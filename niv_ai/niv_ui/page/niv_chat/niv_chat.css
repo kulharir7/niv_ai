@@ -1261,42 +1261,59 @@ pre:hover .code-copy-btn { opacity: 1; }
 }
 
 /* ── Tool Calls Accordion ── */
-.msg-tool-calls { margin: 12px 0; }
+.msg-tool-calls { margin: 8px 0 12px 0; }
 .tool-call-accordion {
-    border: 1px solid var(--niv-border);
     border-radius: 12px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
     overflow: hidden;
+    border: 1px solid var(--niv-border);
+    transition: all 0.2s ease;
 }
+.tool-call-accordion:hover { border-color: rgba(124,58,237,0.3); }
 .tool-call-header {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 10px 16px;
-    background: var(--niv-hover);
+    gap: 10px;
+    padding: 8px 14px;
     cursor: pointer;
     font-size: 13px;
-    transition: background 0.15s ease;
+    transition: all 0.15s ease;
     border-radius: 12px;
+    background: transparent;
 }
 .tool-call-header:hover { background: var(--niv-hover); }
-.tool-call-accordion.open .tool-call-header { border-radius: 12px 12px 0 0; }
-.tool-status-icon { color: #10b981; font-size: 14px; }
-.tool-call-accordion.running .tool-status-icon { color: var(--niv-primary); }
-.tool-running-text { font-size: 12px; color: var(--niv-text-muted); font-style: italic; }
-.tool-name { font-weight: 600; color: var(--niv-primary); }
+.tool-call-accordion.open .tool-call-header { border-radius: 12px 12px 0 0; background: var(--niv-hover); }
+.tool-status-icon {
+    width: 20px; height: 20px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 50%;
+    font-size: 11px;
+}
+.tool-status-icon.done { background: rgba(16,185,129,0.12); color: #10b981; }
+.tool-status-icon.running { background: rgba(124,58,237,0.12); color: var(--niv-primary); }
+.tool-status-icon.error { background: rgba(239,68,68,0.12); color: #ef4444; }
+@keyframes toolPulse { 0%,100%{opacity:1}50%{opacity:0.5} }
+.tool-call-accordion.running { animation: toolPulse 1.5s ease-in-out infinite; }
+.tool-call-accordion.running .tool-call-header { background: linear-gradient(90deg, rgba(124,58,237,0.04), rgba(124,58,237,0.08), rgba(124,58,237,0.04)); background-size: 200% 100%; animation: toolShimmer 2s ease infinite; }
+@keyframes toolShimmer { 0%{background-position:200% 0}100%{background-position:-200% 0} }
+.tool-label { font-size: 12px; color: var(--niv-text-muted); }
+.tool-name { font-weight: 600; color: var(--niv-text); font-size: 13px; }
+.tool-running-text { font-size: 11px; color: var(--niv-text-muted); font-style: italic; margin-left: 4px; }
 .tool-chevron {
     margin-left: auto;
-    font-size: 11px;
+    font-size: 10px;
     color: var(--niv-text-muted);
     transition: transform 0.2s ease;
+    opacity: 0.5;
 }
-.tool-call-accordion.open .tool-chevron { transform: rotate(90deg); }
+.tool-call-accordion:hover .tool-chevron { opacity: 1; }
+.tool-call-accordion.open .tool-chevron { transform: rotate(90deg); opacity: 1; }
 .tool-call-body {
     display: none;
     padding: 10px 14px;
     border-top: 1px solid var(--niv-border);
     font-size: 12px;
+    background: var(--niv-hover);
 }
 .tool-call-accordion.open .tool-call-body { display: block; }
 .tool-section { margin-bottom: 6px; }
@@ -1307,6 +1324,7 @@ pre:hover .code-copy-btn { opacity: 1; }
     font-size: 11px;
     max-height: 200px;
     overflow: auto;
+    background: var(--niv-bg);
 }
 .tool-section strong {
     font-size: 11px;
