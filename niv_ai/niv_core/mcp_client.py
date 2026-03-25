@@ -403,11 +403,13 @@ def _check_sdk():
     if _sdk_available is not None:
         return _sdk_available
     try:
-        import langchain_mcp_adapters.sessions  # noqa: F401
+        import mcp  # noqa: F401
+        import langchain_mcp_adapters  # noqa: F401
         _sdk_available = True
+        frappe.logger().info("Niv MCP: SDK available (mcp + langchain-mcp-adapters)")
     except ImportError:
         _sdk_available = False
-        frappe.logger().info("Niv MCP: SDK (langchain-mcp-adapters) not installed. Remote MCP servers won't work.")
+        frappe.logger().info("Niv MCP: SDK not installed. Install: pip install mcp langchain-mcp-adapters")
     return _sdk_available
 
 
@@ -666,14 +668,21 @@ def discover_tools(server_name, use_cache=True):
     same_server = doc.transport_type != "stdio" and _is_same_server(server_name, doc.server_url)
 
     if same_server:
-        # ── SAME-SERVER: Direct Python ──
+        # ── SAME-SERVER: Direct Python first, SDK fallback ──
         try:
             tools = _direct_list_tools()
         except ImportError:
-            frappe.logger().error(f"Niv MCP: FAC not installed! Cannot discover tools for '{server_name}'")
+            frappe.logger().info(f"Niv MCP: FAC import failed, trying SDK for '{server_name}'")
         except Exception as e:
-            frappe.logger().error(f"Niv MCP: Direct discovery failed for '{server_name}': {e}")
-        # DO NOT fall through to SDK for same-server. Go straight to DB fallback.
+            frappe.logger().warning(f"Niv MCP: Direct discovery failed for '{server_name}': {e}")
+
+        # SDK fallback for same-server (if direct failed)
+        if not tools and _check_sdk():
+            try:
+                tools = _sdk_list_tools(doc)
+                frappe.logger().info(f"Niv MCP: SDK discovery got {len(tools)} tools for '{server_name}'")
+            except Exception as e:
+                frappe.logger().warning(f"Niv MCP: SDK discovery also failed for '{server_name}': {e}")
     else:
         # ── REMOTE: SDK (if available) ──
         if _check_sdk():
@@ -751,20 +760,32 @@ def call_tool_fast(server_name, tool_name, arguments, user_api_key=None):
     same_server = doc.transport_type != "stdio" and _is_same_server(server_name, doc.server_url)
 
     if same_server:
-        # ── SAME-SERVER: Direct Python call. Period. ──
+        # ── SAME-SERVER: Direct Python first (fastest), SDK fallback ──
         try:
             result = _direct_call_tool(tool_name, arguments)
             _record_success(server_name)
             return result
         except ImportError:
-            _record_failure(server_name)
-            raise MCPError(f"FAC app not installed — cannot call tool '{tool_name}'")
+            # FAC not installed or import changed — try SDK
+            frappe.logger().info(f"Niv MCP: Direct import failed for {tool_name}, trying SDK...")
         except MCPError:
             _record_failure(server_name)
             raise
         except Exception as e:
-            _record_failure(server_name)
-            raise MCPError(f"Tool '{tool_name}' failed (direct): {e}")
+            frappe.logger().warning(f"Niv MCP: Direct call failed for {tool_name}: {e}, trying SDK...")
+
+        # Fallback to SDK for same-server
+        if _check_sdk():
+            try:
+                result = _sdk_call_tool(doc, tool_name, arguments, user_api_key)
+                _record_success(server_name)
+                return result
+            except Exception as e:
+                _record_failure(server_name)
+                raise MCPError(f"Tool '{tool_name}' failed (SDK): {e}")
+
+        _record_failure(server_name)
+        raise MCPError(f"Tool '{tool_name}' failed — no working connection method")
     else:
         # ── REMOTE: SDK ──
         if not _check_sdk():
