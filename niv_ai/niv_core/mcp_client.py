@@ -280,16 +280,112 @@ def _direct_call(method, params, _retry=True):
 
 
 def _direct_list_tools():
-    """List tools via direct Python call. Raises on failure."""
-    result = _direct_call("tools/list", {})
-    tools = result.get("tools", [])
-    if not tools:
-        frappe.logger().warning("Niv MCP: Direct FAC returned 0 tools")
-    return tools
+    """List tools from FAC — supports all FAC versions.
+    
+    Resolution order:
+    1. FAC PluginManager.get_all_tools() (v2.3+)
+    2. FAC MCPServer._handle_tools_list() (v2.2)
+    3. Direct _direct_call fallback
+    """
+    # Method 1: FAC PluginManager (v2.3+ — has 34 tools)
+    try:
+        from frappe_assistant_core.utils.plugin_manager import get_plugin_manager
+        from frappe_assistant_core.core.tool_registry import get_tool_registry
+        
+        pm = get_plugin_manager()
+        tool_registry = get_tool_registry()
+        
+        # Get all tools from plugins + external
+        all_tools = pm.get_all_tools()
+        external = tool_registry._get_external_tools()
+        all_tools.update(external)
+        
+        if all_tools:
+            # Convert to MCP tool format
+            tools = []
+            for tool_name, tool_info in all_tools.items():
+                tool_def = {
+                    "name": tool_name,
+                    "description": getattr(tool_info, "description", "") or tool_name,
+                    "inputSchema": getattr(tool_info, "input_schema", None) or {"type": "object", "properties": {}},
+                }
+                # Try to get schema from tool class
+                if not tool_def["inputSchema"].get("properties"):
+                    try:
+                        tool_class = tool_info.tool_class if hasattr(tool_info, "tool_class") else None
+                        if tool_class and hasattr(tool_class, "get_schema"):
+                            schema = tool_class.get_schema()
+                            if schema:
+                                tool_def["inputSchema"] = schema.get("inputSchema", tool_def["inputSchema"])
+                    except Exception:
+                        pass
+                tools.append(tool_def)
+            
+            frappe.logger().info(f"Niv MCP: PluginManager returned {len(tools)} tools")
+            return tools
+    except ImportError:
+        frappe.logger().debug("Niv MCP: PluginManager not available (FAC < v2.3)")
+    except Exception as e:
+        frappe.logger().warning(f"Niv MCP: PluginManager failed: {e}")
+    
+    # Method 2: MCPServer._handle_tools_list (v2.2)
+    try:
+        result = _direct_call("tools/list", {})
+        tools = result.get("tools", [])
+        if tools:
+            frappe.logger().info(f"Niv MCP: MCPServer returned {len(tools)} tools")
+            return tools
+    except Exception as e:
+        frappe.logger().debug(f"Niv MCP: MCPServer method failed: {e}")
+    
+    frappe.logger().warning("Niv MCP: All methods returned 0 tools")
+    return []
 
 
 def _direct_call_tool(tool_name, arguments):
-    """Call a single tool via direct Python call. Raises on failure."""
+    """Call a single tool via MCP endpoint (HTTP) or direct Python call."""
+    # Method 1: HTTP MCP endpoint
+    try:
+        import requests as _req
+        site_url = frappe.utils.get_url()
+        mcp_url = f"{site_url}/api/method/frappe_assistant_core.api.fac_endpoint.handle_mcp"
+        
+        api_key = None
+        api_secret = None
+        try:
+            admin = frappe.get_doc("User", "Administrator")
+            api_key = admin.api_key
+            if api_key:
+                api_secret = frappe.utils.password.get_decrypted_password("User", "Administrator", "api_secret")
+        except Exception:
+            pass
+        
+        headers = {"Content-Type": "application/json"}
+        if api_key and api_secret:
+            headers["Authorization"] = f"token {api_key}:{api_secret}"
+        
+        resp = _req.post(
+            mcp_url,
+            json={"jsonrpc": "2.0", "method": "tools/call", "id": 1, "params": {"name": tool_name, "arguments": arguments}},
+            headers=headers,
+            timeout=60,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if "message" in data:
+                data = data["message"]
+            result = data.get("result", data)
+            if result.get("isError"):
+                contents = result.get("content", [])
+                error_text = contents[0].get("text", "Unknown error") if contents else "Unknown error"
+                raise MCPError(error_text)
+            return result
+    except MCPError:
+        raise
+    except Exception as e:
+        frappe.logger().debug(f"Niv MCP: HTTP tool call failed for {tool_name}: {e}")
+    
+    # Method 2: Direct Python call (fallback)
     return _direct_call("tools/call", {"name": tool_name, "arguments": arguments})
 
 
