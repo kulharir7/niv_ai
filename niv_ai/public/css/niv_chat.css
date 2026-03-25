@@ -3861,3 +3861,90 @@ body.niv-widget-mode .niv-message.user .msg-content { max-width: 90% !important;
         overscroll-behavior: contain;
     }
 }
+
+
+/* ══════════════════════════════════════════════════════════
+   WIDGET UPGRADE — Badge, Error Glow, Idle Nudge, Panel Status
+   ══════════════════════════════════════════════════════════ */
+
+/* Notification Badge on FAB */
+.niv-fab-badge {
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 9px;
+    background: #ef4444;
+    color: #fff;
+    font-size: 10px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    box-shadow: 0 2px 6px rgba(239,68,68,0.4);
+    z-index: 10;
+    animation: nivBadgeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes nivBadgeIn {
+    from { transform: scale(0); }
+    to { transform: scale(1); }
+}
+
+/* FAB Error Alert — red glow pulse */
+.niv-fab.niv-fab-alert {
+    box-shadow: 0 0 0 0 rgba(239,68,68,0.4) !important;
+    animation: nivFabAlert 2s ease-in-out infinite !important;
+}
+@keyframes nivFabAlert {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+    50% { box-shadow: 0 0 0 8px rgba(239,68,68,0); }
+}
+
+/* FAB Idle Nudge — gentle bounce */
+.niv-fab.niv-fab-nudge {
+    animation: nivFabNudge 0.6s cubic-bezier(0.36, 0.07, 0.19, 0.97) 3 !important;
+}
+@keyframes nivFabNudge {
+    0%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-8px); }
+    50% { transform: translateY(-4px); }
+}
+
+/* Panel Header — Status dot */
+.niv-panel-title-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+}
+.niv-panel-status {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: #10b981;
+    font-weight: 500;
+}
+.niv-panel-status-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #10b981;
+    box-shadow: 0 0 6px rgba(16,185,129,0.5);
+    animation: nivStatusPulse 3s ease-in-out infinite;
+}
+@keyframes nivStatusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* Panel header SVG buttons */
+.niv-panel-btn {
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+}
+.niv-panel-btn svg {
+    display: block;
+}
