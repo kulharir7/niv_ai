@@ -1383,7 +1383,6 @@ ${htmlCode}
         const _oldThemeMap = {"ocean":"default","forest":"default","sunset":"default","rose":"default","midnight":"default"};
         if (_oldTheme && _oldThemeMap[_oldTheme] !== undefined) {
             localStorage.setItem("niv_chat_theme", _oldThemeMap[_oldTheme]);
-            // Map old theme to accent color
             const _accentMap = {"ocean":"blue","forest":"green","sunset":"orange","rose":"pink","midnight":"blue"};
             if (_accentMap[_oldTheme]) localStorage.setItem("niv_chat_accent", _accentMap[_oldTheme]);
         }
@@ -1396,24 +1395,14 @@ ${htmlCode}
         const savedAccent = localStorage.getItem("niv_chat_accent") || "purple";
         this.apply_accent(savedAccent);
 
-        // Theme card click
-        this.wrapper.find(".niv-theme-card").on("click", (e) => {
+        // Use $(document) delegation since settings panel is detached to body
+        $(document).off("click.nivtheme").on("click.nivtheme", ".niv-theme-card", (e) => {
             const themeId = $(e.currentTarget).data("theme-id");
             this.apply_theme(themeId);
             localStorage.setItem("niv_chat_theme", themeId);
         });
 
-        // Also handle old dots if they have theme-id (backward compat)
-        this.wrapper.find(".niv-theme-dot[data-theme-id]").on("click", (e) => {
-            const themeId = $(e.currentTarget).data("theme-id");
-            if (themeId) {
-                this.apply_theme(themeId);
-                localStorage.setItem("niv_chat_theme", themeId);
-            }
-        });
-
-        // Accent dot click
-        this.wrapper.find(".niv-theme-dot[data-accent]").on("click", (e) => {
+        $(document).off("click.nivaccent").on("click.nivaccent", ".niv-theme-dot[data-accent]", (e) => {
             const accent = $(e.currentTarget).data("accent");
             this.apply_accent(accent);
             localStorage.setItem("niv_chat_accent", accent);
@@ -1429,14 +1418,15 @@ ${htmlCode}
             $container.addClass("theme-" + themeId);
             $container.attr("data-theme-style", themeId);
         }
-        this.wrapper.find(".niv-theme-card").removeClass("active");
-        this.wrapper.find(`.niv-theme-card[data-theme-id="${themeId}"]`).addClass("active");
+        // Update active state — search everywhere (body too, since panel is detached)
+        $(".niv-theme-card").removeClass("active");
+        $(`.niv-theme-card[data-theme-id="${themeId}"]`).addClass("active");
 
         // Auto dark mode for certain themes
         const forceDark = ["terminal", "cyberpunk", "ocean-deep"];
         if (forceDark.includes(themeId)) {
             $("body").addClass("niv-dark-mode");
-            this.wrapper.find(".btn-dark-mode-toggle").prop("checked", true);
+            $(".btn-dark-mode-toggle").prop("checked", true);
             localStorage.setItem("niv_dark_mode", "true");
         }
     }
@@ -1452,6 +1442,7 @@ ${htmlCode}
         };
         const a = accents[accent] || accents.purple;
         const $container = this.wrapper.find(".niv-chat-container");
+        if (!$container.length || !$container[0]) return;
         $container[0].style.setProperty("--niv-primary", a.primary);
         $container[0].style.setProperty("--niv-primary-hover", a.hover);
         $container[0].style.setProperty("--niv-input-focus", a.primary);
@@ -1461,8 +1452,9 @@ ${htmlCode}
         const isDark = $("body").hasClass("niv-dark-mode");
         $container[0].style.setProperty("--niv-user-msg-bg", isDark ? a.dark : a.light);
 
-        this.wrapper.find(".niv-theme-dot[data-accent]").removeClass("active");
-        this.wrapper.find(`.niv-theme-dot[data-accent="${accent}"]`).addClass("active");
+        // Update active dot — search globally
+        $(".niv-theme-dot[data-accent]").removeClass("active");
+        $(`.niv-theme-dot[data-accent="${accent}"]`).addClass("active");
     }
 
     // ─── Settings Panel ─────────────────────────────────────────────

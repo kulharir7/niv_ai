@@ -3885,9 +3885,15 @@ body[data-route="niv-chat"] .desk-alert,
 .niv-theme-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 12px;
+    gap: 10px;
     margin-top: 12px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding-right: 4px;
 }
+.niv-theme-grid::-webkit-scrollbar { width: 4px; }
+.niv-theme-grid::-webkit-scrollbar-track { background: transparent; }
+.niv-theme-grid::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 4px; }
 .niv-theme-card {
     cursor: pointer;
     border-radius: 12px;
