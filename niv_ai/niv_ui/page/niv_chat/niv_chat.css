@@ -807,11 +807,11 @@ body.niv-chat-active .col-lg-12 {
 .niv-chat-header {
     display: flex;
     align-items: center;
-    padding: 8px 16px;
+    padding: 6px 12px;
     background: var(--niv-bg);
     border-bottom: 1px solid var(--niv-border);
     gap: 8px;
-    min-height: 50px;
+    min-height: 44px;
     color: var(--niv-text);
     transition: background 0.2s ease;
 }
@@ -838,35 +838,82 @@ body.niv-chat-active .col-lg-12 {
     display: block;
 }
 
-.niv-header-title {
-    flex: 1;
-    text-align: center;
-    font-size: 15px;
-    font-weight: 600;
-    color: var(--niv-text);
-    letter-spacing: -0.02em;
-}
+
 
 .niv-header-actions {
     display: flex;
-    gap: 2px;
+    align-items: center;
+    gap: 1px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--niv-border);
+    border-radius: 10px;
+    padding: 2px;
 }
-.niv-header-actions .btn {
-    color: var(--niv-text-muted);
-    border: none;
-    background: none;
-    padding: 8px;
-    border-radius: 8px;
+.niv-hdr-btn {
+    color: var(--niv-text-muted) !important;
+    border: none !important;
+    background: none !important;
+    padding: 6px 8px !important;
+    border-radius: 8px !important;
     cursor: pointer;
     transition: all 0.15s ease;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
-.niv-header-actions .btn:hover {
-    background: var(--niv-hover);
+.niv-hdr-btn:hover {
+    background: var(--niv-hover) !important;
+    color: var(--niv-text) !important;
+}
+.niv-hdr-btn.active {
+    background: rgba(124, 58, 237, 0.12) !important;
+    color: var(--niv-primary) !important;
+}
+.niv-hdr-btn.niv-hdr-danger:hover {
+    background: rgba(239,68,68,0.1) !important;
+    color: #ef4444 !important;
+}
+.niv-hdr-divider {
+    width: 1px;
+    height: 16px;
+    background: var(--niv-border);
+    margin: 0 2px;
+    flex-shrink: 0;
+}
+
+/* Tooltip */
+.niv-hdr-btn[data-tooltip]:hover::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1a1a1a;
+    color: #e5e5e5;
+    font-size: 10px;
+    font-weight: 500;
+    padding: 3px 8px;
+    border-radius: 5px;
+    white-space: nowrap;
+    pointer-events: none;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    animation: niv-tooltip-in 0.15s ease;
+}
+@keyframes niv-tooltip-in {
+    from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* Header title */
+.niv-header-title {
+    flex: 1;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
     color: var(--niv-text);
-}
-.niv-header-actions .btn.active {
-    background: rgba(124, 58, 237, 0.12);
-    color: var(--niv-primary);
+    letter-spacing: -0.02em;
 }
 .niv-header-actions .btn svg {
     display: block;
