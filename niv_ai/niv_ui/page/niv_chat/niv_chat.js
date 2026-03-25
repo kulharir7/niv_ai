@@ -1378,25 +1378,81 @@ ${htmlCode}
     // ─── Themes ─────────────────────────────────────────────────────
 
     setup_themes() {
-        const saved = localStorage.getItem("niv_chat_theme") || "default";
-        this.apply_theme(saved);
+        // Theme style
+        const savedTheme = localStorage.getItem("niv_chat_theme") || "default";
+        this.apply_theme(savedTheme);
 
-        this.wrapper.find(".niv-theme-dot").on("click", (e) => {
+        // Accent color
+        const savedAccent = localStorage.getItem("niv_chat_accent") || "purple";
+        this.apply_accent(savedAccent);
+
+        // Theme card click
+        this.wrapper.find(".niv-theme-card").on("click", (e) => {
             const themeId = $(e.currentTarget).data("theme-id");
             this.apply_theme(themeId);
             localStorage.setItem("niv_chat_theme", themeId);
+        });
+
+        // Also handle old dots if they have theme-id (backward compat)
+        this.wrapper.find(".niv-theme-dot[data-theme-id]").on("click", (e) => {
+            const themeId = $(e.currentTarget).data("theme-id");
+            if (themeId) {
+                this.apply_theme(themeId);
+                localStorage.setItem("niv_chat_theme", themeId);
+            }
+        });
+
+        // Accent dot click
+        this.wrapper.find(".niv-theme-dot[data-accent]").on("click", (e) => {
+            const accent = $(e.currentTarget).data("accent");
+            this.apply_accent(accent);
+            localStorage.setItem("niv_chat_accent", accent);
         });
     }
 
     apply_theme(themeId) {
         const $container = this.wrapper.find(".niv-chat-container");
+        // Remove all theme classes
+        $container.removeClass("theme-glass theme-terminal theme-cyberpunk theme-aurora theme-minimal theme-sunset-grad theme-ocean-deep");
+        $container.removeAttr("data-theme-style");
         if (themeId && themeId !== "default") {
-            $container.attr("data-theme", themeId);
-        } else {
-            $container.removeAttr("data-theme");
+            $container.addClass("theme-" + themeId);
+            $container.attr("data-theme-style", themeId);
         }
-        this.wrapper.find(".niv-theme-dot").removeClass("active");
-        this.wrapper.find(`.niv-theme-dot[data-theme-id="${themeId}"]`).addClass("active");
+        this.wrapper.find(".niv-theme-card").removeClass("active");
+        this.wrapper.find(`.niv-theme-card[data-theme-id="${themeId}"]`).addClass("active");
+
+        // Auto dark mode for certain themes
+        const forceDark = ["terminal", "cyberpunk", "ocean-deep"];
+        if (forceDark.includes(themeId)) {
+            $("body").addClass("niv-dark-mode");
+            this.wrapper.find(".btn-dark-mode-toggle").prop("checked", true);
+            localStorage.setItem("niv_dark_mode", "true");
+        }
+    }
+
+    apply_accent(accent) {
+        const accents = {
+            purple: { primary: "#7c3aed", hover: "#6d28d9", light: "#f3f0ff", dark: "#2d1f5e" },
+            blue:   { primary: "#3b82f6", hover: "#2563eb", light: "#dbeafe", dark: "#1e3a5f" },
+            green:  { primary: "#22c55e", hover: "#16a34a", light: "#dcfce7", dark: "#1a3a2a" },
+            orange: { primary: "#f97316", hover: "#ea580c", light: "#fff7ed", dark: "#3d2414" },
+            pink:   { primary: "#ec4899", hover: "#db2777", light: "#fce7f3", dark: "#3d1a2e" },
+            cyan:   { primary: "#06b6d4", hover: "#0891b2", light: "#cffafe", dark: "#164e63" },
+        };
+        const a = accents[accent] || accents.purple;
+        const $container = this.wrapper.find(".niv-chat-container");
+        $container[0].style.setProperty("--niv-primary", a.primary);
+        $container[0].style.setProperty("--niv-primary-hover", a.hover);
+        $container[0].style.setProperty("--niv-input-focus", a.primary);
+        $container[0].style.setProperty("--niv-accent", a.primary);
+
+        // User message bg based on dark mode
+        const isDark = $("body").hasClass("niv-dark-mode");
+        $container[0].style.setProperty("--niv-user-msg-bg", isDark ? a.dark : a.light);
+
+        this.wrapper.find(".niv-theme-dot[data-accent]").removeClass("active");
+        this.wrapper.find(`.niv-theme-dot[data-accent="${accent}"]`).addClass("active");
     }
 
     // ─── Settings Panel ─────────────────────────────────────────────
