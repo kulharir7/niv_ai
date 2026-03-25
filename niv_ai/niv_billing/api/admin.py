@@ -582,3 +582,520 @@ def sync_balances():
         "total_wallets": len(wallets),
         "updated": updated,
     }
+
+
+@frappe.whitelist()
+def get_ai_insights(days=30):
+    """AI-generated daily insights about usage patterns."""
+    _check_admin()
+    days = int(days or 30)
+    start_date = add_days(getdate(), -days)
+    today = getdate()
+    yesterday = add_days(today, -1)
+
+    # Gather data for AI
+    today_stats = frappe.db.sql("""
+        SELECT COUNT(*) as requests, COALESCE(SUM(total_tokens), 0) as tokens,
+               COUNT(DISTINCT user) as users
+        FROM `tabNiv Usage Log` WHERE DATE(creation) = %s
+    """, (today,), as_dict=True)[0]
+
+    yesterday_stats = frappe.db.sql("""
+        SELECT COUNT(*) as requests, COALESCE(SUM(total_tokens), 0) as tokens,
+               COUNT(DISTINCT user) as users
+        FROM `tabNiv Usage Log` WHERE DATE(creation) = %s
+    """, (yesterday,), as_dict=True)[0]
+
+    # Top user today
+    top_user = frappe.db.sql("""
+        SELECT l.user, u.full_name, COUNT(*) as cnt
+        FROM `tabNiv Usage Log` l
+        LEFT JOIN `tabUser` u ON u.name = l.user
+        WHERE DATE(l.creation) = %s
+        GROUP BY l.user, u.full_name ORDER BY cnt DESC LIMIT 1
+    """, (today,), as_dict=True)
+
+    # Most used tool today
+    top_tool = frappe.db.sql("""
+        SELECT tool_name, COUNT(*) as cnt FROM `tabNiv Usage Log`
+        WHERE DATE(creation) = %s AND tool_name IS NOT NULL AND tool_name != ''
+        GROUP BY tool_name ORDER BY cnt DESC LIMIT 1
+    """, (today,), as_dict=True)
+
+    # Error rate today
+    total_tool_calls = frappe.db.sql("""
+        SELECT COUNT(*) as total,
+               SUM(CASE WHEN is_error = 1 THEN 1 ELSE 0 END) as errors
+        FROM `tabNiv Tool Log` WHERE DATE(creation) = %s
+    """, (today,), as_dict=True)[0]
+
+    # Build insights
+    insights = []
+
+    # Usage trend
+    if yesterday_stats.requests > 0:
+        change = round(((today_stats.requests - yesterday_stats.requests) / yesterday_stats.requests) * 100)
+        if change > 0:
+            insights.append({"icon": "📈", "text": f"Usage is up {change}% today vs yesterday ({today_stats.requests} vs {yesterday_stats.requests} requests)"})
+        elif change < 0:
+            insights.append({"icon": "📉", "text": f"Usage is down {abs(change)}% today vs yesterday ({today_stats.requests} vs {yesterday_stats.requests} requests)"})
+        else:
+            insights.append({"icon": "➡️", "text": f"Usage same as yesterday — {today_stats.requests} requests"})
+    else:
+        insights.append({"icon": "📊", "text": f"Today: {today_stats.requests} requests from {today_stats.users} users"})
+
+    # Top user
+    if top_user:
+        insights.append({"icon": "👤", "text": f"Most active: {top_user[0].full_name or top_user[0].user} ({top_user[0].cnt} queries)"})
+
+    # Top tool
+    if top_tool:
+        insights.append({"icon": "🔧", "text": f"Most used tool: {top_tool[0].tool_name} ({top_tool[0].cnt} calls)"})
+
+    # Error rate
+    if total_tool_calls.total and total_tool_calls.total > 0:
+        error_rate = round((total_tool_calls.errors or 0) / total_tool_calls.total * 100, 1)
+        if error_rate > 20:
+            insights.append({"icon": "⚠️", "text": f"High error rate: {error_rate}% tool calls failing — check logs"})
+        elif error_rate > 0:
+            insights.append({"icon": "✅", "text": f"Tool success rate: {100 - error_rate}%"})
+
+    # Token usage
+    insights.append({"icon": "🔤", "text": f"Tokens used today: {today_stats.tokens:,}"})
+
+    return {"insights": insights, "generated_at": str(now_datetime())}
+
+
+@frappe.whitelist()
+def get_response_times(days=30):
+    """Average response time data from tool logs."""
+    _check_admin()
+    days = int(days or 30)
+    start_date = add_days(getdate(), -days)
+
+    # Daily average response time
+    daily = frappe.db.sql("""
+        SELECT DATE(creation) as date,
+               ROUND(AVG(execution_time_ms), 0) as avg_ms,
+               ROUND(MAX(execution_time_ms), 0) as max_ms,
+               ROUND(MIN(execution_time_ms), 0) as min_ms,
+               COUNT(*) as count
+        FROM `tabNiv Tool Log`
+        WHERE DATE(creation) >= %s
+        GROUP BY DATE(creation) ORDER BY date ASC
+    """, (start_date,), as_dict=True)
+
+    # Overall stats
+    overall = frappe.db.sql("""
+        SELECT ROUND(AVG(execution_time_ms), 0) as avg_ms,
+               ROUND(MAX(execution_time_ms), 0) as max_ms,
+               ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY execution_time_ms), 0) as p95_ms
+        FROM `tabNiv Tool Log`
+        WHERE DATE(creation) >= %s
+    """, (start_date,), as_dict=True)
+
+    # Fallback if PERCENTILE not supported
+    if not overall or overall[0].avg_ms is None:
+        overall = frappe.db.sql("""
+            SELECT ROUND(AVG(execution_time_ms), 0) as avg_ms,
+                   ROUND(MAX(execution_time_ms), 0) as max_ms
+            FROM `tabNiv Tool Log`
+            WHERE DATE(creation) >= %s
+        """, (start_date,), as_dict=True)
+
+    # Slowest queries
+    slowest = frappe.db.sql("""
+        SELECT tool as tool_name, execution_time_ms, DATE(creation) as date,
+               SUBSTRING(parameters_json, 1, 100) as params
+        FROM `tabNiv Tool Log`
+        WHERE DATE(creation) >= %s
+        ORDER BY execution_time_ms DESC LIMIT 5
+    """, (start_date,), as_dict=True)
+
+    return {
+        "daily": [{"date": str(d.date), "avg_ms": d.avg_ms, "max_ms": d.max_ms, "count": d.count} for d in daily],
+        "overall": {
+            "avg_ms": overall[0].avg_ms if overall else 0,
+            "max_ms": overall[0].max_ms if overall else 0,
+        },
+        "slowest": [{"tool": s.tool_name, "ms": s.execution_time_ms, "date": str(s.date)} for s in slowest],
+    }
+
+
+@frappe.whitelist()
+def get_satisfaction_stats(days=30):
+    """User satisfaction from message reactions."""
+    _check_admin()
+    days = int(days or 30)
+    start_date = add_days(getdate(), -days)
+
+    messages = frappe.db.sql("""
+        SELECT reactions_json FROM `tabNiv Message`
+        WHERE role = 'assistant' AND reactions_json IS NOT NULL
+        AND reactions_json != '' AND reactions_json != '{}'
+        AND DATE(creation) >= %s
+    """, (start_date,), as_dict=True)
+
+    thumbs_up = 0
+    thumbs_down = 0
+    for m in messages:
+        try:
+            reactions = json.loads(m.reactions_json)
+            for user, reaction in reactions.items():
+                if reaction in ("up", "like", "thumbsup", "👍"):
+                    thumbs_up += 1
+                elif reaction in ("down", "dislike", "thumbsdown", "👎"):
+                    thumbs_down += 1
+        except (json.JSONDecodeError, AttributeError):
+            pass
+
+    total = thumbs_up + thumbs_down
+    score = round((thumbs_up / total) * 100, 1) if total > 0 else 0
+
+    # Daily trend
+    daily = frappe.db.sql("""
+        SELECT DATE(creation) as date, reactions_json
+        FROM `tabNiv Message`
+        WHERE role = 'assistant' AND reactions_json IS NOT NULL
+        AND reactions_json != '' AND reactions_json != '{}'
+        AND DATE(creation) >= %s
+        ORDER BY date ASC
+    """, (start_date,), as_dict=True)
+
+    daily_map = {}
+    for d in daily:
+        dt = str(d.date)
+        if dt not in daily_map:
+            daily_map[dt] = {"up": 0, "down": 0}
+        try:
+            reactions = json.loads(d.reactions_json)
+            for user, reaction in reactions.items():
+                if reaction in ("up", "like", "thumbsup", "👍"):
+                    daily_map[dt]["up"] += 1
+                elif reaction in ("down", "dislike", "thumbsdown", "👎"):
+                    daily_map[dt]["down"] += 1
+        except Exception:
+            pass
+
+    return {
+        "thumbs_up": thumbs_up,
+        "thumbs_down": thumbs_down,
+        "total_rated": total,
+        "satisfaction_pct": score,
+        "daily": [{"date": k, "up": v["up"], "down": v["down"]} for k, v in sorted(daily_map.items())],
+    }
+
+
+@frappe.whitelist()
+def get_popular_questions(days=30, limit=10):
+    """Most common query patterns."""
+    _check_admin()
+    days = int(days or 30)
+    limit = int(limit or 10)
+    start_date = add_days(getdate(), -days)
+
+    # Get user messages
+    messages = frappe.db.sql("""
+        SELECT content FROM `tabNiv Message`
+        WHERE role = 'user' AND DATE(creation) >= %s
+        AND content IS NOT NULL AND content != ''
+        ORDER BY creation DESC LIMIT 500
+    """, (start_date,), as_dict=True)
+
+    # Simple keyword extraction — count common phrases
+    from collections import Counter
+    word_counter = Counter()
+    question_types = Counter()
+
+    for m in messages:
+        text = (m.content or "").lower().strip()
+        if not text:
+            continue
+
+        # Categorize
+        if any(w in text for w in ["list", "show", "dikhao", "batao", "all"]):
+            question_types["List/Show Data"] += 1
+        elif any(w in text for w in ["how many", "count", "kitne", "total"]):
+            question_types["Count/Total"] += 1
+        elif any(w in text for w in ["create", "make", "banao", "add"]):
+            question_types["Create/Add"] += 1
+        elif any(w in text for w in ["report", "summary", "analysis"]):
+            question_types["Reports"] += 1
+        elif any(w in text for w in ["status", "details", "info"]):
+            question_types["Status/Details"] += 1
+        elif any(w in text for w in ["update", "change", "modify", "edit"]):
+            question_types["Update/Modify"] += 1
+        elif any(w in text for w in ["delete", "remove", "hatao"]):
+            question_types["Delete"] += 1
+        elif any(w in text for w in ["help", "how", "kaise"]):
+            question_types["Help/How-to"] += 1
+        else:
+            question_types["Other"] += 1
+
+        # Extract key words (skip common words)
+        skip = {"the", "a", "an", "is", "are", "was", "were", "to", "of", "in", "for",
+                "and", "or", "me", "my", "i", "you", "it", "this", "that", "mujhe",
+                "ka", "ke", "ki", "ko", "se", "hai", "hain", "ye", "wo", "kya",
+                "please", "show", "list", "get", "all"}
+        words = text.split()
+        for w in words:
+            w = w.strip(".,!?;:'\"()[]{}").lower()
+            if w and len(w) > 2 and w not in skip:
+                word_counter[w] += 1
+
+    return {
+        "question_types": [{"type": k, "count": v} for k, v in question_types.most_common(limit)],
+        "top_words": [{"word": k, "count": v} for k, v in word_counter.most_common(20)],
+        "total_messages": len(messages),
+    }
+
+
+@frappe.whitelist()
+def get_ai_recommendations(days=30):
+    """Smart recommendations based on usage data."""
+    _check_admin()
+    days = int(days or 30)
+    start_date = add_days(getdate(), -days)
+    today = getdate()
+
+    recommendations = []
+
+    # 1. Check users hitting daily limits
+    try:
+        settings = frappe.get_single("Niv Settings")
+        daily_limit = getattr(settings, "per_user_daily_limit", 0) or 0
+        if daily_limit:
+            heavy_users = frappe.db.sql("""
+                SELECT user, SUM(total_tokens) as tokens
+                FROM `tabNiv Usage Log`
+                WHERE DATE(creation) = %s
+                GROUP BY user HAVING tokens > %s * 0.8
+            """, (today, daily_limit), as_dict=True)
+            if heavy_users:
+                recommendations.append({
+                    "type": "warning",
+                    "icon": "⚠️",
+                    "text": f"{len(heavy_users)} user(s) near daily token limit — consider increasing limit",
+                })
+    except Exception:
+        pass
+
+    # 2. Check tool failure rate
+    tool_stats = frappe.db.sql("""
+        SELECT tool as tool_name,
+               COUNT(*) as total,
+               SUM(CASE WHEN is_error = 1 THEN 1 ELSE 0 END) as errors
+        FROM `tabNiv Tool Log`
+        WHERE DATE(creation) >= %s
+        GROUP BY tool
+        HAVING errors > 0
+        ORDER BY errors DESC LIMIT 5
+    """, (start_date,), as_dict=True)
+
+    for t in tool_stats:
+        error_rate = round((t.errors / t.total) * 100, 1) if t.total else 0
+        if error_rate > 25:
+            recommendations.append({
+                "type": "danger",
+                "icon": "🔴",
+                "text": f"Tool '{t.tool_name}' failing {error_rate}% ({t.errors}/{t.total}) — check permissions or arguments",
+            })
+
+    # 3. Check pool balance burn rate
+    try:
+        settings = frappe.get_single("Niv Settings")
+        if settings.billing_mode == "Shared Pool":
+            balance = settings.shared_pool_balance or 0
+            daily_avg = frappe.db.sql("""
+                SELECT COALESCE(AVG(daily_tokens), 0) as avg_daily FROM (
+                    SELECT DATE(creation) as dt, SUM(total_tokens) as daily_tokens
+                    FROM `tabNiv Usage Log`
+                    WHERE DATE(creation) >= %s
+                    GROUP BY DATE(creation)
+                ) sub
+            """, (add_days(today, -7),), as_dict=True)[0].avg_daily
+
+            if daily_avg > 0:
+                days_left = int(balance / daily_avg)
+                if days_left < 7:
+                    recommendations.append({
+                        "type": "danger",
+                        "icon": "🔴",
+                        "text": f"Token pool will run out in ~{days_left} days at current rate — recharge soon!",
+                    })
+                elif days_left < 30:
+                    recommendations.append({
+                        "type": "warning",
+                        "icon": "🟡",
+                        "text": f"Token pool lasts ~{days_left} days at current usage rate",
+                    })
+                else:
+                    recommendations.append({
+                        "type": "info",
+                        "icon": "✅",
+                        "text": f"Token pool healthy — ~{days_left} days remaining",
+                    })
+    except Exception:
+        pass
+
+    # 4. Inactive users
+    inactive = frappe.db.sql("""
+        SELECT COUNT(DISTINCT user) as cnt FROM `tabNiv Conversation`
+        WHERE user NOT IN (
+            SELECT DISTINCT user FROM `tabNiv Usage Log` WHERE DATE(creation) >= %s
+        )
+    """, (add_days(today, -7),), as_dict=True)[0].cnt
+
+    if inactive > 0:
+        recommendations.append({
+            "type": "info",
+            "icon": "💤",
+            "text": f"{inactive} users haven't used AI in 7+ days",
+        })
+
+    # 5. Weekend activity
+    weekend = frappe.db.sql("""
+        SELECT COUNT(*) as cnt FROM `tabNiv Usage Log`
+        WHERE DATE(creation) >= %s AND DAYOFWEEK(creation) IN (1, 7)
+    """, (start_date,), as_dict=True)[0].cnt
+
+    weekday = frappe.db.sql("""
+        SELECT COUNT(*) as cnt FROM `tabNiv Usage Log`
+        WHERE DATE(creation) >= %s AND DAYOFWEEK(creation) NOT IN (1, 7)
+    """, (start_date,), as_dict=True)[0].cnt
+
+    if weekend == 0 and weekday > 0:
+        recommendations.append({
+            "type": "info",
+            "icon": "📅",
+            "text": "No weekend activity — consider scheduling automated reports for Monday",
+        })
+
+    return {"recommendations": recommendations, "generated_at": str(now_datetime())}
+
+
+@frappe.whitelist()
+def get_billing_overview(days=30):
+    """Billing/pool overview with burn rate."""
+    _check_admin()
+    days = int(days or 30)
+    today = getdate()
+
+    settings = frappe.get_single("Niv Settings")
+    billing_mode = settings.billing_mode or "Per User"
+
+    result = {
+        "billing_mode": billing_mode,
+        "pool_balance": 0,
+        "pool_used": 0,
+        "burn_rate_daily": 0,
+        "days_remaining": 0,
+        "total_wallets": 0,
+        "total_wallet_balance": 0,
+        "per_user_costs": [],
+    }
+
+    if billing_mode == "Shared Pool":
+        result["pool_balance"] = settings.shared_pool_balance or 0
+        result["pool_used"] = settings.shared_pool_used or 0
+
+        # Daily burn rate (last 7 days average)
+        daily_usage = frappe.db.sql("""
+            SELECT COALESCE(AVG(daily_tokens), 0) as avg_daily FROM (
+                SELECT SUM(total_tokens) as daily_tokens
+                FROM `tabNiv Usage Log`
+                WHERE DATE(creation) >= %s
+                GROUP BY DATE(creation)
+            ) sub
+        """, (add_days(today, -7),), as_dict=True)[0].avg_daily
+
+        result["burn_rate_daily"] = round(daily_usage)
+        result["days_remaining"] = int(result["pool_balance"] / daily_usage) if daily_usage > 0 else 999
+    else:
+        wallet_stats = frappe.db.sql("""
+            SELECT COUNT(*) as cnt, COALESCE(SUM(balance), 0) as total_balance
+            FROM `tabNiv Wallet`
+        """, as_dict=True)[0]
+        result["total_wallets"] = wallet_stats.cnt
+        result["total_wallet_balance"] = wallet_stats.total_balance
+
+    # Per-user cost (top 5)
+    per_user = frappe.db.sql("""
+        SELECT l.user, u.full_name,
+               COALESCE(SUM(l.total_tokens), 0) as tokens,
+               COALESCE(SUM(COALESCE(l.cost, l.token_cost, 0)), 0) as cost
+        FROM `tabNiv Usage Log` l
+        LEFT JOIN `tabUser` u ON u.name = l.user
+        WHERE DATE(l.creation) >= %s
+        GROUP BY l.user, u.full_name
+        ORDER BY tokens DESC LIMIT 5
+    """, (add_days(today, -days),), as_dict=True)
+
+    result["per_user_costs"] = [{"user": p.full_name or p.user, "tokens": p.tokens, "cost": flt(p.cost, 2)} for p in per_user]
+
+    return result
+
+
+@frappe.whitelist()
+def get_conversation_quality(days=30):
+    """Conversation quality metrics."""
+    _check_admin()
+    days = int(days or 30)
+    start_date = add_days(getdate(), -days)
+
+    # Avg messages per conversation
+    avg_msgs = frappe.db.sql("""
+        SELECT AVG(msg_count) as avg_msgs FROM (
+            SELECT conversation, COUNT(*) as msg_count
+            FROM `tabNiv Message`
+            WHERE DATE(creation) >= %s
+            GROUP BY conversation
+        ) sub
+    """, (start_date,), as_dict=True)[0].avg_msgs or 0
+
+    # Tool success rate
+    tool_stats = frappe.db.sql("""
+        SELECT COUNT(*) as total,
+               SUM(CASE WHEN is_error = 0 OR is_error IS NULL THEN 1 ELSE 0 END) as success
+        FROM `tabNiv Tool Log`
+        WHERE DATE(creation) >= %s
+    """, (start_date,), as_dict=True)[0]
+
+    tool_success_rate = round((tool_stats.success / tool_stats.total) * 100, 1) if tool_stats.total else 100
+
+    # Empty/error response rate
+    total_responses = frappe.db.sql("""
+        SELECT COUNT(*) as total FROM `tabNiv Message`
+        WHERE role = 'assistant' AND DATE(creation) >= %s
+    """, (start_date,), as_dict=True)[0].total or 1
+
+    error_responses = frappe.db.sql("""
+        SELECT COUNT(*) as cnt FROM `tabNiv Message`
+        WHERE role = 'assistant' AND DATE(creation) >= %s
+        AND (content LIKE '%%Error:%%' OR content LIKE '%%could not%%' OR content LIKE '%%try again%%'
+             OR content = '' OR content IS NULL)
+    """, (start_date,), as_dict=True)[0].cnt or 0
+
+    error_rate = round((error_responses / total_responses) * 100, 1)
+
+    # Conversations with tool usage vs without
+    with_tools = frappe.db.sql("""
+        SELECT COUNT(DISTINCT conversation) as cnt FROM `tabNiv Tool Log`
+        WHERE DATE(creation) >= %s
+    """, (start_date,), as_dict=True)[0].cnt or 0
+
+    total_convos = frappe.db.sql("""
+        SELECT COUNT(DISTINCT conversation) as cnt FROM `tabNiv Message`
+        WHERE DATE(creation) >= %s
+    """, (start_date,), as_dict=True)[0].cnt or 1
+
+    tool_usage_pct = round((with_tools / total_convos) * 100, 1)
+
+    return {
+        "avg_messages_per_convo": round(avg_msgs, 1),
+        "tool_success_rate": tool_success_rate,
+        "error_response_rate": error_rate,
+        "tool_usage_pct": tool_usage_pct,
+        "total_conversations": total_convos,
+        "total_tool_calls": tool_stats.total or 0,
+    }

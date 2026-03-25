@@ -26,8 +26,17 @@
         </div>
     </div>
 
+    <!-- AI Insights -->
+    <div class="niv-dash-insights-bar" id="niv-insights-bar"></div>
+
+    <!-- AI Recommendations -->
+    <div class="niv-dash-recommendations" id="niv-recommendations"></div>
+
     <!-- Summary Cards -->
     <div class="niv-dash-stats-row"></div>
+
+    <!-- Quality Metrics -->
+    <div class="niv-dash-quality-row" id="niv-quality-row"></div>
 
     <!-- Usage Over Time Chart -->
     <div class="niv-dash-section">
@@ -43,6 +52,24 @@
             <div class="niv-dash-usage-chart-container">
                 <canvas id="niv-usage-chart" height="280"></canvas>
             </div>
+        </div>
+    </div>
+
+    <!-- Response Time + Satisfaction Row -->
+    <div class="niv-dash-grid-2">
+        <div class="niv-dash-card">
+            <div class="niv-dash-card-header"><h4>Response Time</h4></div>
+            <div class="niv-dash-response-chart-container">
+                <canvas id="niv-response-chart" height="220"></canvas>
+            </div>
+            <div class="niv-dash-response-stats" id="niv-response-stats"></div>
+        </div>
+        <div class="niv-dash-card">
+            <div class="niv-dash-card-header"><h4>User Satisfaction</h4></div>
+            <div class="niv-dash-satisfaction-container">
+                <canvas id="niv-satisfaction-chart" height="180"></canvas>
+            </div>
+            <div class="niv-dash-satisfaction-stats" id="niv-satisfaction-stats"></div>
         </div>
     </div>
 
@@ -65,6 +92,18 @@
         </div>
     </div>
 
+    <!-- Popular Questions + Billing Row -->
+    <div class="niv-dash-grid-2">
+        <div class="niv-dash-card">
+            <div class="niv-dash-card-header"><h4>Popular Questions</h4></div>
+            <div class="niv-dash-popular" id="niv-popular-questions"></div>
+        </div>
+        <div class="niv-dash-card">
+            <div class="niv-dash-card-header"><h4>Billing Overview</h4></div>
+            <div class="niv-dash-billing" id="niv-billing-overview"></div>
+        </div>
+    </div>
+
     <!-- Heatmap + Top Users Row -->
     <div class="niv-dash-grid-2">
         <div class="niv-dash-card">
@@ -77,7 +116,7 @@
         </div>
     </div>
 
-    <!-- Auto-refresh indicator -->
+    <!-- Footer -->
     <div class="niv-dash-footer">
         <span class="niv-dash-auto-refresh-label">
             <i class="fa fa-clock-o"></i> Auto-refreshes every 60s
