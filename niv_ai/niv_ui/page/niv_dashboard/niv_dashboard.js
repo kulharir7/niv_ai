@@ -362,3 +362,313 @@ class NivDashboard {
         return n.toLocaleString();
     }
 }
+
+
+// ═══════════════════════════════════════════════════════════
+// NEW DASHBOARD METHODS — Append to NivDashboard class
+// ═══════════════════════════════════════════════════════════
+
+// Patch loadAll to include new sections
+(function() {
+    const origLoadAll = NivDashboard.prototype.loadAll;
+    NivDashboard.prototype.loadAll = async function(silent) {
+        await origLoadAll.call(this, silent);
+        // Load new sections
+        this.loadInsights();
+        this.loadRecommendations();
+        this.loadQuality();
+        this.loadResponseTimes();
+        this.loadSatisfaction();
+        this.loadPopularQuestions();
+        this.loadBillingOverview();
+    };
+
+    NivDashboard.prototype.loadInsights = async function() {
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_billing.api.admin.get_ai_insights",
+                args: { days: this.days },
+            });
+            const data = r.message;
+            if (!data || !data.insights || !data.insights.length) return;
+
+            let html = '<span class="niv-dash-insights-title">🧠 AI Insights</span>';
+            for (const item of data.insights) {
+                html += `<div class="niv-dash-insight-item">
+                    <span class="niv-dash-insight-icon">${item.icon}</span>
+                    <span>${item.text}</span>
+                </div>`;
+            }
+            this.wrapper.find("#niv-insights-bar").html(html);
+        } catch(e) {}
+    };
+
+    NivDashboard.prototype.loadRecommendations = async function() {
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_billing.api.admin.get_ai_recommendations",
+                args: { days: this.days },
+            });
+            const data = r.message;
+            if (!data || !data.recommendations || !data.recommendations.length) return;
+
+            let html = '';
+            for (const rec of data.recommendations) {
+                html += `<div class="niv-dash-rec niv-dash-rec-${rec.type}">
+                    <span>${rec.icon}</span>
+                    <span>${rec.text}</span>
+                </div>`;
+            }
+            this.wrapper.find("#niv-recommendations").html(html);
+        } catch(e) {}
+    };
+
+    NivDashboard.prototype.loadQuality = async function() {
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_billing.api.admin.get_conversation_quality",
+                args: { days: this.days },
+            });
+            const d = r.message;
+            if (!d) return;
+
+            const successClass = d.tool_success_rate >= 90 ? "good" : d.tool_success_rate >= 70 ? "warn" : "bad";
+            const errorClass = d.error_response_rate <= 5 ? "good" : d.error_response_rate <= 15 ? "warn" : "bad";
+
+            let html = `
+                <div class="niv-dash-quality-card">
+                    <div class="niv-dash-quality-value">${d.avg_messages_per_convo}</div>
+                    <div class="niv-dash-quality-label">Avg Messages/Convo</div>
+                </div>
+                <div class="niv-dash-quality-card">
+                    <div class="niv-dash-quality-value niv-dash-quality-${successClass}">${d.tool_success_rate}%</div>
+                    <div class="niv-dash-quality-label">Tool Success Rate</div>
+                </div>
+                <div class="niv-dash-quality-card">
+                    <div class="niv-dash-quality-value niv-dash-quality-${errorClass}">${d.error_response_rate}%</div>
+                    <div class="niv-dash-quality-label">Error Response Rate</div>
+                </div>
+                <div class="niv-dash-quality-card">
+                    <div class="niv-dash-quality-value">${d.tool_usage_pct}%</div>
+                    <div class="niv-dash-quality-label">Conversations Using Tools</div>
+                </div>`;
+            this.wrapper.find("#niv-quality-row").html(html);
+        } catch(e) {}
+    };
+
+    NivDashboard.prototype.loadResponseTimes = async function() {
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_billing.api.admin.get_response_times",
+                args: { days: this.days },
+            });
+            const data = r.message;
+            if (!data || !data.daily || !data.daily.length) return;
+
+            // Chart
+            if (this.charts.response) this.charts.response.destroy();
+            const canvas = document.getElementById("niv-response-chart");
+            if (!canvas) return;
+
+            this.charts.response = new Chart(canvas, {
+                type: "line",
+                data: {
+                    labels: data.daily.map(d => d.date),
+                    datasets: [{
+                        label: "Avg (ms)",
+                        data: data.daily.map(d => d.avg_ms),
+                        borderColor: "#a78bfa",
+                        backgroundColor: "#a78bfa22",
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 2,
+                    }, {
+                        label: "Max (ms)",
+                        data: data.daily.map(d => d.max_ms),
+                        borderColor: "#f8717144",
+                        borderDash: [5, 5],
+                        fill: false,
+                        tension: 0.4,
+                        pointRadius: 0,
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: "top", labels: { color: "#94a3b8", usePointStyle: true, pointStyleWidth: 8 } },
+                        tooltip: { backgroundColor: "#1e1b2e" },
+                    },
+                    scales: {
+                        x: { grid: { color: "rgba(124,58,237,0.1)" }, ticks: { color: "#94a3b8", maxRotation: 45 } },
+                        y: { grid: { color: "rgba(124,58,237,0.1)" }, ticks: { color: "#94a3b8" }, beginAtZero: true },
+                    },
+                },
+            });
+
+            // Stats below chart
+            let statsHtml = `
+                <div class="niv-dash-response-stat">
+                    <div class="niv-dash-response-stat-val">${data.overall.avg_ms || 0}ms</div>
+                    <div class="niv-dash-response-stat-label">Average</div>
+                </div>
+                <div class="niv-dash-response-stat">
+                    <div class="niv-dash-response-stat-val">${data.overall.max_ms || 0}ms</div>
+                    <div class="niv-dash-response-stat-label">Slowest</div>
+                </div>`;
+            this.wrapper.find("#niv-response-stats").html(statsHtml);
+        } catch(e) {}
+    };
+
+    NivDashboard.prototype.loadSatisfaction = async function() {
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_billing.api.admin.get_satisfaction_stats",
+                args: { days: this.days },
+            });
+            const data = r.message;
+            if (!data) return;
+
+            // Chart
+            if (this.charts.satisfaction) this.charts.satisfaction.destroy();
+            const canvas = document.getElementById("niv-satisfaction-chart");
+            if (!canvas) return;
+
+            if (data.total_rated > 0) {
+                this.charts.satisfaction = new Chart(canvas, {
+                    type: "doughnut",
+                    data: {
+                        labels: ["👍 Positive", "👎 Negative"],
+                        datasets: [{
+                            data: [data.thumbs_up, data.thumbs_down],
+                            backgroundColor: ["#34d39966", "#f8717166"],
+                            borderColor: ["#34d399", "#f87171"],
+                            borderWidth: 2,
+                        }],
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        cutout: "65%",
+                        plugins: {
+                            legend: { position: "bottom", labels: { color: "#94a3b8", padding: 12 } },
+                        },
+                    },
+                });
+            } else {
+                $(canvas).parent().html('<p style="text-align:center;color:#94a3b8;padding:40px;">No ratings yet</p>');
+            }
+
+            // Stats
+            let html = `
+                <div class="niv-dash-sat-item">
+                    <div class="niv-dash-sat-value niv-dash-sat-up">👍 ${data.thumbs_up}</div>
+                    <div class="niv-dash-sat-label">Positive</div>
+                </div>
+                <div class="niv-dash-sat-item">
+                    <div class="niv-dash-sat-value niv-dash-sat-down">👎 ${data.thumbs_down}</div>
+                    <div class="niv-dash-sat-label">Negative</div>
+                </div>
+                <div class="niv-dash-sat-item">
+                    <div class="niv-dash-sat-value niv-dash-sat-score">${data.satisfaction_pct}%</div>
+                    <div class="niv-dash-sat-label">Score</div>
+                </div>`;
+            this.wrapper.find("#niv-satisfaction-stats").html(html);
+        } catch(e) {}
+    };
+
+    NivDashboard.prototype.loadPopularQuestions = async function() {
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_billing.api.admin.get_popular_questions",
+                args: { days: this.days },
+            });
+            const data = r.message;
+            if (!data) return;
+
+            let html = '';
+            if (data.question_types) {
+                for (const qt of data.question_types) {
+                    html += `<div class="niv-dash-popular-item">
+                        <span class="niv-dash-popular-type">${qt.type}</span>
+                        <span class="niv-dash-popular-count">${qt.count}</span>
+                    </div>`;
+                }
+            }
+
+            // Word cloud
+            if (data.top_words && data.top_words.length) {
+                html += '<div class="niv-dash-word-cloud">';
+                for (const w of data.top_words.slice(0, 15)) {
+                    const size = Math.min(16, Math.max(11, 10 + Math.log2(w.count + 1)));
+                    html += `<span class="niv-dash-word" style="font-size:${size}px">${w.word} (${w.count})</span>`;
+                }
+                html += '</div>';
+            }
+
+            this.wrapper.find("#niv-popular-questions").html(html || '<p style="text-align:center;color:#94a3b8;padding:20px;">No data</p>');
+        } catch(e) {}
+    };
+
+    NivDashboard.prototype.loadBillingOverview = async function() {
+        try {
+            const r = await frappe.call({
+                method: "niv_ai.niv_billing.api.admin.get_billing_overview",
+                args: { days: this.days },
+            });
+            const d = r.message;
+            if (!d) return;
+
+            let html = '';
+
+            html += `<div class="niv-dash-billing-stat">
+                <span class="niv-dash-billing-label">Mode</span>
+                <span class="niv-dash-billing-value">${d.billing_mode}</span>
+            </div>`;
+
+            if (d.billing_mode === "Shared Pool") {
+                const total = d.pool_balance + d.pool_used;
+                const pct = total > 0 ? Math.round((d.pool_balance / total) * 100) : 0;
+                const barClass = d.days_remaining < 7 ? "niv-dash-billing-bar-danger" : "";
+
+                html += `<div class="niv-dash-billing-stat">
+                    <span class="niv-dash-billing-label">Pool Balance</span>
+                    <span class="niv-dash-billing-value">${this.fmt(d.pool_balance)} tokens</span>
+                </div>
+                <div class="niv-dash-billing-bar ${barClass}">
+                    <div class="niv-dash-billing-bar-fill" style="width:${pct}%"></div>
+                </div>
+                <div class="niv-dash-billing-stat">
+                    <span class="niv-dash-billing-label">Daily Burn Rate</span>
+                    <span class="niv-dash-billing-value">~${this.fmt(d.burn_rate_daily)}/day</span>
+                </div>
+                <div class="niv-dash-billing-stat">
+                    <span class="niv-dash-billing-label">Days Remaining</span>
+                    <span class="niv-dash-billing-value" style="color:${d.days_remaining < 7 ? '#f87171' : d.days_remaining < 30 ? '#fbbf24' : '#34d399'}">${d.days_remaining > 999 ? '∞' : '~' + d.days_remaining + ' days'}</span>
+                </div>`;
+            } else {
+                html += `<div class="niv-dash-billing-stat">
+                    <span class="niv-dash-billing-label">Total Wallets</span>
+                    <span class="niv-dash-billing-value">${d.total_wallets}</span>
+                </div>
+                <div class="niv-dash-billing-stat">
+                    <span class="niv-dash-billing-label">Total Balance</span>
+                    <span class="niv-dash-billing-value">${this.fmt(d.total_wallet_balance)} tokens</span>
+                </div>`;
+            }
+
+            // Per-user costs
+            if (d.per_user_costs && d.per_user_costs.length) {
+                html += '<div style="margin-top:12px;padding-top:12px;border-top:1px solid rgba(124,58,237,.1);font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Top Spenders</div>';
+                for (const u of d.per_user_costs) {
+                    html += `<div class="niv-dash-billing-stat">
+                        <span class="niv-dash-billing-label">${u.user}</span>
+                        <span class="niv-dash-billing-value">${this.fmt(u.tokens)}</span>
+                    </div>`;
+                }
+            }
+
+            this.wrapper.find("#niv-billing-overview").html(html);
+        } catch(e) {}
+    };
+})();
