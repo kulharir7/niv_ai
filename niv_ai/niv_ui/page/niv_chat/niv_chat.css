@@ -1668,91 +1668,99 @@ pre:hover .code-copy-btn { opacity: 1; }
 
 .niv-input-pill .btn-attach-file {
     border: none;
-    background: none;
+    background: rgba(255,255,255,0.05);
     color: var(--niv-text-muted);
     padding: 0;
-    border-radius: 50%;
+    border-radius: 8px;
     cursor: pointer;
-    transition: all 0.15s ease;
+    transition: all 0.2s ease;
     flex-shrink: 0;
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 .niv-input-pill .btn-attach-file:hover {
     background: var(--niv-hover);
-    color: var(--niv-text);
+    color: var(--niv-primary);
+    transform: rotate(90deg);
 }
 
 .niv-input-right {
     display: flex;
     align-items: center;
-    gap: 2px;
+    gap: 4px;
     flex-shrink: 0;
 }
-.niv-input-right .btn-voice-input,
-.niv-input-right .btn-voice-mode {
-    border: none;
-    background: none;
-    color: var(--niv-text-muted);
-    padding: 0;
-    border-radius: 50%;
+.niv-inp-btn {
+    border: none !important;
+    background: none !important;
+    color: var(--niv-text-muted) !important;
+    padding: 0 !important;
+    border-radius: 8px !important;
     cursor: pointer;
-    transition: all 0.15s ease;
-    width: 36px;
-    height: 36px;
-    display: flex;
+    transition: all 0.2s ease;
+    width: 32px !important;
+    height: 32px !important;
+    display: flex !important;
     align-items: center;
     justify-content: center;
 }
-.niv-input-right .btn-voice-input:hover,
-.niv-input-right .btn-voice-mode:hover {
-    background: var(--niv-hover);
-    color: var(--niv-primary);
+.niv-inp-btn:hover {
+    background: var(--niv-hover) !important;
+    color: var(--niv-primary) !important;
 }
 
 /* Send Button */
 .btn-send {
     background: var(--niv-text-muted) !important;
-    border-radius: 50% !important;
-    width: 36px !important;
-    height: 36px !important;
+    border-radius: 10px !important;
+    width: 32px !important;
+    height: 32px !important;
     padding: 0 !important;
     display: flex !important;
     align-items: center;
     justify-content: center;
     border: none !important;
-    transition: all 0.2s ease;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     cursor: pointer;
+    opacity: 0.4;
 }
-.btn-send svg { color: #fff; }
+.btn-send svg { color: #fff; stroke: #fff; fill: none; }
 .niv-input-pill:focus-within .btn-send,
 .niv-input-pill.has-text .btn-send {
     background: var(--niv-primary) !important;
+    opacity: 1;
+    box-shadow: 0 2px 8px rgba(124,58,237,0.3);
 }
 .btn-send:hover {
-    transform: scale(1.05);
+    transform: scale(1.08);
     background: var(--niv-primary-hover) !important;
+    box-shadow: 0 4px 16px rgba(124,58,237,0.4);
 }
 
 /* Stop Button */
 .btn-stop {
-    background: var(--niv-text) !important;
-    border-radius: 50% !important;
-    width: 36px !important;
-    height: 36px !important;
+    background: #ef4444 !important;
+    border-radius: 10px !important;
+    width: 32px !important;
+    height: 32px !important;
     padding: 0 !important;
     display: flex !important;
     align-items: center;
     justify-content: center;
     border: none !important;
     cursor: pointer;
-    transition: opacity 0.15s ease;
+    transition: all 0.2s ease;
+    animation: stopPulse 1.5s ease-in-out infinite;
 }
-.btn-stop svg { color: var(--niv-bg); }
-.btn-stop:hover { opacity: 0.8; }
+.btn-stop svg { color: #fff; }
+.btn-stop:hover { background: #dc2626 !important; transform: scale(1.05); }
+@keyframes stopPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.3); }
+    50% { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+}
 
 /* Icon button colors */
 .btn-attach-file,
