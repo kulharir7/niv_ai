@@ -3276,6 +3276,8 @@ body.niv-dark-mode .niv-header-actions .btn:hover { color: var(--niv-text); }
     padding: 10px 28px 28px;
     overflow-y: auto;
     background: #17191d;
+    flex: 1;
+    min-height: 0;
 }
 
 .niv-settings-tab-content { animation: fadeinSettings 0.2s ease; }
