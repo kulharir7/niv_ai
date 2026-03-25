@@ -1883,16 +1883,28 @@ ${htmlCode}
                     </div>
                     <div class="msg-actions">
                         ${isUser ? `
-                            <button class="msg-action-btn btn-copy-msg" title="Copy"><i class="fa fa-copy"></i></button>
-                            <button class="msg-action-btn btn-edit-msg" title="Edit"><i class="fa fa-pencil"></i></button>
-                            <button class="msg-action-btn btn-pin-msg ${meta.is_pinned ? 'active' : ''}" title="Pin"><i class="fa fa-thumb-tack"></i></button>
+                            <button class="msg-action-btn btn-copy-msg" title="Copy">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            </button>
+                            <button class="msg-action-btn btn-edit-msg" title="Edit">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                            </button>
                         ` : `
-                            <button class="msg-action-btn btn-react-up" title="Good response"><i class="fa fa-thumbs-up"></i></button>
-                            <button class="msg-action-btn btn-react-down" title="Bad response"><i class="fa fa-thumbs-down"></i></button>
-                            <button class="msg-action-btn btn-copy-msg" title="Copy"><i class="fa fa-copy"></i></button>
-                            <button class="msg-action-btn btn-tts-msg" title="Read aloud"><i class="fa fa-volume-up"></i></button>
-                            <button class="msg-action-btn btn-pin-msg ${meta.is_pinned ? 'active' : ''}" title="Pin"><i class="fa fa-thumb-tack"></i></button>
-                            <button class="msg-action-btn btn-regen-msg" title="Regenerate" style="display:none;"><i class="fa fa-refresh"></i></button>
+                            <button class="msg-action-btn btn-react-up" title="Good">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3zM7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3"/></svg>
+                            </button>
+                            <button class="msg-action-btn btn-react-down" title="Bad">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3zm7-13h2.67A2.31 2.31 0 0 1 22 4v7a2.31 2.31 0 0 1-2.33 2H17"/></svg>
+                            </button>
+                            <button class="msg-action-btn btn-copy-msg" title="Copy">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                            </button>
+                            <button class="msg-action-btn btn-tts-msg" title="Listen">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                            </button>
+                            <button class="msg-action-btn btn-regen-msg" title="Retry" style="display:none;">
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                            </button>
                         `}
                     </div>
                 </div>
