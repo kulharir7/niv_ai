@@ -4810,3 +4810,98 @@ body.niv-dark-mode .niv-chat-container.theme-minimal .niv-sidebar * {
         grid-template-columns: repeat(2, 1fr);
     }
 }
+
+
+/* ══════════════════════════════════════════════════════════
+   SKELETON LOADING — Shimmer Effect
+   ══════════════════════════════════════════════════════════ */
+
+/* Sidebar conversation skeleton */
+.niv-skel-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    margin: 2px 6px;
+    animation: skelFadeIn 0.4s ease both;
+}
+.niv-skel-line {
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    flex: 1;
+}
+.niv-skel-time {
+    width: 20px;
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.06) 50%, rgba(255,255,255,0.03) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+    flex-shrink: 0;
+}
+
+/* Message area skeleton */
+.niv-msg-skel-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 20px;
+    max-width: var(--niv-chat-width);
+    margin: 0 auto;
+}
+.niv-msg-skel {
+    display: flex;
+    gap: 10px;
+    animation: skelFadeIn 0.4s ease both;
+}
+.niv-skel-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 10px;
+    flex-shrink: 0;
+    background: linear-gradient(90deg, rgba(255,255,255,0.04) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+}
+.niv-skel-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.niv-skel-body .niv-skel-line {
+    height: 12px;
+}
+.niv-skel-body .niv-skel-line.short {
+    height: 10px;
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+@keyframes skelFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ── Smooth Transitions ── */
+.niv-sidebar {
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), width 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.niv-chat-main {
+    transition: margin-left 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.niv-conv-item {
+    animation: convItemIn 0.2s ease both;
+}
+.niv-conv-date-group {
+    animation: convItemIn 0.15s ease both;
+}
+@keyframes convItemIn {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+}
