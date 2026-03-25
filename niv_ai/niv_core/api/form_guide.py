@@ -142,7 +142,7 @@ RULES:
                 "max_tokens": 500,
                 "temperature": 0.1,  # Low temp = precise
             },
-            timeout=10,  # 10 sec max — don't block user
+            timeout=30,  # 30 sec — ollama cloud can be slow
         )
 
         if resp.status_code != 200:
