@@ -55,6 +55,7 @@ def setup_provider(base_url, api_key, model="mistral-large-latest", fast_model="
 
 
 def after_migrate():
+    seed_mcp_servers()
     """Run after bench migrate — ensures defaults exist, fills missing fields, re-discovers system"""
     _create_settings()
     _ensure_settings_defaults()
@@ -357,3 +358,25 @@ DEFAULT_PLANS = [
         "validity_days": 30,
     },
 ]
+
+
+def seed_mcp_servers():
+    """Create default MCP server record for Frappe Assistant Core."""
+    import frappe
+    try:
+        if not frappe.db.exists("DocType", "Niv MCP Server"):
+            return
+        if frappe.db.exists("Niv MCP Server", "Frappe Assistant Core"):
+            return
+        frappe.get_doc({
+            "doctype": "Niv MCP Server",
+            "server_name": "Frappe Assistant Core",
+            "is_active": 1,
+            "transport_type": "http",
+            "server_url": "http://localhost:" + str(frappe.conf.get("webserver_port", 8000)),
+            "notes": "Auto-created. FAC runs on same server — uses direct Python calls (no HTTP).",
+        }).insert(ignore_permissions=True)
+        frappe.db.commit()
+        print("Niv AI: Created default MCP server record for FAC")
+    except Exception as e:
+        print(f"Niv AI: Could not create MCP server record: {e}")

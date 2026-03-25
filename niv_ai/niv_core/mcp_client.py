@@ -430,18 +430,40 @@ def _db_get_tools(server_name):
 # ─── Server Config Helper ─────────────────────────────────────────
 
 def _get_server_config(server_name):
-    """Get MCP server config. FAC is always same-server (direct Python).
-    No DocType needed — FAC runs on same Frappe instance."""
+    """Get MCP server config from Niv MCP Server DocType.
+    Fallback: if DocType doesn't exist, assume FAC on same server."""
     cache_key = f"mcp_server_{server_name}"
     if hasattr(frappe.local, cache_key):
         return getattr(frappe.local, cache_key)
-    # FAC is always local — return a simple config object
-    config = frappe._dict({
-        "server_name": server_name,
-        "transport_type": "http",
-        "server_url": f"http://localhost:{frappe.conf.get('webserver_port', 8000)}",
-        "is_active": 1,
-    })
+
+    config = None
+
+    # Try reading from Niv MCP Server DocType
+    try:
+        if frappe.db.exists("DocType", "Niv MCP Server") and frappe.db.exists("Niv MCP Server", server_name):
+            doc = frappe.get_doc("Niv MCP Server", server_name)
+            config = frappe._dict({
+                "server_name": doc.server_name,
+                "transport_type": doc.transport_type or "http",
+                "server_url": doc.server_url or f"http://localhost:{frappe.conf.get('webserver_port', 8000)}",
+                "is_active": doc.is_active,
+                "api_key": doc.api_key,
+                "command": getattr(doc, "command", None),
+                "args": getattr(doc, "args", None),
+                "env_vars": getattr(doc, "env_vars", None),
+            })
+    except Exception:
+        pass
+
+    # Fallback — old behavior (FAC on same server)
+    if not config:
+        config = frappe._dict({
+            "server_name": server_name,
+            "transport_type": "http",
+            "server_url": f"http://localhost:{frappe.conf.get('webserver_port', 8000)}",
+            "is_active": 1,
+        })
+
     setattr(frappe.local, cache_key, config)
     return config
 
@@ -449,7 +471,21 @@ def _get_server_config(server_name):
 # ─── High-Level API ────────────────────────────────────────────────
 
 def get_all_active_servers():
-    """Return active MCP servers. FAC (Frappe Assistant Core) is the only server."""
+    """Return active MCP servers from Niv MCP Server DocType.
+    Fallback: if DocType doesn't exist, return FAC as default."""
+    try:
+        if frappe.db.exists("DocType", "Niv MCP Server"):
+            servers = frappe.get_all(
+                "Niv MCP Server",
+                filters={"is_active": 1},
+                fields=["server_name"],
+                order_by="creation ASC",
+            )
+            if servers:
+                return [s.server_name for s in servers]
+    except Exception:
+        pass
+    # Fallback — old behavior
     return ["Frappe Assistant Core"]
 
 
