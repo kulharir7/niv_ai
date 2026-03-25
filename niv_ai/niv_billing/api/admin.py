@@ -685,23 +685,13 @@ def get_response_times(days=30):
         GROUP BY DATE(creation) ORDER BY date ASC
     """, (start_date,), as_dict=True)
 
-    # Overall stats
+    # Overall stats (MariaDB compatible — no PERCENTILE_CONT)
     overall = frappe.db.sql("""
         SELECT ROUND(AVG(execution_time_ms), 0) as avg_ms,
-               ROUND(MAX(execution_time_ms), 0) as max_ms,
-               ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY execution_time_ms), 0) as p95_ms
+               ROUND(MAX(execution_time_ms), 0) as max_ms
         FROM `tabNiv Tool Log`
         WHERE DATE(creation) >= %s
     """, (start_date,), as_dict=True)
-
-    # Fallback if PERCENTILE not supported
-    if not overall or overall[0].avg_ms is None:
-        overall = frappe.db.sql("""
-            SELECT ROUND(AVG(execution_time_ms), 0) as avg_ms,
-                   ROUND(MAX(execution_time_ms), 0) as max_ms
-            FROM `tabNiv Tool Log`
-            WHERE DATE(creation) >= %s
-        """, (start_date,), as_dict=True)
 
     # Slowest queries
     slowest = frappe.db.sql("""
