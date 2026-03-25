@@ -280,118 +280,135 @@ def _direct_call(method, params, _retry=True):
 
 
 def _direct_list_tools():
-    """List tools from FAC — supports all FAC versions.
+    """List tools via MCP SDK — standard protocol, no hardcoded imports.
+    Config from Niv MCP Server DocType."""
     
-    Resolution order:
-    1. FAC PluginManager.get_all_tools() (v2.3+)
-    2. FAC MCPServer._handle_tools_list() (v2.2)
-    3. Direct _direct_call fallback
-    """
-    # Method 1: FAC PluginManager (v2.3+ — has 34 tools)
+    servers = get_all_active_servers()
+    if not servers:
+        return []
+    
+    config = _get_server_config(servers[0])
+    url = config.get("server_url", "")
+    if not url:
+        frappe.logger().warning("Niv MCP: No server URL configured")
+        return []
+    
+    site = getattr(frappe.local, "site", None) or ""
+    headers = {}
+    if site:
+        headers["Host"] = site
+        headers["X-Frappe-Site-Name"] = site
+    
     try:
-        from frappe_assistant_core.utils.plugin_manager import get_plugin_manager
-        from frappe_assistant_core.core.tool_registry import get_tool_registry
+        admin = frappe.get_doc("User", "Administrator")
+        api_key = admin.api_key
+        if api_key:
+            api_secret = frappe.utils.password.get_decrypted_password("User", "Administrator", "api_secret")
+            if api_secret:
+                headers["Authorization"] = f"token {api_key}:{api_secret}"
+    except Exception:
+        pass
+    
+    # Capture URL and headers NOW (frappe context available here)
+    _url = url
+    _headers = dict(headers)
+    
+    async def _discover():
+        from mcp.client.streamable_http import streamablehttp_client
+        from mcp import ClientSession
+        import asyncio
         
-        pm = get_plugin_manager()
-        tool_registry = get_tool_registry()
-        
-        # Get all tools from plugins + external
-        all_tools = pm.get_all_tools()
-        external = tool_registry._get_external_tools()
-        all_tools.update(external)
-        
-        if all_tools:
-            # Convert to MCP tool format using instance.to_mcp_format()
-            tools = []
-            for tool_name, tool_info in all_tools.items():
-                try:
-                    # Best: use to_mcp_format() which has full schema
-                    inst = getattr(tool_info, "instance", None)
-                    if inst and hasattr(inst, "to_mcp_format"):
-                        tool_def = inst.to_mcp_format()
-                    elif inst and hasattr(inst, "inputSchema"):
-                        tool_def = {
-                            "name": tool_name,
-                            "description": getattr(inst, "description", "") or getattr(tool_info, "description", "") or tool_name,
-                            "inputSchema": inst.inputSchema,
-                        }
-                    else:
-                        tool_def = {
-                            "name": tool_name,
-                            "description": getattr(tool_info, "description", "") or tool_name,
-                            "inputSchema": {"type": "object", "properties": {}},
-                        }
-                    tools.append(tool_def)
-                except Exception as e:
-                    frappe.logger().debug(f"Niv MCP: Failed to get schema for {tool_name}: {e}")
+        async with streamablehttp_client(_url, headers=_headers) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await asyncio.wait_for(session.initialize(), timeout=15)
+                result = await asyncio.wait_for(session.list_tools(), timeout=30)
+                tools = []
+                for t in result.tools:
                     tools.append({
-                        "name": tool_name,
-                        "description": getattr(tool_info, "description", "") or tool_name,
-                        "inputSchema": {"type": "object", "properties": {}},
+                        "name": t.name,
+                        "description": t.description or t.name,
+                        "inputSchema": t.inputSchema if t.inputSchema else {"type": "object", "properties": {}},
                     })
-            
-            frappe.logger().info(f"Niv MCP: PluginManager returned {len(tools)} tools")
-            return tools
-    except ImportError:
-        frappe.logger().debug("Niv MCP: PluginManager not available (FAC < v2.3)")
-    except Exception as e:
-        frappe.logger().warning(f"Niv MCP: PluginManager failed: {e}")
+                return tools
     
-    # Method 2: MCPServer._handle_tools_list (v2.2)
     try:
-        result = _direct_call("tools/list", {})
-        tools = result.get("tools", [])
+        tools = _run_async(_discover())
         if tools:
-            frappe.logger().info(f"Niv MCP: MCPServer returned {len(tools)} tools")
+            frappe.logger().info(f"Niv MCP: SDK discovered {len(tools)} tools")
             return tools
     except Exception as e:
-        frappe.logger().debug(f"Niv MCP: MCPServer method failed: {e}")
+        frappe.logger().warning(f"Niv MCP: SDK discovery failed: {e}")
     
-    frappe.logger().warning("Niv MCP: All methods returned 0 tools")
     return []
 
 
 def _direct_call_tool(tool_name, arguments):
-    """Call a single tool — supports all FAC versions.
+    """Call tool via MCP SDK — standard protocol, no hardcoded imports."""
     
-    Resolution order:
-    1. FAC ToolRegistry.execute_tool() (v2.3+)
-    2. FAC MCPServer._handle_tools_call() (v2.2)
-    """
-    # Method 1: FAC ToolRegistry (v2.3+)
+    servers = get_all_active_servers()
+    if not servers:
+        raise MCPError("No active MCP servers")
+    
+    config = _get_server_config(servers[0])
+    url = config.get("server_url", "")
+    if not url:
+        raise MCPError("No server URL configured")
+    
+    site = getattr(frappe.local, "site", None) or ""
+    headers = {}
+    if site:
+        headers["Host"] = site
+        headers["X-Frappe-Site-Name"] = site
+    
     try:
-        from frappe_assistant_core.core.tool_registry import get_tool_registry
+        admin = frappe.get_doc("User", "Administrator")
+        api_key = admin.api_key
+        if api_key:
+            api_secret = frappe.utils.password.get_decrypted_password("User", "Administrator", "api_secret")
+            if api_secret:
+                headers["Authorization"] = f"token {api_key}:{api_secret}"
+    except Exception:
+        pass
+    
+    _url = url
+    _headers = dict(headers)
+    _tool_name = tool_name
+    _arguments = arguments
+    
+    async def _call():
+        from mcp.client.streamable_http import streamablehttp_client
+        from mcp import ClientSession
+        import asyncio
         
-        registry = get_tool_registry()
-        if registry.has_tool(tool_name):
-            result = registry.execute_tool(tool_name, arguments)
-            # Convert to MCP format
-            if isinstance(result, dict) and "content" in result:
-                return result
-            # Wrap raw result
-            if isinstance(result, str):
-                return {"content": [{"type": "text", "text": result}]}
-            elif isinstance(result, dict):
-                return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
-            return {"content": [{"type": "text", "text": str(result)}]}
-    except ImportError:
-        frappe.logger().debug("Niv MCP: ToolRegistry not available (FAC < v2.3)")
-    except Exception as e:
-        frappe.logger().warning(f"Niv MCP: ToolRegistry execute failed for {tool_name}: {e}")
-        raise MCPError(f"Tool '{tool_name}' failed: {e}")
+        async with streamablehttp_client(_url, headers=_headers) as (read, write, _):
+            async with ClientSession(read, write) as session:
+                await asyncio.wait_for(session.initialize(), timeout=15)
+                result = await asyncio.wait_for(session.call_tool(_tool_name, _arguments), timeout=60)
+                
+                if result.isError:
+                    error_text = ""
+                    for c in result.content:
+                        if hasattr(c, "text"):
+                            error_text += c.text
+                    raise MCPError(error_text or "Tool call failed")
+                
+                content = []
+                for c in result.content:
+                    if hasattr(c, "text"):
+                        content.append({"type": "text", "text": c.text})
+                    else:
+                        content.append({"type": str(c.type), "text": str(c)})
+                return {"content": content}
     
-    # Method 2: MCPServer._handle_tools_call (v2.2)
     try:
-        return _direct_call("tools/call", {"name": tool_name, "arguments": arguments})
+        return _run_async(_call())
+    except MCPError:
+        raise
     except Exception as e:
-        raise MCPError(f"Tool '{tool_name}' failed: {e}")
+        raise MCPError(f"Tool '{tool_name}' failed (SDK): {e}")
 
 
-# ─── SDK Path (Remote Servers Only) ───────────────────────────────
-# Only imported/used when connecting to a non-localhost MCP server.
-# If SDK is not installed, falls back to DB.
-
-_sdk_available = None  # None = not checked, True/False after first check
+_sdk_available = None
 _loop = None
 _loop_thread = None
 _loop_lock = threading.Lock()
