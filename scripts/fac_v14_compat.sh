@@ -73,3 +73,36 @@ fi
 
 echo ""
 echo "═══ Fix complete! Restart bench: sudo supervisorctl restart all ═══"
+
+# Step 2b: Fix redis_cache/site_cache import (may not exist in Frappe v14)
+echo ""
+echo "Step 2b: Adding fallback for redis_cache/site_cache import..."
+python3 -c "
+path = '$FAC_PATH/frappe_assistant_core/utils/cache.py'
+with open(path, 'r') as f:
+    content = f.read()
+old_import = 'from frappe.utils.caching import redis_cache, site_cache'
+fallback = '''# Frappe v14 compat: redis_cache/site_cache may not exist
+try:
+    from frappe.utils.caching import redis_cache, site_cache
+except (ImportError, AttributeError):
+    def redis_cache(*args, **kwargs):
+        def decorator(func):
+            return func
+        if args and callable(args[0]):
+            return args[0]
+        return decorator
+    def site_cache(*args, **kwargs):
+        def decorator(func):
+            return func
+        if args and callable(args[0]):
+            return args[0]
+        return decorator'''
+if old_import in content and 'try:' not in content.split(old_import)[0][-20:]:
+    content = content.replace(old_import, fallback)
+    with open(path, 'w') as f:
+        f.write(content)
+    print('  Added fallback import')
+else:
+    print('  Already has fallback or different import')
+"
