@@ -1,0 +1,72 @@
+#!/bin/bash
+# ═══════════════════════════════════════════════════════════
+# FAC v14 Compatibility Fix
+# Run after installing FAC v2.3+ on Frappe v14
+# 
+# Usage: bash fac_v14_compat.sh /path/to/frappe-bench
+# 
+# What it does:
+#   - Fixes frappe.cache. → frappe.cache(). (v14 requires function call)
+#   - Fixes site_cache(ttl=...) → site_cache() (v14 doesn't support ttl)
+#   - Safe to run multiple times (idempotent)
+#
+# GitHub: https://github.com/kulharir7/niv_ai/scripts/fac_v14_compat.sh
+# ═══════════════════════════════════════════════════════════
+
+set -e
+
+BENCH_PATH="${1:-/home/gws/frappe-bench}"
+FAC_PATH="$BENCH_PATH/apps/frappe_assistant_core"
+
+if [ ! -d "$FAC_PATH" ]; then
+    echo "ERROR: FAC not found at $FAC_PATH"
+    echo "Usage: bash fac_v14_compat.sh /path/to/frappe-bench"
+    exit 1
+fi
+
+echo "═══ FAC v14 Compatibility Fix ═══"
+echo "FAC path: $FAC_PATH"
+
+# Check Frappe version
+FRAPPE_VERSION=$(python3 -c "import frappe; print(frappe.__version__)" 2>/dev/null || echo "unknown")
+echo "Frappe version: $FRAPPE_VERSION"
+
+# Step 1: Fix frappe.cache. → frappe.cache().
+echo ""
+echo "Step 1: Fixing frappe.cache → frappe.cache()..."
+
+METHODS="get_value set_value delete_value delete_key delete_keys hdel hget hset redis"
+
+for method in $METHODS; do
+    find "$FAC_PATH/frappe_assistant_core/" -name "*.py" -not -path "*__pycache__*" \
+        -exec sed -i "s/frappe\.cache\.${method}/frappe.cache().${method}/g" {} \;
+done
+
+# Fix double-call if already correct: frappe.cache()(). → frappe.cache().
+for method in $METHODS; do
+    find "$FAC_PATH/frappe_assistant_core/" -name "*.py" -not -path "*__pycache__*" \
+        -exec sed -i "s/frappe\.cache()()\.${method}/frappe.cache().${method}/g" {} \;
+done
+
+echo "  Done!"
+
+# Step 2: Fix site_cache(ttl=...) → site_cache()
+echo ""
+echo "Step 2: Fixing site_cache(ttl=...)..."
+find "$FAC_PATH/frappe_assistant_core/" -name "*.py" -not -path "*__pycache__*" \
+    -exec sed -i 's/@site_cache(ttl=[^)]*)/@site_cache()/g' {} \;
+echo "  Done!"
+
+# Step 3: Verify
+echo ""
+echo "Step 3: Verifying..."
+REMAINING=$(grep -rn "frappe\.cache\." "$FAC_PATH/frappe_assistant_core/" --include="*.py" | grep -v __pycache__ | grep -v "frappe\.cache()" | wc -l)
+if [ "$REMAINING" -eq 0 ]; then
+    echo "  ✅ All fixes applied — no bare frappe.cache. remaining"
+else
+    echo "  ⚠️  $REMAINING lines still have bare frappe.cache. — check manually"
+    grep -rn "frappe\.cache\." "$FAC_PATH/frappe_assistant_core/" --include="*.py" | grep -v __pycache__ | grep -v "frappe\.cache()" | head -5
+fi
+
+echo ""
+echo "═══ Fix complete! Restart bench: sudo supervisorctl restart all ═══"
