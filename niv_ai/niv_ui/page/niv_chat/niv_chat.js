@@ -1949,8 +1949,9 @@ ${htmlCode}
             html += `
                 <div class="tool-call-accordion">
                     <div class="tool-call-header" onclick="$(this).closest('.tool-call-accordion').toggleClass('open')">
-                        <i class="fa fa-check-circle tool-status-icon"></i>
-                        <span class="tool-name">${frappe.utils.escape_html(tc.name)}</span>
+                        <span class="tool-status-icon done"><i class="fa fa-check"></i></span>
+                        <span class="tool-label">Used</span>
+                        <span class="tool-name">${frappe.utils.escape_html(tc.name || tc.tool || 'tool')}</span>
                         <i class="fa fa-chevron-right tool-chevron"></i>
                     </div>
                     <div class="tool-call-body">
@@ -2375,8 +2376,10 @@ ${htmlCode}
                                 var $toolHtml = $(`
                                     <div class="tool-call-accordion running" data-tool="${frappe.utils.escape_html(toolName)}">
                                         <div class="tool-call-header">
-                                            <i class="fa fa-spinner fa-spin tool-status-icon"></i>
+                                            <span class="tool-status-icon running"><i class="fa fa-circle-o-notch fa-spin" style="font-size:11px"></i></span>
+                                            <span class="tool-label">Using</span>
                                             <span class="tool-name">${frappe.utils.escape_html(toolName)}</span>
+                                            <span class="tool-running-text">working...</span>
                                             <i class="fa fa-chevron-right tool-chevron"></i>
                                         </div>
                                     </div>
@@ -2421,7 +2424,9 @@ ${htmlCode}
                                 
                                 if ($running && $running.length) {
                                     $running.removeClass("running");
-                                    $running.find(".tool-status-icon").removeClass("fa-spinner fa-spin").addClass("fa-check-circle");
+                                    $running.find(".tool-status-icon").removeClass("running").addClass("done").html('<i class="fa fa-check"></i>');
+                                    $running.find(".tool-label").text("Used");
+                                    $running.find(".tool-running-text").remove();
                                     var resultStr = typeof data.result === "string" ? data.result : JSON.stringify(data.result || {}, null, 2);
                                     resultStr = resultStr.substring(0, 2000);
                                     $running.find(".tool-call-header").attr("onclick", "$(this).closest('.tool-call-accordion').toggleClass('open')");
