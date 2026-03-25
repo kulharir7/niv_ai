@@ -1,47 +1,43 @@
 /**
- * Niv AI Form Guide v4.0 — AI-Powered
+ * Niv AI Form Guide v5.0 — Smart Hybrid
  * 
- * Sends error message + form fields to AI → AI understands what happened →
- * AI tells which field(s) need attention → JS guides user there.
+ * INSTANT (0ms): Reads message + scans form fields → guides to matching field
+ * BACKGROUND (2-5s): Sends to AI → if AI gives better answer, updates tooltip
  * 
- * Fallback: If AI is slow or fails, uses basic regex parsing.
- * 
- * Flow:
- * 1. Error message appears (frappe.msgprint/throw)
- * 2. Collect current form's field list
- * 3. Send to AI API (fast model, ~1-2 sec)
- * 4. AI returns: which fields, what type, user-friendly message
- * 5. Scroll + highlight + show AI's message as tooltip
+ * Smart matching: No hardcoded patterns. Dynamically matches form field
+ * labels/names against words in the error message.
  */
 (function() {
     "use strict";
 
     var HIGHLIGHT_COLOR = "#7c3aed";
-    var HIGHLIGHT_MS = 6000;
-    var TOOLTIP_MS = 10000;
-    var DEBOUNCE_MS = 500;
+    var HIGHLIGHT_MS = 8000;
+    var TOOLTIP_MS = 12000;
+    var DEBOUNCE_MS = 400;
 
     var _lastTrigger = 0;
     var _highlights = [];
     var _tooltips = [];
     var _hooked = false;
-    var _pendingCall = null;
+    var _activeTooltipEl = null;
+    var _activeTooltipData = null;
 
     // ─── CSS ───────────────────────────────────────────────────
     function injectStyles() {
-        if (document.getElementById("niv-fg4-css")) return;
+        if (document.getElementById("niv-fg5-css")) return;
         var s = document.createElement("style");
-        s.id = "niv-fg4-css";
+        s.id = "niv-fg5-css";
         s.textContent = [
             "@keyframes nivPulse{0%,100%{box-shadow:0 0 8px 2px " + HIGHLIGHT_COLOR + "55}50%{box-shadow:0 0 18px 6px " + HIGHLIGHT_COLOR + "88}}",
             ".niv-hl{animation:nivPulse 1.2s ease-in-out infinite;border-radius:6px;position:relative;z-index:1}",
             ".niv-hl input,.niv-hl select,.niv-hl .ql-editor,.niv-hl .link-field,.niv-hl .control-input,.niv-hl .control-input-wrapper{border-color:" + HIGHLIGHT_COLOR + " !important}",
-            ".niv-tip{position:absolute;left:0;right:0;background:linear-gradient(135deg,#1e1b2e,#2d2640);color:#e2e0ea;padding:12px 16px 12px 14px;border-radius:10px;font-size:13px;line-height:1.6;z-index:1050;box-shadow:0 6px 24px rgba(124,58,237,.25);border:1px solid " + HIGHLIGHT_COLOR + "44;margin-top:6px;opacity:0;transform:translateY(-8px);transition:opacity .3s,transform .3s}",
+            ".niv-tip{position:absolute;left:0;right:0;background:linear-gradient(135deg,#1e1b2e,#2d2640);color:#e2e0ea;padding:12px 16px;border-radius:10px;font-size:13px;line-height:1.6;z-index:1050;box-shadow:0 6px 24px rgba(124,58,237,.25);border:1px solid " + HIGHLIGHT_COLOR + "44;margin-top:6px;opacity:0;transform:translateY(-8px);transition:opacity .3s,transform .3s}",
             ".niv-tip.niv-show{opacity:1;transform:translateY(0)}",
             ".niv-tip-x{position:absolute;top:6px;right:10px;cursor:pointer;color:#9f9bb0;font-size:16px;line-height:1;border:none;background:none;padding:2px 4px}",
             ".niv-tip-x:hover{color:#fff}",
             ".niv-tip-badge{display:inline-block;background:" + HIGHLIGHT_COLOR + "33;color:#c4b5fd;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle}",
-            ".niv-tip-reason{color:#a5a0b8;font-size:12px;margin-top:4px}"
+            ".niv-tip-msg{margin-top:0}",
+            ".niv-tip-updating{opacity:0.7;transition:opacity 0.3s}"
         ].join("\n");
         document.head.appendChild(s);
     }
@@ -55,39 +51,232 @@
             if (_tooltips[i].parentNode) _tooltips[i].parentNode.removeChild(_tooltips[i]);
         }
         _tooltips = [];
+        _activeTooltipEl = null;
+        _activeTooltipData = null;
     }
 
-    // ─── Collect Form Fields ───────────────────────────────────
-    function getFormFields() {
-        if (typeof cur_frm === "undefined" || !cur_frm) return [];
-        var fields = [];
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 1: INSTANT SMART MATCHING (0ms)
+    // No hardcoded patterns. Reads message, finds field names dynamically.
+    // ═══════════════════════════════════════════════════════════
 
+    function instantParse(msg) {
+        if (!msg || typeof msg !== "string") return null;
+        if (typeof cur_frm === "undefined" || !cur_frm) return null;
+
+        // Step 1: Extract clean text + any <li> items from HTML
+        var liItems = [];
+        var re = /<li[^>]*>([\s\S]*?)<\/li>/gi;
+        var match;
+        while ((match = re.exec(msg)) !== null) {
+            var t = match[1].replace(/<[^>]*>/g, "").trim();
+            if (t) liItems.push(t);
+        }
+
+        // Strip HTML
+        var clean = msg.replace(/<[^>]*>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+        if (!clean) return null;
+
+        // Step 2: Detect error type from keywords
+        var type = "general";
+        if (/mandatory|required|missing|must\s+not\s+be\s+empty|cannot\s+be\s+empty/i.test(clean)) type = "mandatory";
+        else if (/not\s+permitted|permission\s+denied|access\s+denied|no\s+permission/i.test(clean)) type = "permission";
+        else if (/could\s+not\s+find|invalid\s+link|cancelled\s+document/i.test(clean)) type = "link_error";
+        else if (/invalid|wrong|incorrect|negative|must\s+be|should\s+be|cannot|error/i.test(clean)) type = "validation";
+
+        // Permission — no field to find
+        if (type === "permission") {
+            return { fields: [], type: "permission", message: clean };
+        }
+
+        // Step 3: Detect row number
+        var rowNum = null;
+        var rowMatch = clean.match(/Row\s*#?\s*(\d+)/i);
+        if (rowMatch) rowNum = parseInt(rowMatch[1]);
+
+        // Step 4: Detect table name
+        var tableName = null;
+        var tableMatch = clean.match(/(?:in\s+table|table)\s+([A-Za-z][A-Za-z0-9 _-]+?)(?:\s*,|\s+Row|\s*$)/i);
+        if (tableMatch) tableName = tableMatch[1].trim();
+
+        // Step 5: Find fields — use <li> items first, then scan message for field labels
+        var foundFields = [];
+
+        // 5a: If <li> items exist, those ARE the field names (Frappe standard)
+        if (liItems.length > 0) {
+            for (var i = 0; i < liItems.length; i++) {
+                var fieldMatch = matchFieldOnForm(liItems[i], rowNum, tableName);
+                if (fieldMatch) {
+                    foundFields.push(fieldMatch);
+                } else {
+                    // Still add it even if not found on form (might be child table)
+                    foundFields.push({
+                        label: liItems[i],
+                        fieldname: null,
+                        row: rowNum,
+                        table: tableName
+                    });
+                }
+            }
+        }
+
+        // 5b: If no <li> items, scan the full message for field labels
+        if (foundFields.length === 0) {
+            foundFields = scanMessageForFields(clean, rowNum, tableName);
+        }
+
+        if (foundFields.length === 0) return null;
+
+        return {
+            fields: foundFields,
+            type: type,
+            message: clean,
+            row: rowNum,
+            table: tableName
+        };
+    }
+
+    // Match a single field name against the current form
+    function matchFieldOnForm(text, rowNum, tableName) {
+        if (!cur_frm || !text) return null;
+        var searchText = text.toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+        if (!searchText || searchText.length < 2) return null;
+
+        // Search main form fields
+        for (var fname in cur_frm.fields_dict) {
+            var field = cur_frm.fields_dict[fname];
+            var df = field.df || {};
+            var fLabel = (df.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+            var fName = (df.fieldname || "").toLowerCase();
+
+            if (fLabel === searchText || fName === searchText) {
+                return {
+                    label: df.label || text,
+                    fieldname: df.fieldname,
+                    row: (df.fieldtype === "Table") ? null : rowNum,
+                    table: tableName
+                };
+            }
+        }
+
+        // Search child table fields (all tables)
+        for (var fn2 in cur_frm.fields_dict) {
+            var f2 = cur_frm.fields_dict[fn2];
+            if ((f2.df || {}).fieldtype !== "Table" || !f2.grid) continue;
+            var childMeta = (f2.grid.meta && f2.grid.meta.fields) || [];
+            for (var c = 0; c < childMeta.length; c++) {
+                var cf = childMeta[c];
+                var cfLabel = (cf.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+                var cfName = (cf.fieldname || "").toLowerCase();
+                if (cfLabel === searchText || cfName === searchText) {
+                    return {
+                        label: cf.label || text,
+                        fieldname: cf.fieldname,
+                        row: rowNum,
+                        table: (f2.df || {}).fieldname || tableName
+                    };
+                }
+            }
+        }
+
+        return null;
+    }
+
+    // Scan full message text for any field label on current form
+    function scanMessageForFields(text, rowNum, tableName) {
+        if (!cur_frm) return [];
+        var textLower = text.toLowerCase();
+        var found = [];
+        var usedLabels = {};
+
+        // Check all form fields
+        for (var fname in cur_frm.fields_dict) {
+            var df = cur_frm.fields_dict[fname].df || {};
+            if (!df.label) continue;
+            if (/Section Break|Column Break|Tab Break|HTML|Button|Table/.test(df.fieldtype)) continue;
+
+            var label = df.label.toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+            if (label.length < 3) continue;
+            if (usedLabels[label]) continue;
+
+            if (textLower.indexOf(label) !== -1) {
+                found.push({ label: df.label, fieldname: df.fieldname, row: null, table: null });
+                usedLabels[label] = true;
+            }
+        }
+
+        // Check child table fields too
+        for (var fn2 in cur_frm.fields_dict) {
+            var f2 = cur_frm.fields_dict[fn2];
+            if ((f2.df || {}).fieldtype !== "Table" || !f2.grid) continue;
+            var childMeta = (f2.grid.meta && f2.grid.meta.fields) || [];
+            for (var c = 0; c < childMeta.length; c++) {
+                var cf = childMeta[c];
+                if (!cf.label) continue;
+                var cfLabel = cf.label.toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+                if (cfLabel.length < 3 || usedLabels[cfLabel]) continue;
+
+                if (textLower.indexOf(cfLabel) !== -1) {
+                    found.push({
+                        label: cf.label,
+                        fieldname: cf.fieldname,
+                        row: rowNum,
+                        table: (f2.df || {}).fieldname || tableName
+                    });
+                    usedLabels[cfLabel] = true;
+                }
+            }
+        }
+
+        return found;
+    }
+
+    // ═══════════════════════════════════════════════════════════
+    // PHASE 2: AI ENHANCEMENT (background, 2-5s)
+    // ═══════════════════════════════════════════════════════════
+
+    function callAI(message, callback) {
+        var formFields = getFormFieldsList();
+        var doctype = cur_frm ? cur_frm.doctype : "";
+
+        frappe.call({
+            method: "niv_ai.niv_core.api.form_guide.parse_message",
+            args: {
+                message: message,
+                doctype: doctype,
+                fields_json: JSON.stringify(formFields)
+            },
+            async: true,
+            callback: function(r) {
+                if (r && r.message && r.message.ai_powered) {
+                    callback(r.message);
+                }
+            },
+            error: function() { /* Silent — instant guide already shown */ }
+        });
+    }
+
+    function getFormFieldsList() {
+        if (!cur_frm) return [];
+        var fields = [];
         for (var fname in cur_frm.fields_dict) {
             var f = cur_frm.fields_dict[fname];
             var df = f.df || {};
             if (!df.fieldname) continue;
-            // Skip layout fields
             if (/Section Break|Column Break|Tab Break|HTML|Button/.test(df.fieldtype)) continue;
 
-            var entry = {
+            fields.push({
                 fieldname: df.fieldname,
                 label: df.label || df.fieldname,
                 fieldtype: df.fieldtype,
                 reqd: df.reqd ? 1 : 0
-            };
+            });
 
-            // For Table fields, also include child table fields
+            // Child table fields
             if (df.fieldtype === "Table" && f.grid) {
-                entry.parent_table = null;
-                fields.push(entry);
-
-                // Add child table fields
-                var gridMeta = f.grid.grid_rows && f.grid.grid_rows.length > 0
-                    ? f.grid.grid_rows[0]
-                    : null;
-                var childFields = (f.grid.meta && f.grid.meta.fields) || [];
-                for (var j = 0; j < childFields.length; j++) {
-                    var cf = childFields[j];
+                var childMeta = (f.grid.meta && f.grid.meta.fields) || [];
+                for (var j = 0; j < childMeta.length; j++) {
+                    var cf = childMeta[j];
                     if (/Section Break|Column Break|Tab Break|HTML|Button/.test(cf.fieldtype)) continue;
                     fields.push({
                         fieldname: cf.fieldname,
@@ -97,87 +286,66 @@
                         parent_table: df.fieldname
                     });
                 }
-            } else {
-                fields.push(entry);
             }
         }
         return fields;
     }
 
-    // ─── Call AI API ───────────────────────────────────────────
-    function callAI(message, callback) {
-        var formFields = getFormFields();
-        var doctype = cur_frm ? cur_frm.doctype : "";
+    // ═══════════════════════════════════════════════════════════
+    // FIND FIELD ON FORM + UI
+    // ═══════════════════════════════════════════════════════════
 
-        // Cancel previous pending call
-        if (_pendingCall) {
-            try { _pendingCall.abort(); } catch(e) {}
-        }
+    function findFieldElement(info) {
+        if (!cur_frm || !info) return null;
 
-        _pendingCall = frappe.call({
-            method: "niv_ai.niv_core.api.form_guide.parse_message",
-            args: {
-                message: message,
-                doctype: doctype,
-                fields_json: JSON.stringify(formFields)
-            },
-            async: true,
-            callback: function(r) {
-                _pendingCall = null;
-                if (r && r.message) {
-                    callback(r.message);
-                }
-            },
-            error: function() {
-                _pendingCall = null;
-                // Silently fail — user already sees the original error
-            }
-        });
-    }
+        var fieldname = info.fieldname;
+        var label = info.label;
+        var rowNum = info.row;
+        var tableName = info.table;
 
-    // ─── Find Field on Form ────────────────────────────────────
-    function findField(fieldname, label, rowNum, tableName) {
-        if (!cur_frm) return null;
-
-        // Strategy 1: Find by exact fieldname
-        if (fieldname && cur_frm.fields_dict[fieldname]) {
-            var field = cur_frm.fields_dict[fieldname];
-            if (field.$wrapper && field.$wrapper.length) {
-                return { el: field.$wrapper[0], field: field };
-            }
-        }
-
-        // Strategy 2: If it's a child table field, find in the table
+        // 1. Child table field
         if (tableName && rowNum) {
             var tableField = cur_frm.fields_dict[tableName];
             if (tableField && tableField.grid) {
-                var result = findInChildTable(tableField.grid, rowNum, fieldname, label);
-                if (result) return result;
+                var r = findInChild(tableField.grid, rowNum, fieldname, label);
+                if (r) return r;
             }
-        }
-
-        // Strategy 3: Search all child tables if row specified
-        if (rowNum) {
-            for (var fname in cur_frm.fields_dict) {
-                var f = cur_frm.fields_dict[fname];
-                if ((f.df || {}).fieldtype === "Table" && f.grid) {
-                    var res = findInChildTable(f.grid, rowNum, fieldname, label);
-                    if (res) return res;
+            // Try all tables
+            for (var fn in cur_frm.fields_dict) {
+                var ff = cur_frm.fields_dict[fn];
+                if ((ff.df || {}).fieldtype === "Table" && ff.grid) {
+                    var r2 = findInChild(ff.grid, rowNum, fieldname, label);
+                    if (r2) return r2;
                 }
             }
         }
 
-        // Strategy 4: Search by label (fuzzy)
+        // 2. By fieldname
+        if (fieldname && cur_frm.fields_dict[fieldname]) {
+            var fld = cur_frm.fields_dict[fieldname];
+            if (fld.$wrapper && fld.$wrapper.length) return fld.$wrapper[0];
+        }
+
+        // 3. By label (fuzzy)
         if (label) {
-            var searchLabel = label.toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
-            for (var fn in cur_frm.fields_dict) {
-                var fld = cur_frm.fields_dict[fn];
-                var df = fld.df || {};
-                var fLabel = (df.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
-                if (fLabel === searchLabel || fLabel.indexOf(searchLabel) !== -1 || searchLabel.indexOf(fLabel) !== -1) {
-                    if (fld.$wrapper && fld.$wrapper.length) {
-                        return { el: fld.$wrapper[0], field: fld };
-                    }
+            var sl = label.toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+            for (var fn3 in cur_frm.fields_dict) {
+                var df3 = cur_frm.fields_dict[fn3].df || {};
+                var fl3 = (df3.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+                if (fl3 === sl || (fl3 && sl && (fl3.indexOf(sl) !== -1 || sl.indexOf(fl3) !== -1))) {
+                    var w = cur_frm.fields_dict[fn3].$wrapper;
+                    if (w && w.length) return w[0];
+                }
+            }
+        }
+
+        // 4. If row but no table, try all child tables
+        if (rowNum && !tableName) {
+            for (var fn4 in cur_frm.fields_dict) {
+                var ff4 = cur_frm.fields_dict[fn4];
+                if ((ff4.df || {}).fieldtype === "Table" && ff4.grid) {
+                    var r4 = findInChild(ff4.grid, rowNum, fieldname, label);
+                    if (r4) return r4;
                 }
             }
         }
@@ -185,7 +353,7 @@
         return null;
     }
 
-    function findInChildTable(grid, rowNum, fieldname, label) {
+    function findInChild(grid, rowNum, fieldname, label) {
         var rows = grid.grid_rows || [];
         var row = rows[rowNum - 1];
         if (!row) return null;
@@ -196,38 +364,26 @@
             else if (row.toggle_view) row.toggle_view(true);
         } catch(e) {}
 
-        var searchName = (fieldname || "").toLowerCase();
-        var searchLabel = (label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+        var sn = (fieldname || "").toLowerCase();
+        var sl = (label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
 
-        // Search in columns
-        var rowFields = row.columns || row.fields_dict || {};
-        for (var fn in rowFields) {
-            var rf = rowFields[fn];
-            var rdf = rf.df || {};
-            var rn = (rdf.fieldname || "").toLowerCase();
-            var rl = (rdf.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+        // Search columns + fields_dict
+        var sources = [row.columns || {}, row.fields_dict || {}];
+        if (row.form && row.form.fields_dict) sources.push(row.form.fields_dict);
 
-            if ((searchName && rn === searchName) || (searchLabel && (rl === searchLabel || rl.indexOf(searchLabel) !== -1))) {
-                var el = rf.$wrapper ? rf.$wrapper[0] : rf.wrapper;
-                if (el) return { el: el, field: rf, row: rowNum };
-            }
-        }
+        for (var s = 0; s < sources.length; s++) {
+            for (var fn in sources[s]) {
+                var rf = sources[s][fn];
+                var rdf = rf.df || {};
+                var rn = (rdf.fieldname || "").toLowerCase();
+                var rl = (rdf.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
 
-        // Search in open form
-        if (row.form && row.form.fields_dict) {
-            for (var fn2 in row.form.fields_dict) {
-                var rf2 = row.form.fields_dict[fn2];
-                var rdf2 = rf2.df || {};
-                var rn2 = (rdf2.fieldname || "").toLowerCase();
-                var rl2 = (rdf2.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
-
-                if ((searchName && rn2 === searchName) || (searchLabel && (rl2 === searchLabel || rl2.indexOf(searchLabel) !== -1))) {
-                    var el2 = rf2.$wrapper ? rf2.$wrapper[0] : rf2.wrapper;
-                    if (el2) return { el: el2, field: rf2, row: rowNum };
+                if ((sn && rn === sn) || (sl && (rl === sl || rl.indexOf(sl) !== -1 || sl.indexOf(rl) !== -1))) {
+                    var el = rf.$wrapper ? rf.$wrapper[0] : rf.wrapper;
+                    if (el) return el;
                 }
             }
         }
-
         return null;
     }
 
@@ -248,105 +404,63 @@
         }, 500);
     }
 
-    function showTip(el, mainText, reason, aiPowered) {
+    function showTip(el, text, aiPowered) {
         if (!el) return;
         var old = el.querySelector(".niv-tip");
         if (old) old.remove();
 
         var tip = document.createElement("div");
         tip.className = "niv-tip";
-
-        var html = escapeHtml(mainText);
-        if (aiPowered) {
-            html += '<span class="niv-tip-badge">✨ AI</span>';
-        }
-        if (reason) {
-            html += '<div class="niv-tip-reason">' + escapeHtml(reason) + '</div>';
-        }
-        html += '<button class="niv-tip-x">&times;</button>';
-        tip.innerHTML = html;
+        var badge = aiPowered ? '<span class="niv-tip-badge">✨ AI</span>' : '';
+        tip.innerHTML = '<div class="niv-tip-msg">' + escapeHtml(text) + badge + '</div>' +
+                        '<button class="niv-tip-x">&times;</button>';
 
         var origPos = getComputedStyle(el).position;
         if (origPos === "static") el.style.position = "relative";
 
         el.appendChild(tip);
         _tooltips.push(tip);
+        _activeTooltipEl = el;
+        _activeTooltipData = { tip: tip, origPos: origPos };
 
         requestAnimationFrame(function() {
             requestAnimationFrame(function() { tip.classList.add("niv-show"); });
         });
 
         tip.querySelector(".niv-tip-x").addEventListener("click", function() {
-            tip.classList.remove("niv-show");
-            setTimeout(function() {
-                if (tip.parentNode) tip.parentNode.removeChild(tip);
-                if (origPos === "static" && el) el.style.position = "";
-            }, 250);
+            removeTip(tip, el, origPos);
         });
 
+        setTimeout(function() { removeTip(tip, el, origPos); }, TOOLTIP_MS);
+    }
+
+    // Update existing tooltip with AI message
+    function updateTip(text) {
+        if (!_activeTooltipData || !_activeTooltipData.tip) return;
+        var tip = _activeTooltipData.tip;
+        var msgEl = tip.querySelector(".niv-tip-msg");
+        if (!msgEl) return;
+
+        // Fade transition
+        tip.classList.add("niv-tip-updating");
         setTimeout(function() {
-            tip.classList.remove("niv-show");
-            setTimeout(function() {
-                if (tip.parentNode) tip.parentNode.removeChild(tip);
-                if (origPos === "static" && el) el.style.position = "";
-            }, 250);
-        }, TOOLTIP_MS);
+            msgEl.innerHTML = escapeHtml(text) + '<span class="niv-tip-badge">✨ AI</span>';
+            tip.classList.remove("niv-tip-updating");
+        }, 200);
     }
 
-    // ─── Apply AI Response ─────────────────────────────────────
-    function applyGuidance(data) {
-        if (!data) return;
-        clearAll();
-
-        // Permission — no field, show header message
-        if (data.type === "permission") {
-            var hdr = document.querySelector(".page-head, .form-message");
-            if (hdr) {
-                showTip(hdr, "🔒 " + (data.user_message || "You don't have permission."), null, data.ai_powered);
-                hdr.scrollIntoView({ behavior: "smooth", block: "start" });
-            }
-            return;
-        }
-
-        if (!data.fields || !data.fields.length) return;
-
-        var scrolled = false;
-
-        for (var i = 0; i < data.fields.length; i++) {
-            var f = data.fields[i];
-            var target = findField(f.fieldname, f.label, f.row, f.table);
-
-            if (!target) {
-                // Retry after delay (child table row might be opening)
-                (function(fieldInfo, isFirst, guidance) {
-                    setTimeout(function() {
-                        var t = findField(fieldInfo.fieldname, fieldInfo.label, fieldInfo.row, fieldInfo.table);
-                        if (t) {
-                            highlight(t.el);
-                            if (isFirst) {
-                                scrollTo(t.el);
-                                var mainMsg = guidance.user_message || (fieldInfo.label + " needs attention");
-                                showTip(t.el, mainMsg, fieldInfo.reason, guidance.ai_powered);
-                            }
-                        }
-                    }, 500);
-                })(f, !scrolled, data);
-                if (!scrolled) scrolled = true;
-                continue;
-            }
-
-            highlight(target.el);
-
-            if (!scrolled) {
-                scrollTo(target.el);
-                var mainMsg = data.user_message || (f.label + " needs attention");
-                showTip(target.el, mainMsg, f.reason, data.ai_powered);
-                scrolled = true;
-            }
-        }
+    function removeTip(tip, el, origPos) {
+        tip.classList.remove("niv-show");
+        setTimeout(function() {
+            if (tip.parentNode) tip.parentNode.removeChild(tip);
+            if (origPos === "static" && el) el.style.position = "";
+        }, 250);
     }
 
-    // ─── Main Guide ────────────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════
+    // MAIN GUIDE — Hybrid: Instant + AI
+    // ═══════════════════════════════════════════════════════════
+
     function guide(msg) {
         var now = Date.now();
         if (now - _lastTrigger < DEBOUNCE_MS) return;
@@ -355,10 +469,122 @@
         if (typeof cur_frm === "undefined" || !cur_frm) return;
         if (!msg) return;
 
-        // Call AI to parse the message
-        callAI(msg, function(result) {
-            applyGuidance(result);
+        // ── PHASE 1: Instant smart match ──
+        var parsed = instantParse(msg);
+        if (parsed) {
+            clearAll();
+            applyParsed(parsed, false);
+        }
+
+        // ── PHASE 2: AI enhancement (background) ──
+        callAI(msg, function(aiResult) {
+            if (!aiResult || !aiResult.ai_powered) return;
+
+            // If AI found fields that instant didn't
+            if (aiResult.fields && aiResult.fields.length > 0) {
+                // Re-apply with AI results (better field matching)
+                clearAll();
+                applyAIResult(aiResult);
+            } else if (aiResult.user_message) {
+                // Just update the tooltip text
+                updateTip(aiResult.user_message);
+            }
         });
+    }
+
+    function applyParsed(parsed, isAI) {
+        // Permission
+        if (parsed.type === "permission") {
+            var hdr = document.querySelector(".page-head, .form-message");
+            if (hdr) {
+                showTip(hdr, "🔒 You don't have permission for this action.", isAI);
+                hdr.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+            return;
+        }
+
+        if (!parsed.fields || !parsed.fields.length) return;
+
+        var scrolled = false;
+        for (var i = 0; i < parsed.fields.length; i++) {
+            var info = parsed.fields[i];
+            var el = findFieldElement(info);
+
+            if (!el) {
+                // Retry after delay (child table row opening)
+                (function(fieldInfo, isFirst, ptype) {
+                    setTimeout(function() {
+                        var e = findFieldElement(fieldInfo);
+                        if (e) {
+                            highlight(e);
+                            if (isFirst) {
+                                scrollTo(e);
+                                var tipMsg = buildTipText(fieldInfo, ptype);
+                                showTip(e, tipMsg, isAI);
+                            }
+                        }
+                    }, 500);
+                })(info, !scrolled, parsed.type);
+                if (!scrolled) scrolled = true;
+                continue;
+            }
+
+            highlight(el);
+            if (!scrolled) {
+                scrollTo(el);
+                var tipText = buildTipText(info, parsed.type);
+                showTip(el, tipText, isAI);
+                scrolled = true;
+            }
+        }
+    }
+
+    function applyAIResult(data) {
+        if (!data.fields || !data.fields.length) return;
+
+        var scrolled = false;
+        for (var i = 0; i < data.fields.length; i++) {
+            var f = data.fields[i];
+            var el = findFieldElement(f);
+
+            if (!el) {
+                (function(fInfo, isFirst, aiData) {
+                    setTimeout(function() {
+                        var e = findFieldElement(fInfo);
+                        if (e) {
+                            highlight(e);
+                            if (isFirst) {
+                                scrollTo(e);
+                                showTip(e, aiData.user_message || fInfo.reason || (fInfo.label + " needs attention"), true);
+                            }
+                        }
+                    }, 500);
+                })(f, !scrolled, data);
+                if (!scrolled) scrolled = true;
+                continue;
+            }
+
+            highlight(el);
+            if (!scrolled) {
+                scrollTo(el);
+                showTip(el, data.user_message || f.reason || (f.label + " needs attention"), true);
+                scrolled = true;
+            }
+        }
+    }
+
+    function buildTipText(info, type) {
+        var label = info.label || "This field";
+        var row = info.row;
+
+        if (type === "mandatory") {
+            var msg = "📝 " + label + " is required. Please fill this field.";
+            if (row) msg += " (Row " + row + ")";
+            return msg;
+        }
+        if (type === "link_error") return "🔗 " + label + " — invalid or not found. Check this value.";
+        if (type === "validation") return "⚠️ " + label + " — please check this value.";
+        return "💡 " + label + " needs your attention.";
     }
 
     // ─── Hook Frappe ───────────────────────────────────────────
@@ -366,9 +592,8 @@
         if (_hooked) return;
         _hooked = true;
 
-        // Hook frappe.msgprint
         var origMsgprint = frappe.msgprint;
-        frappe.msgprint = function(msg, title) {
+        frappe.msgprint = function(msg) {
             var result = origMsgprint.apply(this, arguments);
             try {
                 var text = "";
@@ -379,7 +604,6 @@
             return result;
         };
 
-        // Hook frappe.throw
         var origThrow = frappe.throw;
         frappe.throw = function(msg) {
             try {
@@ -391,10 +615,9 @@
             return origThrow.apply(this, arguments);
         };
 
-        // Hook show_alert for red/orange
         if (frappe.show_alert) {
             var origAlert = frappe.show_alert;
-            frappe.show_alert = function(msg, seconds) {
+            frappe.show_alert = function(msg) {
                 var result = origAlert.apply(this, arguments);
                 try {
                     var text = "";
@@ -420,17 +643,22 @@
         guide: guide,
         test: function(msg) {
             msg = msg || 'Mandatory fields required in table <b>Items</b>, Row 1<br><br><ul><li>Delivery Date</li></ul>';
-            console.log("[NivFormGuide] AI-powered test:", msg);
+            console.log("[NivFormGuide] Hybrid test:", msg);
             guide(msg);
         },
+        parse: function(msg) {
+            var r = instantParse(msg);
+            console.log("[NivFormGuide] Instant parse:", JSON.stringify(r, null, 2));
+            return r;
+        },
         clear: clearAll,
-        version: "4.0.0"
+        version: "5.0.0"
     };
 
     function init() {
         injectStyles();
         hookFrappe();
-        console.log("[NivFormGuide] v4.0.0 AI-powered loaded");
+        console.log("[NivFormGuide] v5.0.0 Smart Hybrid loaded");
     }
 
     if (typeof frappe !== "undefined" && frappe.ready) {
