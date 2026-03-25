@@ -301,25 +301,34 @@ def _direct_list_tools():
         all_tools.update(external)
         
         if all_tools:
-            # Convert to MCP tool format
+            # Convert to MCP tool format using instance.to_mcp_format()
             tools = []
             for tool_name, tool_info in all_tools.items():
-                tool_def = {
-                    "name": tool_name,
-                    "description": getattr(tool_info, "description", "") or tool_name,
-                    "inputSchema": getattr(tool_info, "input_schema", None) or {"type": "object", "properties": {}},
-                }
-                # Try to get schema from tool class
-                if not tool_def["inputSchema"].get("properties"):
-                    try:
-                        tool_class = tool_info.tool_class if hasattr(tool_info, "tool_class") else None
-                        if tool_class and hasattr(tool_class, "get_schema"):
-                            schema = tool_class.get_schema()
-                            if schema:
-                                tool_def["inputSchema"] = schema.get("inputSchema", tool_def["inputSchema"])
-                    except Exception:
-                        pass
-                tools.append(tool_def)
+                try:
+                    # Best: use to_mcp_format() which has full schema
+                    inst = getattr(tool_info, "instance", None)
+                    if inst and hasattr(inst, "to_mcp_format"):
+                        tool_def = inst.to_mcp_format()
+                    elif inst and hasattr(inst, "inputSchema"):
+                        tool_def = {
+                            "name": tool_name,
+                            "description": getattr(inst, "description", "") or getattr(tool_info, "description", "") or tool_name,
+                            "inputSchema": inst.inputSchema,
+                        }
+                    else:
+                        tool_def = {
+                            "name": tool_name,
+                            "description": getattr(tool_info, "description", "") or tool_name,
+                            "inputSchema": {"type": "object", "properties": {}},
+                        }
+                    tools.append(tool_def)
+                except Exception as e:
+                    frappe.logger().debug(f"Niv MCP: Failed to get schema for {tool_name}: {e}")
+                    tools.append({
+                        "name": tool_name,
+                        "description": getattr(tool_info, "description", "") or tool_name,
+                        "inputSchema": {"type": "object", "properties": {}},
+                    })
             
             frappe.logger().info(f"Niv MCP: PluginManager returned {len(tools)} tools")
             return tools
