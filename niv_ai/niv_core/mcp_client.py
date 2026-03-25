@@ -343,50 +343,39 @@ def _direct_list_tools():
 
 
 def _direct_call_tool(tool_name, arguments):
-    """Call a single tool via MCP endpoint (HTTP) or direct Python call."""
-    # Method 1: HTTP MCP endpoint
-    try:
-        import requests as _req
-        site_url = frappe.utils.get_url()
-        mcp_url = f"{site_url}/api/method/frappe_assistant_core.api.fac_endpoint.handle_mcp"
-        
-        api_key = None
-        api_secret = None
-        try:
-            admin = frappe.get_doc("User", "Administrator")
-            api_key = admin.api_key
-            if api_key:
-                api_secret = frappe.utils.password.get_decrypted_password("User", "Administrator", "api_secret")
-        except Exception:
-            pass
-        
-        headers = {"Content-Type": "application/json"}
-        if api_key and api_secret:
-            headers["Authorization"] = f"token {api_key}:{api_secret}"
-        
-        resp = _req.post(
-            mcp_url,
-            json={"jsonrpc": "2.0", "method": "tools/call", "id": 1, "params": {"name": tool_name, "arguments": arguments}},
-            headers=headers,
-            timeout=60,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            if "message" in data:
-                data = data["message"]
-            result = data.get("result", data)
-            if result.get("isError"):
-                contents = result.get("content", [])
-                error_text = contents[0].get("text", "Unknown error") if contents else "Unknown error"
-                raise MCPError(error_text)
-            return result
-    except MCPError:
-        raise
-    except Exception as e:
-        frappe.logger().debug(f"Niv MCP: HTTP tool call failed for {tool_name}: {e}")
+    """Call a single tool — supports all FAC versions.
     
-    # Method 2: Direct Python call (fallback)
-    return _direct_call("tools/call", {"name": tool_name, "arguments": arguments})
+    Resolution order:
+    1. FAC ToolRegistry.execute_tool() (v2.3+)
+    2. FAC MCPServer._handle_tools_call() (v2.2)
+    """
+    # Method 1: FAC ToolRegistry (v2.3+)
+    try:
+        from frappe_assistant_core.core.tool_registry import get_tool_registry
+        
+        registry = get_tool_registry()
+        if registry.has_tool(tool_name):
+            result = registry.execute_tool(tool_name, arguments)
+            # Convert to MCP format
+            if isinstance(result, dict) and "content" in result:
+                return result
+            # Wrap raw result
+            if isinstance(result, str):
+                return {"content": [{"type": "text", "text": result}]}
+            elif isinstance(result, dict):
+                return {"content": [{"type": "text", "text": json.dumps(result, default=str)}]}
+            return {"content": [{"type": "text", "text": str(result)}]}
+    except ImportError:
+        frappe.logger().debug("Niv MCP: ToolRegistry not available (FAC < v2.3)")
+    except Exception as e:
+        frappe.logger().warning(f"Niv MCP: ToolRegistry execute failed for {tool_name}: {e}")
+        raise MCPError(f"Tool '{tool_name}' failed: {e}")
+    
+    # Method 2: MCPServer._handle_tools_call (v2.2)
+    try:
+        return _direct_call("tools/call", {"name": tool_name, "arguments": arguments})
+    except Exception as e:
+        raise MCPError(f"Tool '{tool_name}' failed: {e}")
 
 
 # ─── SDK Path (Remote Servers Only) ───────────────────────────────
