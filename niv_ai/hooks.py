@@ -10,7 +10,7 @@ required_apps = ["frappe", "erpnext"]
 
 # Includes in <head>
 app_include_css = "/assets/niv_ai/css/niv_widget.css"
-app_include_js = "/assets/niv_ai/js/niv_widget.js"
+app_include_js = ["/assets/niv_ai/js/niv_widget.js", "/assets/niv_ai/js/niv_form_guide.js"]
 
 # Page modules
 page_modules = {
