@@ -1457,6 +1457,17 @@ ${htmlCode}
         $(`.niv-theme-dot[data-accent="${accent}"]`).addClass("active");
     }
 
+    update_token_bar(used, remaining) {
+        // Update compact token bar in footer
+        const total = (used || 0) + (remaining || 0);
+        const pct = total > 0 ? Math.min(100, ((remaining / total) * 100)) : 0;
+        const $fill = this.wrapper.find(".niv-ft-fill");
+        $fill.css("width", pct + "%");
+        $fill.removeClass("warning danger");
+        if (pct < 15) $fill.addClass("danger");
+        else if (pct < 35) $fill.addClass("warning");
+    }
+
     // ─── Settings Panel ─────────────────────────────────────────────
 
     setup_settings_panel() {
@@ -3157,8 +3168,9 @@ ${htmlCode}
             return Number(n).toLocaleString();
         };
         const used = Math.max(0, total - balance);
-        this.wrapper.find(".niv-token-usage-used").text("Used: " + fmt(used));
-        this.wrapper.find(".niv-token-usage-remaining").text("Remaining: " + fmt(balance));
+        this.wrapper.find(".niv-token-usage-used").text(fmt(used) + " used");
+        this.wrapper.find(".niv-token-usage-remaining").text(fmt(balance) + " left");
+        this.update_token_bar(used, balance);
     }
 
     async show_recharge_dialog() {
