@@ -2372,7 +2372,7 @@ ${htmlCode}
                                     this.hide_typing();
                                     $msgEl = this.append_message("assistant", "");
                                 }
-                                this.update_typing_text(`Calling ${toolName}...`);
+                                this.update_typing_text(`Fetching data`);
                                 var $toolHtml = $(`
                                     <div class="tool-call-accordion running" data-tool="${frappe.utils.escape_html(toolName)}">
                                         <div class="tool-call-header">
@@ -2454,7 +2454,7 @@ ${htmlCode}
                                 const toName = agentNames[toAgent] || toAgent;
                                 
                                 // Update typing indicator with agent info
-                                this.update_typing_text(`Delegating to ${toName}...`);
+                                this.update_typing_text(`Working with ${toName}`);
                                 
                                 // Add agent badge to thought wrapper
                                 var $thoughtWrapper = $msgEl.find(".msg-thought-wrapper");
@@ -2924,17 +2924,14 @@ ${htmlCode}
                 <div class="niv-typing-indicator">
                     <div class="msg-avatar">${this.get_bot_avatar()}</div>
                     <div class="typing-content">
-                        <span class="typing-text">${this.widget_name || "Niv"} is thinking</span>
+                        <span class="typing-sparkle">✦</span>
+                        <span class="typing-text">Analyzing your request</span>
                         <span class="typing-dots-anim"><span></span><span></span><span></span></span>
-                        <span class="typing-elapsed"></span>
                     </div>
                 </div>
             `);
         }
-        this.typing_timer = setInterval(() => {
-            const elapsed = Math.floor((Date.now() - this.typing_start) / 1000);
-            this.wrapper.find(".typing-elapsed").text(`${elapsed}s`);
-        }, 1000);
+        // No elapsed timer — cleaner look
         this.scroll_to_bottom();
     }
 
