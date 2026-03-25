@@ -157,74 +157,6 @@ def _is_same_server(server_name, url):
 # This is the PRIMARY path. No HTTP, no SDK, no external deps.
 # Calls FAC's MCPServer internals directly — bypasses HTTP auth layer.
 
-_fac_mcp_server = None  # Cached FAC MCP server instance
-_fac_mcp_server_time = 0  # Timestamp when cache was set
-_FAC_CACHE_TTL = 300  # 5 minutes — refresh FAC tools periodically
-
-
-def _get_fac_server():
-    """Get the FAC MCPServer instance with tools registered.
-    
-    Cached for 5 minutes to allow tool updates without worker restart.
-    Tries multiple import paths to support different FAC versions.
-    Returns None if FAC is not installed.
-    """
-    global _fac_mcp_server, _fac_mcp_server_time
-    
-    # Check if cache is still valid
-    if _fac_mcp_server is not None and time.time() - _fac_mcp_server_time < _FAC_CACHE_TTL:
-        return _fac_mcp_server
-
-    _ensure_db_alive()
-
-    mcp = None
-
-    # Try import paths (supports current + future FAC versions)
-    import_attempts = [
-        # Current FAC version
-        ("frappe_assistant_core.api.fac_endpoint", "mcp", "_import_tools"),
-        # Possible future paths
-        ("frappe_assistant_core.mcp.server", "mcp_server", None),
-        ("frappe_assistant_core.api.assistant_api", "mcp", None),
-    ]
-
-    for module_path, server_attr, import_func_name in import_attempts:
-        try:
-            import importlib
-            mod = importlib.import_module(module_path)
-            mcp = getattr(mod, server_attr, None)
-            if import_func_name:
-                import_func = getattr(mod, import_func_name, None)
-                if import_func:
-                    import_func()
-            if mcp:
-                break
-        except (ImportError, AttributeError) as e:
-            frappe.logger().debug(f"Niv MCP: Import attempt {module_path} failed: {e}")
-            continue
-
-    if not mcp:
-        raise MCPError(
-            "FAC (frappe_assistant_core) not found or import failed. "
-            "Please install or update FAC."
-        )
-
-    # Verify MCPServer has the methods we need
-    if not hasattr(mcp, "_handle_tools_list") or not hasattr(mcp, "_handle_tools_call"):
-        # Try alternate method names for newer FAC versions
-        if hasattr(mcp, "handle_tools_list") and hasattr(mcp, "handle_tools_call"):
-            # Patch: map public method names to expected private names
-            mcp._handle_tools_list = mcp.handle_tools_list
-            mcp._handle_tools_call = mcp.handle_tools_call
-        else:
-            raise MCPError(
-                "FAC version incompatible — MCPServer missing tools_list/tools_call methods. "
-                "Please update frappe_assistant_core to a compatible version."
-            )
-
-    _fac_mcp_server = mcp
-    _fac_mcp_server_time = time.time()
-    return _fac_mcp_server
 
 
 def _ensure_db_alive():
@@ -236,47 +168,6 @@ def _ensure_db_alive():
             frappe.db.connect()
         except Exception:
             pass
-
-
-def _direct_call(method, params, _retry=True):
-    """Call FAC MCP server directly via Python — NO HTTP, NO auth headers.
-
-    Bypasses handle_mcp() entirely. Calls _handle_tools_list / _handle_tools_call
-    on the MCPServer instance. Runs as current frappe.session.user.
-
-    Returns the MCP result dict, or raises MCPError on failure.
-    NEVER returns None silently.
-    
-    Auto-retries once on DB connection errors (InterfaceError, OperationalError)
-    since FAC tools don't handle reconnection internally.
-    """
-    _ensure_db_alive()
-
-    server = _get_fac_server()
-
-    try:
-        if method == "tools/list":
-            return server._handle_tools_list(params)
-        elif method == "tools/call":
-            result = server._handle_tools_call(params)
-            # Check if tool returned an error
-            if result.get("isError"):
-                contents = result.get("content", [])
-                error_text = contents[0].get("text", "Unknown error") if contents else "Unknown error"
-                raise MCPError(error_text)
-            return result
-        else:
-            raise MCPError(f"Unknown MCP method: {method}")
-    except (MCPError, ValueError, KeyError):
-        raise  # Don't retry application errors
-    except Exception as e:
-        err_str = str(e).lower()
-        is_db_error = any(k in err_str for k in ("interfaceerror", "operationalerror", "connection", "gone away", "lost connection", "cursor closed"))
-        if is_db_error and _retry:
-            frappe.logger().warning(f"Niv MCP: DB error in FAC tool call, retrying once: {e}")
-            _ensure_db_alive()
-            return _direct_call(method, params, _retry=False)
-        raise
 
 
 def _direct_list_tools():
@@ -566,7 +457,7 @@ def _sdk_call_tool(doc, tool_name, arguments, user_api_key=None):
 def _db_get_tools(server_name):
     """Get tools via direct FAC discovery. No DocType needed."""
     try:
-        tools = _direct_discover()
+        tools = []  # Removed — using SDK now
         if tools:
             return tools
         # Fallback: empty list
@@ -927,7 +818,7 @@ def call_tool(server_name, tool_name, arguments):
 
 def clear_cache(server_name=None):
     """Clear all caches — worker memory, Redis, and LangChain tools."""
-    global _tool_index_expires, _openai_tools_cache, _fac_mcp_server, _fac_mcp_server_time
+    global _tool_index_expires, _openai_tools_cache
     with _cache_lock:
         if server_name:
             _tools_cache.pop(server_name, None)
@@ -937,8 +828,6 @@ def clear_cache(server_name=None):
         _tool_index_expires = 0
         _openai_tools_cache = {"tools": [], "expires": 0}
     # Clear FAC server cache (force re-import on next call)
-    _fac_mcp_server = None
-    _fac_mcp_server_time = 0
     # Clear Redis
     try:
         if server_name:
