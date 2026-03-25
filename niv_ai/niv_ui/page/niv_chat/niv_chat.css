@@ -4984,3 +4984,139 @@ body.niv-dark-mode .niv-chat-container.theme-minimal .niv-sidebar * {
     from { opacity: 0; transform: translateX(-8px); }
     to { opacity: 1; transform: translateX(0); }
 }
+
+/* ── Widget Mode — Premium Dark Fixes ── */
+
+/* Dark background for entire widget */
+body.niv-widget-mode .niv-chat-container {
+    background: #1a1a1a !important;
+}
+body.niv-widget-mode .niv-chat-messages {
+    background: #1a1a1a !important;
+}
+
+/* Cards dark bg */
+body.niv-widget-mode .empty-cap {
+    background: #242424 !important;
+    border-color: rgba(255,255,255,0.06) !important;
+}
+body.niv-widget-mode .empty-cap:hover {
+    background: #2a2a2a !important;
+    border-color: var(--niv-primary) !important;
+}
+body.niv-widget-mode .empty-cap-icon {
+    background: rgba(124,58,237,0.1) !important;
+}
+body.niv-widget-mode .empty-cap-title {
+    color: #e5e5e5 !important;
+}
+body.niv-widget-mode .empty-cap-desc {
+    color: #737373 !important;
+}
+
+/* Less space above greeting */
+body.niv-widget-mode .niv-empty-state {
+    padding-top: 10px !important;
+    justify-content: flex-start !important;
+    padding-bottom: 8px !important;
+}
+
+/* Smaller morph in widget */
+body.niv-widget-mode .empty-morph-wrap {
+    width: 44px !important;
+    height: 44px !important;
+    margin-bottom: 12px !important;
+}
+body.niv-widget-mode .empty-morph {
+    width: 44px !important;
+    height: 44px !important;
+}
+body.niv-widget-mode .empty-morph-icon {
+    font-size: 16px !important;
+}
+
+/* Greeting compact */
+body.niv-widget-mode .niv-empty-state .empty-greeting {
+    font-size: 17px !important;
+    margin-bottom: 1px !important;
+}
+body.niv-widget-mode .niv-empty-state .empty-subtitle {
+    font-size: 12px !important;
+    margin-bottom: 12px !important;
+    color: #737373 !important;
+}
+
+/* Cards tighter */
+body.niv-widget-mode .empty-caps {
+    gap: 5px !important;
+    padding: 0 4px !important;
+}
+body.niv-widget-mode .empty-cap {
+    padding: 9px 10px !important;
+    border-radius: 10px !important;
+}
+
+/* Input area — cleaner */
+body.niv-widget-mode .niv-input-area {
+    padding: 0 10px 10px !important;
+    background: #1a1a1a !important;
+}
+body.niv-widget-mode .niv-input-pill {
+    background: #242424 !important;
+    border-color: rgba(255,255,255,0.08) !important;
+    border-radius: 16px !important;
+    padding: 5px 6px 5px 12px !important;
+    gap: 2px !important;
+}
+body.niv-widget-mode .niv-input-pill:focus-within {
+    border-color: var(--niv-primary) !important;
+    box-shadow: 0 0 0 2px rgba(124,58,237,0.1) !important;
+}
+body.niv-widget-mode .niv-input-textarea {
+    font-size: 13px !important;
+    color: #e5e5e5 !important;
+    padding: 4px 6px !important;
+}
+
+/* Hide voice buttons in widget to keep clean — show only attach + send */
+body.niv-widget-mode .btn-voice-input,
+body.niv-widget-mode .btn-voice-mode {
+    display: none !important;
+}
+
+body.niv-widget-mode .btn-send {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 8px !important;
+}
+body.niv-widget-mode .btn-stop {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 8px !important;
+}
+body.niv-widget-mode .btn-attach-file {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 8px !important;
+}
+body.niv-widget-mode .btn-attach-file svg,
+body.niv-widget-mode .btn-send svg,
+body.niv-widget-mode .btn-stop svg {
+    width: 14px !important;
+    height: 14px !important;
+}
+
+/* User bubbles dark */
+body.niv-widget-mode .niv-message.user .msg-content {
+    background: #2d2450 !important;
+    border-color: rgba(124,58,237,0.15) !important;
+    color: #e5e5e5 !important;
+}
+body.niv-widget-mode .niv-message.assistant .msg-content {
+    color: #d4d4d4 !important;
+}
+
+/* Message spacing tighter */
+body.niv-widget-mode .niv-message {
+    padding: 6px 0 !important;
+}
