@@ -1246,16 +1246,30 @@ mark.niv-search-highlight.active {
 
 /* ── Code Blocks ── */
 .msg-content pre {
-    background: var(--niv-code-bg);
+    background: #1a1b26;
     color: var(--niv-code-text);
-    padding: 16px 20px;
-    border-radius: 12px;
+    padding: 14px 16px;
+    padding-top: 32px;
+    border-radius: 10px;
     overflow-x: auto;
     font-size: 13px;
-    margin: 14px 0;
+    margin: 12px 0;
     position: relative;
-    line-height: 1.6;
+    line-height: 1.55;
     border: 1px solid rgba(255,255,255,0.06);
+}
+/* Language badge — auto-generated from class */
+.msg-content pre::before {
+    content: attr(data-lang);
+    position: absolute;
+    top: 6px;
+    left: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-family: var(--niv-font);
 }
 .msg-content code {
     background: rgba(0,0,0,0.05);
@@ -1275,22 +1289,26 @@ mark.niv-search-highlight.active {
 /* Code Copy Button */
 .code-copy-btn {
     position: absolute;
-    top: 8px;
+    top: 6px;
     right: 8px;
     background: rgba(255,255,255,0.06);
     border: none;
-    color: #888;
-    padding: 4px 10px;
-    border-radius: 6px;
+    color: rgba(255,255,255,0.4);
+    padding: 3px 8px;
+    border-radius: 5px;
     cursor: pointer;
-    font-size: 12px;
+    font-size: 11px;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    transition: all 0.2s ease;
 }
 pre:hover .code-copy-btn { opacity: 1; }
 .code-copy-btn:hover {
-    background: rgba(255,255,255,0.12);
+    background: var(--niv-primary);
     color: #fff;
+}
+.code-copy-btn.copied {
+    color: #10b981 !important;
+    background: rgba(16,185,129,0.1);
 }
 
 /* ── Message Footer ── */
@@ -1561,9 +1579,10 @@ pre:hover .code-copy-btn { opacity: 1; }
 .niv-scroll-bottom {
     position: absolute;
     bottom: 100px;
-    right: 24px;
-    width: 36px;
-    height: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     background: var(--niv-bg);
     border: 1px solid var(--niv-border);
@@ -1571,16 +1590,22 @@ pre:hover .code-copy-btn { opacity: 1; }
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    box-shadow: 0 2px 12px var(--niv-shadow-lg);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
     z-index: 20;
-    transition: all 0.2s ease;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
     color: var(--niv-text-muted);
-    font-size: 13px;
+    animation: scrollBtnIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes scrollBtnIn {
+    from { opacity: 0; transform: translateX(-50%) translateY(10px) scale(0.8); }
+    to { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
 }
 .niv-scroll-bottom:hover {
-    background: var(--niv-hover);
-    color: var(--niv-text);
-    box-shadow: 0 4px 20px var(--niv-shadow-lg);
+    background: var(--niv-primary);
+    color: #fff;
+    border-color: var(--niv-primary);
+    box-shadow: 0 4px 20px rgba(124,58,237,0.3);
+    transform: translateX(-50%) translateY(-2px);
 }
 .scroll-unread-badge {
     position: absolute;
