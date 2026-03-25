@@ -1583,12 +1583,23 @@ ${htmlCode}
 
     // ─── Conversations ──────────────────────────────────────────────
 
+    _show_skeleton() {
+        const skeletons = Array(6).fill(0).map((_, i) => `
+            <div class="niv-skel-item" style="animation-delay:${i * 0.05}s">
+                <div class="niv-skel-line" style="width:${65 + Math.random() * 30}%"></div>
+                <div class="niv-skel-time"></div>
+            </div>
+        `).join("");
+        this.$convList.html(skeletons);
+    }
+
     async load_conversations() {
         // Check if a conversation ID was passed in the URL (from widget expand)
         const routeParts = frappe.get_route();
         if (routeParts.length > 1 && routeParts[1] && !this._route_conv_loaded) {
             this._route_conv_id = routeParts[1];
         }
+        this._show_skeleton();
         try {
             const r = await frappe.call({
                 method: "niv_ai.niv_core.api.conversation.list_conversations",
@@ -1681,6 +1692,24 @@ ${htmlCode}
         renderGroup("Older", groups.older);
     }
 
+    _show_msg_skeleton() {
+        const items = [
+            { align: "flex-start", w: "55%" },
+            { align: "flex-end", w: "40%" },
+            { align: "flex-start", w: "70%" },
+        ];
+        const html = items.map((item, i) => `
+            <div class="niv-msg-skel" style="align-self:${item.align};animation-delay:${i*0.1}s">
+                <div class="niv-skel-avatar"></div>
+                <div class="niv-skel-body">
+                    <div class="niv-skel-line" style="width:${item.w}"></div>
+                    <div class="niv-skel-line short" style="width:${parseInt(item.w)-20}%"></div>
+                </div>
+            </div>
+        `).join("");
+        this.$chatArea.html(`<div class="niv-msg-skel-wrap">${html}</div>`);
+    }
+
     async select_conversation(name) {
         this.current_conversation = name;
         this.$convList.find(".niv-conv-item").removeClass("active");
@@ -1689,6 +1718,7 @@ ${htmlCode}
         this.hide_empty_state();
         this.messages_data = [];
         this.reactions = {};
+        this._show_msg_skeleton();
         await this.load_messages(name);
         this.load_pinned_messages();
     }
