@@ -15,21 +15,24 @@
         </div>
         <div class="niv-conversation-list"></div>
         <div class="niv-sidebar-footer">
-            <div class="niv-footer-tokens">
-                <div class="niv-ft-bar">
-                    <div class="niv-ft-fill"></div>
+            <div class="niv-footer-row">
+                <div class="niv-avatar-ring-wrap">
+                    <svg class="niv-avatar-ring" viewBox="0 0 36 36">
+                        <circle class="ring-bg" cx="18" cy="18" r="16" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="2.5"/>
+                        <circle class="ring-fill" cx="18" cy="18" r="16" fill="none" stroke="#10b981" stroke-width="2.5" stroke-dasharray="100.5" stroke-dashoffset="0" stroke-linecap="round" transform="rotate(-90 18 18)"/>
+                    </svg>
+                    <div class="niv-user-avatar"></div>
                 </div>
-                <div class="niv-ft-info">
-                    <span class="niv-token-usage-remaining niv-ft-remaining">--</span>
-                    <span class="niv-ft-sep">·</span>
-                    <span class="niv-token-usage-used niv-ft-used">--</span>
+                <div class="niv-footer-info">
+                    <span class="niv-user-name"></span>
+                    <span class="niv-token-pill">
+                        <span class="niv-tp-dot"></span>
+                        <span class="niv-token-usage-remaining niv-tp-text">--</span>
+                        <span class="niv-token-usage-used" style="display:none"></span>
+                    </span>
                 </div>
-            </div>
-            <div class="niv-user-profile">
-                <div class="niv-user-avatar"></div>
-                <span class="niv-user-name"></span>
                 <button class="btn-settings-toggle" title="Settings">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
                 </button>
             </div>
         </div>
