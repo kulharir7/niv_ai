@@ -1378,6 +1378,16 @@ ${htmlCode}
     // ─── Themes ─────────────────────────────────────────────────────
 
     setup_themes() {
+        // Migrate old color-only themes to new system
+        const _oldTheme = localStorage.getItem("niv_chat_theme");
+        const _oldThemeMap = {"ocean":"default","forest":"default","sunset":"default","rose":"default","midnight":"default"};
+        if (_oldTheme && _oldThemeMap[_oldTheme] !== undefined) {
+            localStorage.setItem("niv_chat_theme", _oldThemeMap[_oldTheme]);
+            // Map old theme to accent color
+            const _accentMap = {"ocean":"blue","forest":"green","sunset":"orange","rose":"pink","midnight":"blue"};
+            if (_accentMap[_oldTheme]) localStorage.setItem("niv_chat_accent", _accentMap[_oldTheme]);
+        }
+
         // Theme style
         const savedTheme = localStorage.getItem("niv_chat_theme") || "default";
         this.apply_theme(savedTheme);
