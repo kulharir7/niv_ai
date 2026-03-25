@@ -19,7 +19,9 @@ Chanakya Ai (formerly Niv AI) is a production-ready AI assistant that sits insid
 ## Key Features
 
 ### 🧠 Smart Tool Calling
-- **34 MCP Tools** — LLM picks the right tool freely, no hardcoded routing
+- **34 MCP Tools** via official MCP SDK — standard protocol, no hardcoded imports
+- **MCP SDK** (`mcp` v1.26 + `langchain-mcp-adapters` v0.2.1) — same protocol as ChatGPT/Claude
+- **Niv MCP Server DocType** — manage connections via UI, add multiple servers, toggle ON/OFF
 - **Two-Model Optimization** — Fast model selects tools → Big model streams the answer
 - **Auto-retry** on tool errors — DB connection resilience, field name correction hints
 - **Result processing** — Large results capped at 4KB, intelligently summarized
@@ -274,7 +276,7 @@ MIT License — see [LICENSE](LICENSE).
 
 - [Frappe Framework](https://frappe.io) & [Growth System](https://erpnext.com)
 - [LangChain](https://langchain.com) + [LangGraph](https://langchain-ai.github.io/langgraph/)
-- [frappe_assistant_core](https://github.com/AdarshPS1/frappe_assistant_core) — MCP tool provider
+- [Frappe Assistant Core](https://github.com/buildswithpaul/Frappe_Assistant_Core) — MCP tool provider (v2.3+)
 - [Edge TTS](https://github.com/rany2/edge-tts) — Free Microsoft TTS
 
 ---
