@@ -1458,14 +1458,25 @@ ${htmlCode}
     }
 
     update_token_bar(used, remaining) {
-        // Update compact token bar in footer
+        // Update avatar ring + status dot
         const total = (used || 0) + (remaining || 0);
-        const pct = total > 0 ? Math.min(100, ((remaining / total) * 100)) : 0;
-        const $fill = this.wrapper.find(".niv-ft-fill");
-        $fill.css("width", pct + "%");
-        $fill.removeClass("warning danger");
-        if (pct < 15) $fill.addClass("danger");
-        else if (pct < 35) $fill.addClass("warning");
+        const pct = total > 0 ? Math.min(100, ((remaining / total) * 100)) : 100;
+        // SVG ring: circumference = 2 * PI * 16 = ~100.5
+        const circ = 100.5;
+        const offset = circ - (circ * pct / 100);
+        const $ring = this.wrapper.find(".ring-fill");
+        const $dot = this.wrapper.find(".niv-tp-dot");
+        $ring.attr("stroke-dashoffset", offset.toFixed(1));
+        $dot.removeClass("warning danger");
+        if (pct < 15) {
+            $ring.attr("stroke", "#ef4444");
+            $dot.addClass("danger");
+        } else if (pct < 35) {
+            $ring.attr("stroke", "#f59e0b");
+            $dot.addClass("warning");
+        } else {
+            $ring.attr("stroke", "#10b981");
+        }
     }
 
     // ─── Settings Panel ─────────────────────────────────────────────
@@ -3168,8 +3179,8 @@ ${htmlCode}
             return Number(n).toLocaleString();
         };
         const used = Math.max(0, total - balance);
-        this.wrapper.find(".niv-token-usage-used").text(fmt(used) + " used");
-        this.wrapper.find(".niv-token-usage-remaining").text(fmt(balance) + " left");
+        this.wrapper.find(".niv-token-usage-used").text(fmt(used));
+        this.wrapper.find(".niv-token-usage-remaining").text(fmt(balance) + " tokens");
         this.update_token_bar(used, balance);
     }
 
