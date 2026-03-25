@@ -36,7 +36,7 @@
             ".niv-tip-x{position:absolute;top:6px;right:10px;cursor:pointer;color:#9f9bb0;font-size:16px;line-height:1;border:none;background:none;padding:2px 4px}",
             ".niv-tip-x:hover{color:#fff}",
             ".niv-tip-badge{display:inline-block;background:" + HIGHLIGHT_COLOR + "33;color:#c4b5fd;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:6px;vertical-align:middle}",
-            ".niv-thinking{position:fixed;bottom:20px;right:20px;background:linear-gradient(135deg,#1e1b2e,#2d2640);color:#c4b5fd;padding:10px 18px;border-radius:10px;font-size:13px;z-index:2000;box-shadow:0 6px 24px rgba(124,58,237,.3);border:1px solid " + HIGHLIGHT_COLOR + "44;opacity:0;transform:translateY(10px);transition:opacity .3s,transform .3s}",
+            ".niv-thinking{position:fixed;bottom:20px;left:20px;background:linear-gradient(135deg,#1e1b2e,#2d2640);color:#c4b5fd;padding:10px 18px;border-radius:10px;font-size:13px;z-index:2000;box-shadow:0 6px 24px rgba(124,58,237,.3);border:1px solid " + HIGHLIGHT_COLOR + "44;opacity:0;transform:translateY(10px);transition:opacity .3s,transform .3s}",
             ".niv-thinking.niv-show{opacity:1;transform:translateY(0)}",
             ".niv-thinking::after{content:'';animation:nivDots 1.5s infinite}"
         ].join("\n");
@@ -60,7 +60,7 @@
         hideThinking();
         var el = document.createElement("div");
         el.className = "niv-thinking";
-        el.innerHTML = "✨ Niv AI is reading the error";
+        el.innerHTML = '<b style="color:#a78bfa">AI</b> &nbsp;is reading the error';
         document.body.appendChild(el);
         _thinkingEl = el;
         requestAnimationFrame(function() {
