@@ -1,158 +1,278 @@
 /**
- * Niv AI Form Guide v1.0
- * Auto-scroll + highlight + tooltip when validation/mandatory errors occur.
+ * Niv AI Form Guide v2.0
+ * 
+ * Reads ANY message (mandatory, validation, permission, link error, custom)
+ * and intelligently guides the user to the right field.
+ * 
+ * Message-first approach: parse the message text → find field(s) → scroll + highlight + tooltip
+ * 
  * Pure client-side JS — zero API calls, zero AI cost, instant.
+ * Safe: original frappe.msgprint/throw run first, we only add guidance after.
  */
 (function() {
     "use strict";
 
     // ─── Config ────────────────────────────────────────────────
-    var CONFIG = {
-        highlightColor: "#7c3aed",
-        highlightDuration: 6000,
-        tooltipDuration: 8000,
-        scrollBehavior: "smooth",
-        scrollBlock: "center",
-        debounceMs: 300,
-    };
+    var HIGHLIGHT_COLOR = "#7c3aed";
+    var HIGHLIGHT_MS = 6000;
+    var TOOLTIP_MS = 8000;
+    var DEBOUNCE_MS = 300;
 
     // ─── State ─────────────────────────────────────────────────
     var _lastTrigger = 0;
-    var _activeHighlights = [];
-    var _activeTooltips = [];
+    var _highlights = [];
+    var _tooltips = [];
+    var _hooked = false;
 
-    // ─── CSS Injection ─────────────────────────────────────────
+    // ─── CSS ───────────────────────────────────────────────────
     function injectStyles() {
-        if (document.getElementById("niv-form-guide-styles")) return;
-        var style = document.createElement("style");
-        style.id = "niv-form-guide-styles";
-        style.textContent = [
-            "@keyframes niv-pulse-glow {",
-            "  0%, 100% { box-shadow: 0 0 8px 2px " + CONFIG.highlightColor + "66; }",
-            "  50% { box-shadow: 0 0 18px 6px " + CONFIG.highlightColor + "99; }",
-            "}",
-            ".niv-field-highlight {",
-            "  animation: niv-pulse-glow 1.2s ease-in-out infinite;",
-            "  border-radius: 6px;",
-            "  position: relative;",
-            "  z-index: 1;",
-            "  transition: box-shadow 0.3s ease;",
-            "}",
-            ".niv-field-highlight .control-input,",
-            ".niv-field-highlight .control-input-wrapper,",
-            ".niv-field-highlight input,",
-            ".niv-field-highlight select,",
-            ".niv-field-highlight .ql-editor,",
-            ".niv-field-highlight .link-field {",
-            "  border-color: " + CONFIG.highlightColor + " !important;",
-            "}",
-            ".niv-guide-tooltip {",
-            "  position: absolute;",
-            "  left: 0; right: 0;",
-            "  background: #1e1b2e;",
-            "  color: #e2e0ea;",
-            "  padding: 10px 14px;",
-            "  border-radius: 8px;",
-            "  font-size: 13px;",
-            "  line-height: 1.5;",
-            "  z-index: 1050;",
-            "  box-shadow: 0 4px 20px rgba(124, 58, 237, 0.25);",
-            "  border: 1px solid " + CONFIG.highlightColor + "44;",
-            "  margin-top: 4px;",
-            "  opacity: 0;",
-            "  transform: translateY(-6px);",
-            "  transition: opacity 0.25s ease, transform 0.25s ease;",
-            "}",
-            ".niv-guide-tooltip.niv-visible {",
-            "  opacity: 1;",
-            "  transform: translateY(0);",
-            "}",
-            ".niv-guide-tooltip .niv-tooltip-close {",
-            "  position: absolute; top: 4px; right: 8px;",
-            "  cursor: pointer; color: #9f9bb0; font-size: 16px;",
-            "  line-height: 1; border: none; background: none; padding: 2px 4px;",
-            "}",
-            ".niv-guide-tooltip .niv-tooltip-close:hover { color: #fff; }",
-            ".niv-guide-tooltip .niv-tooltip-icon { margin-right: 6px; }",
+        if (document.getElementById("niv-fg2-css")) return;
+        var s = document.createElement("style");
+        s.id = "niv-fg2-css";
+        s.textContent = [
+            "@keyframes nivPulse{0%,100%{box-shadow:0 0 8px 2px " + HIGHLIGHT_COLOR + "55}50%{box-shadow:0 0 18px 6px " + HIGHLIGHT_COLOR + "88}}",
+            ".niv-hl{animation:nivPulse 1.2s ease-in-out infinite;border-radius:6px;position:relative;z-index:1}",
+            ".niv-hl input,.niv-hl select,.niv-hl .ql-editor,.niv-hl .link-field,.niv-hl .control-input,.niv-hl .control-input-wrapper{border-color:" + HIGHLIGHT_COLOR + " !important}",
+            ".niv-tip{position:absolute;left:0;right:0;background:#1e1b2e;color:#e2e0ea;padding:10px 14px 10px 12px;border-radius:8px;font-size:13px;line-height:1.5;z-index:1050;box-shadow:0 4px 20px rgba(124,58,237,.2);border:1px solid " + HIGHLIGHT_COLOR + "44;margin-top:4px;opacity:0;transform:translateY(-6px);transition:opacity .25s,transform .25s}",
+            ".niv-tip.niv-show{opacity:1;transform:translateY(0)}",
+            ".niv-tip-x{position:absolute;top:4px;right:8px;cursor:pointer;color:#9f9bb0;font-size:16px;line-height:1;border:none;background:none;padding:2px 4px}",
+            ".niv-tip-x:hover{color:#fff}"
         ].join("\n");
-        document.head.appendChild(style);
+        document.head.appendChild(s);
     }
 
-    // ─── Message Parsing ───────────────────────────────────────
-    function parseMessage(msg) {
-        if (!msg || typeof msg !== "string") return null;
-        msg = msg.replace(/<[^>]*>/g, "").trim();
-        if (!msg) return null;
+    // ─── Clear Previous ────────────────────────────────────────
+    function clearAll() {
+        var i;
+        for (i = 0; i < _highlights.length; i++) {
+            _highlights[i].classList.remove("niv-hl");
+        }
+        _highlights = [];
+        for (i = 0; i < _tooltips.length; i++) {
+            if (_tooltips[i].parentNode) _tooltips[i].parentNode.removeChild(_tooltips[i]);
+        }
+        _tooltips = [];
+    }
 
-        var results = [];
-        var m;
+    // ─── Parse Message — Extract Field Names ───────────────────
+    // This is the CORE — reads any message and finds field names in it.
 
-        // Pattern 1: "Mandatory: Field1, Field2"
-        m = msg.match(/(?:mandatory|required)[\s:]+(.+)/i);
-        if (m) {
-            var fields = m[1].split(/[,]+/).map(function(f) { return f.trim(); }).filter(Boolean);
-            for (var i = 0; i < fields.length; i++) {
-                results.push({ label: fields[i], type: "mandatory", row: null });
+    function extractFieldNames(msg) {
+        if (!msg || typeof msg !== "string") return { fields: [], type: "unknown", raw: "" };
+
+        // Strip HTML but remember list items (they are field names in mandatory errors)
+        var raw = msg;
+
+        // 1. Frappe mandatory format: "Mandatory fields required in DocType<br><br><ul><li>Field1</li><li>Field2</li></ul>"
+        var liMatches = msg.match(/<li[^>]*>(.*?)<\/li>/gi);
+        if (liMatches && liMatches.length > 0) {
+            var fields = [];
+            for (var i = 0; i < liMatches.length; i++) {
+                var text = liMatches[i].replace(/<[^>]*>/g, "").trim();
+                if (text) {
+                    // Handle "Row #3: FieldName" inside <li>
+                    var rowMatch = text.match(/^Row\s*#?\s*(\d+)\s*[:]\s*(.+)/i);
+                    if (rowMatch) {
+                        fields.push({ label: rowMatch[2].trim(), row: parseInt(rowMatch[1]) });
+                    } else {
+                        fields.push({ label: text, row: null });
+                    }
+                }
             }
-            if (results.length) return results;
+            if (fields.length > 0) {
+                return { fields: fields, type: "mandatory", raw: raw };
+            }
         }
 
-        // Pattern 2: "Row #N: Mandatory: Field"
-        m = msg.match(/row\s*#?\s*(\d+)[\s:]+(?:mandatory[\s:]+)?(.+)/i);
+        // Now strip all HTML for remaining patterns
+        var clean = msg.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+        if (!clean) return { fields: [], type: "unknown", raw: raw };
+
+        var m, result;
+
+        // 2. "Mandatory: Field1, Field2" (simple format)
+        m = clean.match(/(?:mandatory|required)\s*[:：]\s*(.+)/i);
         if (m) {
-            var rowNum = parseInt(m[1]);
-            var fieldPart = m[2].replace(/is\s+required.*$/i, "").trim();
-            results.push({ label: fieldPart, type: "mandatory", row: rowNum });
-            return results;
+            return {
+                fields: splitFieldNames(m[1]),
+                type: "mandatory",
+                raw: clean
+            };
         }
 
-        // Pattern 3: "Field is required"
-        m = msg.match(/^(.+?)\s+(?:is required|cannot be empty|is mandatory|must be filled)/i);
+        // 3. "Row #N: Field is required" or "Row #N: Mandatory: Field"
+        m = clean.match(/Row\s*#?\s*(\d+)\s*[:]\s*(?:mandatory\s*[:：]\s*)?(.+?)(?:\s+is\s+required|\s+is\s+mandatory)?$/i);
         if (m) {
-            results.push({ label: m[1].trim(), type: "mandatory", row: null });
-            return results;
+            return {
+                fields: [{ label: m[2].trim(), row: parseInt(m[1]) }],
+                type: "mandatory",
+                raw: clean
+            };
         }
 
-        // Pattern 4: "Value missing for: Field"
-        m = msg.match(/value\s+missing\s+for[\s:]+(.+)/i);
+        // 4. "FieldName is required" / "FieldName cannot be empty" / "FieldName is mandatory"
+        m = clean.match(/^(.+?)\s+(?:is\s+required|cannot\s+be\s+empty|is\s+mandatory|must\s+be\s+filled|must\s+not\s+be\s+empty)/i);
         if (m) {
-            results.push({ label: m[1].trim(), type: "mandatory", row: null });
-            return results;
+            return {
+                fields: [{ label: m[1].trim(), row: null }],
+                type: "mandatory",
+                raw: clean
+            };
         }
 
-        // Pattern 5: Validation errors
-        m = msg.match(/(?:invalid|wrong|incorrect)\s+(.+?)(?:\s+format|\s+value|$)/i);
+        // 5. "Value missing for: FieldName"
+        m = clean.match(/value\s+missing\s+for\s*[:：]\s*(.+)/i);
         if (m) {
-            results.push({ label: m[1].trim(), type: "validation", row: null });
-            return results;
+            return {
+                fields: splitFieldNames(m[1]),
+                type: "mandatory",
+                raw: clean
+            };
         }
 
-        // Pattern 6: Permission errors
-        if (/not\s+permitted|permission\s+denied|access\s+denied/i.test(msg)) {
-            results.push({ label: null, type: "permission", row: null });
-            return results;
+        // 6. "Could not find FieldLabel" (link validation error)
+        m = clean.match(/could\s+not\s+find\s+(.+)/i);
+        if (m) {
+            return {
+                fields: splitFieldNames(m[1]),
+                type: "link_error",
+                raw: clean
+            };
         }
 
-        return null;
+        // 7. "Cannot link cancelled document: FieldLabel"
+        m = clean.match(/cannot\s+link\s+cancelled\s+document\s*[:：]\s*(.+)/i);
+        if (m) {
+            return {
+                fields: splitFieldNames(m[1]),
+                type: "link_error",
+                raw: clean
+            };
+        }
+
+        // 8. Negative value — "Negative Value" title with field in message
+        if (/negative\s+value/i.test(clean)) {
+            // Try to find field name — usually in format "Value cannot be negative for FieldName"
+            m = clean.match(/(?:for|of|in)\s+(.+?)(?:\s+in\s+row|\s*$)/i);
+            if (m) {
+                return {
+                    fields: [{ label: m[1].trim(), row: null }],
+                    type: "validation",
+                    raw: clean
+                };
+            }
+        }
+
+        // 9. "Invalid FieldName" / "Wrong FieldName" / "Incorrect FieldName"
+        m = clean.match(/(?:invalid|wrong|incorrect)\s+(.+?)(?:\s+format|\s+value|\s+in\s+row|$)/i);
+        if (m && m[1].length < 60) {
+            return {
+                fields: [{ label: m[1].trim(), row: null }],
+                type: "validation",
+                raw: clean
+            };
+        }
+
+        // 10. "Please enter FieldName" / "Please set FieldName" / "Please select FieldName"
+        m = clean.match(/please\s+(?:enter|set|select|fill|provide|specify)\s+(.+?)(?:\s+first|\s+before|\s+in\s+row|\s*[.]|$)/i);
+        if (m && m[1].length < 60) {
+            return {
+                fields: [{ label: m[1].trim(), row: null }],
+                type: "mandatory",
+                raw: clean
+            };
+        }
+
+        // 11. "FieldName must be ..." (validation)
+        m = clean.match(/^(.+?)\s+must\s+be\s+/i);
+        if (m && m[1].length < 50) {
+            return {
+                fields: [{ label: m[1].trim(), row: null }],
+                type: "validation",
+                raw: clean
+            };
+        }
+
+        // 12. "FieldName should be ..." / "FieldName needs to be ..."
+        m = clean.match(/^(.+?)\s+(?:should|needs?\s+to)\s+be\s+/i);
+        if (m && m[1].length < 50) {
+            return {
+                fields: [{ label: m[1].trim(), row: null }],
+                type: "validation",
+                raw: clean
+            };
+        }
+
+        // 13. Permission messages
+        if (/not\s+permitted|permission\s+denied|access\s+denied|no\s+permission/i.test(clean)) {
+            return { fields: [], type: "permission", raw: clean };
+        }
+
+        // 14. Generic — try to find any field name mentioned in the message
+        // Last resort: scan message for known field labels on current form
+        if (typeof cur_frm !== "undefined" && cur_frm) {
+            var foundFields = findFieldNamesInText(clean);
+            if (foundFields.length > 0) {
+                return {
+                    fields: foundFields,
+                    type: "general",
+                    raw: clean
+                };
+            }
+        }
+
+        return { fields: [], type: "unknown", raw: clean };
     }
 
-    // ─── Field Finder ──────────────────────────────────────────
-    function findField(label, rowNum) {
-        if (!cur_frm) return null;
-        var labelLower = label.toLowerCase().replace(/[^a-z0-9_ ]/g, "");
+    function splitFieldNames(str) {
+        var parts = str.split(/[,،;]+/);
+        var result = [];
+        for (var i = 0; i < parts.length; i++) {
+            var t = parts[i].trim();
+            if (t) result.push({ label: t, row: null });
+        }
+        return result;
+    }
 
-        var fname, field, df, fieldLabel, fieldName;
+    // Scan message text for any field label that exists on the current form
+    function findFieldNamesInText(text) {
+        if (!cur_frm || !text) return [];
+        var textLower = text.toLowerCase();
+        var found = [];
+        var fields = cur_frm.fields_dict;
+        for (var fname in fields) {
+            var df = fields[fname].df;
+            if (!df || !df.label) continue;
+            // Skip layout fields
+            if (df.fieldtype === "Section Break" || df.fieldtype === "Column Break" ||
+                df.fieldtype === "Tab Break" || df.fieldtype === "HTML") continue;
+            var label = df.label.toLowerCase();
+            if (label.length < 3) continue; // Skip very short labels to avoid false matches
+            if (textLower.indexOf(label) !== -1) {
+                found.push({ label: df.label, row: null });
+            }
+        }
+        return found;
+    }
+
+    // ─── Find Field on Form ────────────────────────────────────
+    function findField(label, rowNum) {
+        if (!cur_frm || !label) return null;
+        var searchLabel = label.toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+        if (!searchLabel) return null;
+
+        var fname, field, df, fLabel, fName;
+
+        // First pass: exact match on label or fieldname
         for (fname in cur_frm.fields_dict) {
             field = cur_frm.fields_dict[fname];
             df = field.df || {};
-            fieldLabel = (df.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "");
-            fieldName = (df.fieldname || "").toLowerCase();
+            fLabel = (df.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+            fName = (df.fieldname || "").toLowerCase();
 
-            if (fieldLabel === labelLower || fieldName === labelLower ||
-                fieldLabel.indexOf(labelLower) !== -1 || labelLower.indexOf(fieldLabel) !== -1) {
-
+            if (fLabel === searchLabel || fName === searchLabel) {
                 if (rowNum && df.fieldtype === "Table" && field.grid) {
-                    return findChildField(field.grid, rowNum, label);
+                    return findInChildTable(field.grid, rowNum, label);
                 }
                 if (field.$wrapper && field.$wrapper.length) {
                     return { el: field.$wrapper[0], field: field, df: df };
@@ -160,12 +280,31 @@
             }
         }
 
-        // Deep search in child tables
+        // Second pass: partial match (contains)
+        for (fname in cur_frm.fields_dict) {
+            field = cur_frm.fields_dict[fname];
+            df = field.df || {};
+            fLabel = (df.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
+            fName = (df.fieldname || "").toLowerCase();
+
+            if (!fLabel && !fName) continue;
+            if (fLabel.indexOf(searchLabel) !== -1 || searchLabel.indexOf(fLabel) !== -1 ||
+                fName.indexOf(searchLabel) !== -1 || searchLabel.indexOf(fName) !== -1) {
+                if (rowNum && df.fieldtype === "Table" && field.grid) {
+                    return findInChildTable(field.grid, rowNum, label);
+                }
+                if (field.$wrapper && field.$wrapper.length) {
+                    return { el: field.$wrapper[0], field: field, df: df };
+                }
+            }
+        }
+
+        // If rowNum specified, search all child tables
         if (rowNum) {
             for (fname in cur_frm.fields_dict) {
                 field = cur_frm.fields_dict[fname];
                 if ((field.df || {}).fieldtype === "Table" && field.grid) {
-                    var found = findChildField(field.grid, rowNum, label);
+                    var found = findInChildTable(field.grid, rowNum, label);
                     if (found) return found;
                 }
             }
@@ -173,12 +312,13 @@
         return null;
     }
 
-    function findChildField(grid, rowNum, label) {
-        var labelLower = label.toLowerCase().replace(/[^a-z0-9_ ]/g, "");
+    function findInChildTable(grid, rowNum, label) {
+        var searchLabel = label.toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
         var rows = grid.grid_rows || [];
-        var row = rows[rowNum - 1];
+        var row = rows[rowNum - 1]; // 1-indexed
         if (!row) return null;
 
+        // Open row if collapsed
         try { row.toggle_view(true); } catch(e) {}
 
         var rowFields = row.columns || row.fields_dict || {};
@@ -186,11 +326,10 @@
         for (fn in rowFields) {
             rf = rowFields[fn];
             rdf = rf.df || {};
-            rl = (rdf.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "");
+            rl = (rdf.label || "").toLowerCase().replace(/[^a-z0-9_ ]/g, "").trim();
             rn = (rdf.fieldname || "").toLowerCase();
-
-            if (rl === labelLower || rn === labelLower ||
-                rl.indexOf(labelLower) !== -1 || labelLower.indexOf(rl) !== -1) {
+            if (rl === searchLabel || rn === searchLabel ||
+                rl.indexOf(searchLabel) !== -1 || searchLabel.indexOf(rl) !== -1) {
                 el = rf.$wrapper ? rf.$wrapper[0] : rf.wrapper;
                 if (el) return { el: el, field: rf, df: rdf, row: rowNum };
             }
@@ -198,240 +337,244 @@
         return null;
     }
 
-    // ─── Highlight ─────────────────────────────────────────────
-    function highlightField(target) {
+    // ─── Highlight + Scroll + Tooltip ──────────────────────────
+    function highlight(target) {
         if (!target || !target.el) return;
-        var el = target.el;
-        el.classList.add("niv-field-highlight");
-        _activeHighlights.push(el);
-
+        target.el.classList.add("niv-hl");
+        _highlights.push(target.el);
         setTimeout(function() {
-            el.classList.remove("niv-field-highlight");
-            _activeHighlights = _activeHighlights.filter(function(e) { return e !== el; });
-        }, CONFIG.highlightDuration);
+            target.el.classList.remove("niv-hl");
+            _highlights = _highlights.filter(function(e) { return e !== target.el; });
+        }, HIGHLIGHT_MS);
     }
 
-    function clearHighlights() {
-        for (var i = 0; i < _activeHighlights.length; i++) {
-            _activeHighlights[i].classList.remove("niv-field-highlight");
-        }
-        _activeHighlights = [];
-    }
-
-    // ─── Tooltip ───────────────────────────────────────────────
-    function showTooltip(target, message, type) {
+    function scrollTo(target) {
         if (!target || !target.el) return;
-        var el = target.el;
-
-        var existing = el.querySelector(".niv-guide-tooltip");
-        if (existing) existing.remove();
-
-        var icons = { mandatory: "📝", validation: "⚠️", permission: "🔒" };
-        var icon = icons[type] || "💡";
-
-        var tooltip = document.createElement("div");
-        tooltip.className = "niv-guide-tooltip";
-        tooltip.innerHTML =
-            '<span class="niv-tooltip-icon">' + icon + '</span>' +
-            escapeHtml(message) +
-            '<button class="niv-tooltip-close" title="Close">&times;</button>';
-
-        var pos = getComputedStyle(el).position;
-        if (pos === "static") el.style.position = "relative";
-
-        el.appendChild(tooltip);
-        _activeTooltips.push(tooltip);
-
-        requestAnimationFrame(function() {
-            requestAnimationFrame(function() {
-                tooltip.classList.add("niv-visible");
-            });
-        });
-
-        tooltip.querySelector(".niv-tooltip-close").addEventListener("click", function() {
-            removeTooltip(tooltip, el, pos);
-        });
-
+        target.el.scrollIntoView({ behavior: "smooth", block: "center" });
+        // Focus input after scroll
         setTimeout(function() {
-            removeTooltip(tooltip, el, pos);
-        }, CONFIG.tooltipDuration);
-    }
-
-    function removeTooltip(tooltip, parentEl, origPos) {
-        tooltip.classList.remove("niv-visible");
-        setTimeout(function() {
-            if (tooltip.parentNode) tooltip.parentNode.removeChild(tooltip);
-            if (origPos === "static" && parentEl) parentEl.style.position = "";
-            _activeTooltips = _activeTooltips.filter(function(t) { return t !== tooltip; });
-        }, 250);
-    }
-
-    function clearTooltips() {
-        for (var i = 0; i < _activeTooltips.length; i++) {
-            if (_activeTooltips[i].parentNode) _activeTooltips[i].parentNode.removeChild(_activeTooltips[i]);
-        }
-        _activeTooltips = [];
-    }
-
-    // ─── Scroll ────────────────────────────────────────────────
-    function scrollToField(target) {
-        if (!target || !target.el) return;
-        target.el.scrollIntoView({
-            behavior: CONFIG.scrollBehavior,
-            block: CONFIG.scrollBlock,
-        });
-
-        setTimeout(function() {
-            var input = target.el.querySelector(
-                "input:not([type=hidden]), select, textarea, .ql-editor, [contenteditable]"
-            );
-            if (input) {
-                try { input.focus(); } catch(e) {}
-            }
+            var inp = target.el.querySelector("input:not([type=hidden]), select, textarea, .ql-editor, [contenteditable]");
+            if (inp) try { inp.focus(); } catch(e) {}
         }, 400);
     }
 
-    // ─── Main Guide Logic ──────────────────────────────────────
+    function showTip(target, text) {
+        if (!target || !target.el) return;
+        var el = target.el;
+
+        // Remove existing
+        var old = el.querySelector(".niv-tip");
+        if (old) old.remove();
+
+        var tip = document.createElement("div");
+        tip.className = "niv-tip";
+        tip.innerHTML = escapeHtml(text) + '<button class="niv-tip-x" title="Close">&times;</button>';
+
+        var origPos = getComputedStyle(el).position;
+        if (origPos === "static") el.style.position = "relative";
+
+        el.appendChild(tip);
+        _tooltips.push(tip);
+
+        // Animate in
+        requestAnimationFrame(function() {
+            requestAnimationFrame(function() { tip.classList.add("niv-show"); });
+        });
+
+        // Close button
+        tip.querySelector(".niv-tip-x").addEventListener("click", function() {
+            removeTip(tip, el, origPos);
+        });
+
+        // Auto-dismiss
+        setTimeout(function() { removeTip(tip, el, origPos); }, TOOLTIP_MS);
+    }
+
+    function removeTip(tip, el, origPos) {
+        tip.classList.remove("niv-show");
+        setTimeout(function() {
+            if (tip.parentNode) tip.parentNode.removeChild(tip);
+            if (origPos === "static" && el) el.style.position = "";
+            _tooltips = _tooltips.filter(function(t) { return t !== tip; });
+        }, 250);
+    }
+
+    // ─── Build Tooltip Message ─────────────────────────────────
+    function buildTipMessage(fieldLabel, type, rawMessage) {
+        var icon = { mandatory: "📝", validation: "⚠️", link_error: "🔗", permission: "🔒", general: "💡" };
+        var prefix = icon[type] || "💡";
+
+        if (type === "mandatory") {
+            return prefix + " " + fieldLabel + " is required. Please fill this field.";
+        }
+        if (type === "link_error") {
+            return prefix + " " + fieldLabel + " has an invalid link. Please check the value.";
+        }
+        if (type === "validation") {
+            return prefix + " Please check " + fieldLabel + ". " + (rawMessage.length < 120 ? rawMessage : "");
+        }
+        if (type === "permission") {
+            return prefix + " You don't have permission. Contact your administrator.";
+        }
+        // General — show the raw message
+        return prefix + " " + (rawMessage.length < 150 ? rawMessage : fieldLabel + " needs attention.");
+    }
+
+    // ─── Main Guide Function ───────────────────────────────────
     function guide(msg) {
+        // Debounce
         var now = Date.now();
-        if (now - _lastTrigger < CONFIG.debounceMs) return;
+        if (now - _lastTrigger < DEBOUNCE_MS) return;
         _lastTrigger = now;
 
         if (typeof cur_frm === "undefined" || !cur_frm) return;
 
-        var parsed = parseMessage(msg);
-        if (!parsed || !parsed.length) return;
+        var parsed = extractFieldNames(msg);
+        if (!parsed.fields.length && parsed.type !== "permission") return;
 
-        clearHighlights();
-        clearTooltips();
+        clearAll();
+
+        // Permission — no specific field, show near header
+        if (parsed.type === "permission") {
+            var header = document.querySelector(".form-page .page-head, .page-header, .form-message");
+            if (header) {
+                showTip({ el: header }, buildTipMessage("", "permission", parsed.raw));
+                header.scrollIntoView({ behavior: "smooth", block: "start" });
+            }
+            return;
+        }
 
         var scrolled = false;
-
-        for (var i = 0; i < parsed.length; i++) {
-            var info = parsed[i];
-
-            if (info.type === "permission") {
-                var header = document.querySelector(".form-page .page-head, .form-message");
-                if (header) {
-                    showTooltip({ el: header }, "You don't have permission for this action. Contact your administrator.", "permission");
-                    if (!scrolled) {
-                        header.scrollIntoView({ behavior: "smooth", block: "start" });
-                        scrolled = true;
-                    }
-                }
-                continue;
-            }
-
+        for (var i = 0; i < parsed.fields.length; i++) {
+            var info = parsed.fields[i];
             if (!info.label) continue;
 
             var target = findField(info.label, info.row);
             if (!target) continue;
 
-            highlightField(target);
+            highlight(target);
 
+            // First field gets scroll + tooltip
             if (!scrolled) {
-                scrollToField(target);
-                var tooltipMsg = info.type === "mandatory"
-                    ? info.label + " is required to save this form. Please fill it in."
-                    : "Please check the value of " + info.label + ".";
-                showTooltip(target, tooltipMsg, info.type);
+                scrollTo(target);
+                var tipMsg = buildTipMessage(info.label, parsed.type, parsed.raw);
+                showTip(target, tipMsg);
                 scrolled = true;
             }
         }
     }
 
-    // ─── Hook into Frappe ──────────────────────────────────────
+    // ─── Hook Frappe Functions ──────────────────────────────────
+    // SAFE: original functions run FIRST, then we add guidance.
+
     function hookFrappe() {
-        // Hook frappe.msgprint
+        if (_hooked) return;
+        _hooked = true;
+
+        // 1. Hook frappe.msgprint
         var origMsgprint = frappe.msgprint;
         frappe.msgprint = function(msg, title) {
             var result = origMsgprint.apply(this, arguments);
-            var text = "";
-            if (typeof msg === "string") {
-                text = msg;
-            } else if (msg && typeof msg === "object") {
-                text = msg.message || msg.msg || "";
-            }
-            if (text) {
-                setTimeout(function() { guide(text); }, 100);
-            }
+            try {
+                var text = "";
+                if (typeof msg === "string") {
+                    text = msg;
+                } else if (msg && typeof msg === "object") {
+                    text = msg.message || msg.msg || msg.body || "";
+                    // Also check title for context
+                    if (!text && msg.title) text = msg.title;
+                }
+                if (text) setTimeout(function() { guide(text); }, 150);
+            } catch(e) { /* Never break original flow */ }
             return result;
         };
 
-        // Hook frappe.throw
+        // 2. Hook frappe.throw
         var origThrow = frappe.throw;
         frappe.throw = function(msg) {
-            var text = "";
-            if (typeof msg === "string") {
-                text = msg;
-            } else if (msg && typeof msg === "object") {
-                text = msg.message || msg.msg || "";
-            }
-            if (text) {
-                setTimeout(function() { guide(text); }, 100);
-            }
+            try {
+                var text = "";
+                if (typeof msg === "string") {
+                    text = msg;
+                } else if (msg && typeof msg === "object") {
+                    text = msg.message || msg.msg || "";
+                }
+                if (text) setTimeout(function() { guide(text); }, 150);
+            } catch(e) { /* Never break original flow */ }
             return origThrow.apply(this, arguments);
         };
 
-        // Hook .has-error class via MutationObserver
+        // 3. Hook frappe.show_alert (lighter messages)
+        if (frappe.show_alert) {
+            var origAlert = frappe.show_alert;
+            frappe.show_alert = function(msg, seconds) {
+                var result = origAlert.apply(this, arguments);
+                try {
+                    var text = "";
+                    if (typeof msg === "string") {
+                        text = msg;
+                    } else if (msg && typeof msg === "object") {
+                        text = msg.message || msg.body || "";
+                    }
+                    // Only guide on red/orange alerts (errors/warnings)
+                    if (text && msg && (msg.indicator === "red" || msg.indicator === "orange")) {
+                        setTimeout(function() { guide(text); }, 150);
+                    }
+                } catch(e) {}
+                return result;
+            };
+        }
+
+        // 4. Watch for .has-error class additions
         var observer = new MutationObserver(function(mutations) {
             for (var m = 0; m < mutations.length; m++) {
-                var mutation = mutations[m];
-                if (mutation.type === "attributes" && mutation.attributeName === "class") {
-                    var el = mutation.target;
-                    if (el.classList && el.classList.contains("has-error")) {
-                        var wrapper = el.closest(".frappe-control");
-                        if (wrapper) {
-                            var labelEl = wrapper.querySelector(".control-label, label");
-                            if (labelEl) {
-                                var label = labelEl.textContent.trim();
-                                if (label) {
-                                    (function(l) {
-                                        setTimeout(function() { guide("Mandatory: " + l); }, 200);
-                                    })(label);
-                                }
-                            }
-                        }
-                    }
+                if (mutations[m].type !== "attributes" || mutations[m].attributeName !== "class") continue;
+                var el = mutations[m].target;
+                if (!el.classList || !el.classList.contains("has-error")) continue;
+                var wrapper = el.closest(".frappe-control");
+                if (!wrapper) continue;
+                var labelEl = wrapper.querySelector(".control-label, label");
+                if (!labelEl) continue;
+                var label = labelEl.textContent.trim();
+                if (label) {
+                    (function(l) {
+                        setTimeout(function() { guide("Mandatory: " + l); }, 200);
+                    })(label);
                 }
             }
         });
 
-        var formArea = document.getElementById("body") || document.body;
-        observer.observe(formArea, {
-            attributes: true,
-            attributeFilter: ["class"],
-            subtree: true,
-        });
+        var body = document.getElementById("body") || document.body;
+        observer.observe(body, { attributes: true, attributeFilter: ["class"], subtree: true });
     }
 
-    // ─── Utilities ─────────────────────────────────────────────
+    // ─── Utility ───────────────────────────────────────────────
     function escapeHtml(str) {
-        var div = document.createElement("div");
-        div.textContent = str;
-        return div.innerHTML;
+        var d = document.createElement("div");
+        d.textContent = str || "";
+        return d.innerHTML;
     }
 
     // ─── Public API ────────────────────────────────────────────
     window.NivFormGuide = {
         guide: guide,
         test: function(msg) {
-            msg = msg || "Mandatory: Customer";
-            console.log("[NivFormGuide] Testing with:", msg);
+            msg = msg || 'Mandatory fields required in Sales Invoice<br><br><ul><li>Customer</li><li>Posting Date</li></ul>';
+            console.log("[NivFormGuide] Testing:", msg);
             guide(msg);
         },
-        clear: function() {
-            clearHighlights();
-            clearTooltips();
+        parse: function(msg) {
+            console.log("[NivFormGuide] Parse result:", extractFieldNames(msg));
         },
-        version: "1.0.0",
+        clear: clearAll,
+        version: "2.0.0"
     };
 
     // ─── Init ──────────────────────────────────────────────────
     function init() {
         injectStyles();
         hookFrappe();
-        console.log("[NivFormGuide] v1.0.0 loaded ✓");
+        console.log("[NivFormGuide] v2.0.0 loaded");
     }
 
     if (typeof frappe !== "undefined" && frappe.ready) {
