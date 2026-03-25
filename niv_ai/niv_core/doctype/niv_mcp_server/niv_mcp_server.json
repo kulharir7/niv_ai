@@ -32,7 +32,6 @@
             "fieldtype": "Data",
             "label": "Server Name",
             "reqd": 1,
-            "unique": 1,
             "in_list_view": 1,
             "bold": 1,
             "description": "Unique name for this MCP server (e.g., Frappe Assistant Core)"
@@ -170,9 +169,10 @@
     ],
     "sort_field": "modified",
     "sort_order": "DESC",
-    "naming_rule": "By fieldname",
-    "autoname": "field:server_name",
+    "naming_rule": "Expression",
+    "autoname": "format:MCP-{####}",
     "title_field": "server_name",
     "show_name_in_global_search": 1,
-    "track_changes": 1
+    "track_changes": 1,
+    "allow_rename": 1
 }

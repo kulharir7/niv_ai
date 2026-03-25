@@ -5,26 +5,78 @@ from frappe import _
 
 @frappe.whitelist()
 def get_mcp_servers():
-    """List MCP servers. FAC is always the server (same Frappe instance)."""
+    """List MCP servers from Niv MCP Server DocType."""
+    try:
+        if frappe.db.exists("DocType", "Niv MCP Server"):
+            servers = frappe.get_all(
+                "Niv MCP Server",
+                filters={},
+                fields=["name", "server_name", "is_active", "transport_type", "server_url", "tools_count", "last_connected", "notes"],
+                order_by="creation ASC",
+            )
+            result = []
+            for s in servers:
+                result.append({
+                    "name": s.name,
+                    "server_name": s.server_name,
+                    "is_active": s.is_active,
+                    "status": "Connected" if s.is_active else "Disconnected",
+                    "transport_type": s.transport_type or "http",
+                    "description": s.notes or f"MCP Server ({s.transport_type})",
+                    "tools_count": s.tools_count or 0,
+                    "last_connected": str(s.last_connected) if s.last_connected else None,
+                })
+            if result:
+                return result
+    except Exception:
+        pass
+    # Fallback
     return [{
-        "name": "Frappe Assistant Core",
-        "server_name": "Frappe Assistant Core",
+        "name": "default",
+        "server_name": "MCP Server",
         "is_active": 1,
         "status": "Connected",
         "transport_type": "direct",
-        "description": "Built-in Growth System tools via Frappe Assistant Core",
+        "description": "Built-in tools",
     }]
 
 
 @frappe.whitelist()
 def toggle_server(server_name, is_active):
-    """Toggle not needed — FAC is always active."""
-    return {"success": True}
+    """Toggle MCP server active status. Accepts name or server_name."""
+    try:
+        if not frappe.db.exists("DocType", "Niv MCP Server"):
+            return {"success": False, "error": "Niv MCP Server DocType not found"}
+
+        # Find by name (primary key) first, then by server_name
+        doc_name = None
+        if frappe.db.exists("Niv MCP Server", server_name):
+            doc_name = server_name
+        else:
+            # Search by server_name field
+            found = frappe.db.get_value("Niv MCP Server", {"server_name": server_name}, "name")
+            if found:
+                doc_name = found
+
+        if doc_name:
+            is_active_val = 1 if (is_active and str(is_active) not in ("0", "false", "False")) else 0
+            frappe.db.set_value("Niv MCP Server", doc_name, "is_active", is_active_val)
+            frappe.db.commit()
+            # Clear MCP cache
+            try:
+                from niv_ai.niv_core.mcp_client import clear_cache
+                clear_cache()
+            except Exception:
+                pass
+            return {"success": True, "is_active": is_active_val}
+        return {"success": False, "error": f"Server '{server_name}' not found"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @frappe.whitelist()
 def test_connection(server_name=None):
-    """Test FAC tool discovery."""
+    """Test MCP tool discovery."""
     try:
         from niv_ai.niv_core.mcp_client import get_all_mcp_tools_cached
         tools = get_all_mcp_tools_cached()
@@ -40,7 +92,7 @@ def test_connection(server_name=None):
 
 @frappe.whitelist()
 def get_all_mcp_tools():
-    """Get all tools from FAC in OpenAI function calling format."""
+    """Get all tools from MCP servers in OpenAI function calling format."""
     try:
         from niv_ai.niv_core.mcp_client import get_all_mcp_tools as _get_all
         return _get_all()
