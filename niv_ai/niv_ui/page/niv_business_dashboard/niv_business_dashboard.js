@@ -21,89 +21,74 @@ class NivAIDashboard {
         this.page.main.html(this.loadingScreen());
         
         try {
-            // Clear cache if period changed
-            if (period) {
-                await frappe.call({
-                    method: "niv_ai.niv_ui.api.bi_dashboard.clear_bi_cache",
-                    args: { period: this.period }
-                });
-            }
-            
-            // Start the AI job
+            // Step 1: Load instant SQL data (fast)
             const r = await frappe.call({
                 method: "niv_ai.niv_ui.api.bi_dashboard.get_bi_data",
                 args: { period: this.period }
             });
+            this.data = r.message || {};
+            this.aiData = null;
+            this.render();
             
-            const result = r.message;
-            
-            if (result.status === "ready" && result.data) {
-                // Cached result available
-                this.handleResult(result.data);
-            } else {
-                // Job started or processing — start polling
-                this.startPolling();
-            }
+            // Step 2: Start background AI analysis
+            this.startAiRefresh();
         } catch(e) {
             console.error(e);
-            this.renderError("Failed to start AI analysis. Try again.");
+            this.renderError("Failed to load dashboard.");
         }
     }
 
-    startPolling() {
-        this._pollCount = 0;
-        this._pollTimer = setInterval(async () => {
-            this._pollCount++;
-            
-            // Update loading step animation
-            const steps = document.querySelectorAll(".ai-step");
-            const activeIdx = Math.min(Math.floor(this._pollCount / 5), steps.length - 1);
-            steps.forEach((s, i) => {
-                s.classList.toggle("active", i === activeIdx);
-                if (i < activeIdx) s.classList.add("done");
-            });
-            
-            // Timeout after 3 minutes
-            if (this._pollCount > 36) {
-                clearInterval(this._pollTimer);
-                this.renderError("AI took too long. The model might be busy. Try again.");
+    async startAiRefresh() {
+        // Clear old cache
+        await frappe.call({ method: "niv_ai.niv_ui.api.bi_dashboard.clear_ai_cache", args: { period: this.period } });
+        
+        // Start AI job
+        await frappe.call({ method: "niv_ai.niv_ui.api.bi_dashboard.start_ai_refresh", args: { period: this.period } });
+        
+        // Show AI loading indicator
+        const banner = document.getElementById("aiBanner");
+        if (banner) {
+            banner.style.display = "flex";
+            banner.innerHTML = '<span class="ai-banner-spinner">&#x2728;</span> AI is analyzing data in background... <span class="ai-banner-tokens" id="aiTokens"></span>';
+        }
+        
+        // Start polling
+        this._aiPollCount = 0;
+        this._aiPollTimer = setInterval(async () => {
+            this._aiPollCount++;
+            if (this._aiPollCount > 36) { // 3 min timeout
+                clearInterval(this._aiPollTimer);
+                if (banner) banner.innerHTML = '&#x26A0; AI analysis timed out. <button onclick="window._biDash.startAiRefresh()" style="background:none;border:none;color:#7c3aed;cursor:pointer;font-weight:600">Retry</button>';
                 return;
             }
             
             try {
-                const r = await frappe.call({
-                    method: "niv_ai.niv_ui.api.bi_dashboard.poll_bi_data",
-                    args: { period: this.period }
-                });
-                
-                const result = r.message;
-                
-                if (result.status === "ready" && result.data) {
-                    clearInterval(this._pollTimer);
-                    this.handleResult(result.data);
+                const r = await frappe.call({ method: "niv_ai.niv_ui.api.bi_dashboard.poll_ai_result", args: { period: this.period } });
+                if (r.message.status === "ready") {
+                    clearInterval(this._aiPollTimer);
+                    this.aiData = r.message.data;
+                    
+                    // Merge AI data into dashboard
+                    if (this.aiData && this.aiData.data) {
+                        // AI predictions/insights overlay
+                        this.data.ai_predictions = this.aiData.data.predictions || this.aiData.data;
+                        this.data.ai_raw = this.aiData.raw;
+                    } else if (this.aiData && this.aiData.raw) {
+                        this.data.ai_raw = this.aiData.raw;
+                    }
+                    
+                    this.render();
+                    if (banner) {
+                        banner.innerHTML = '&#x2728; AI analysis complete! Data refreshed.';
+                        banner.classList.add("done");
+                        setTimeout(() => { banner.style.display = "none"; }, 5000);
+                    }
                 }
-                // If still processing, continue polling
-            } catch(e) {
-                // Ignore poll errors, keep trying
-            }
-        }, 5000); // Poll every 5 seconds
+            } catch(e) {}
+        }, 5000);
     }
 
-    handleResult(result) {
-        if (result.status === "ok" && result.data) {
-            this.data = result.data;
-            this.render();
-        } else if (result.raw) {
-            this.renderRaw(result.raw);
-        } else if (result.data) {
-            this.data = result.data;
-            this.render();
-        } else {
-            this.renderError("AI returned no data. Try again.");
-        }
-    }
-
-    loadingScreen() {
+        loadingScreen() {
         return `
             <div class="ai-dash">
                 <div class="ai-loading">
@@ -314,7 +299,10 @@ class NivAIDashboard {
                         <button class="ai-btn-refresh" onclick="window._biDash.init()">&#x21BB; Reload</button>
                     </div>
                 </div>
+                <div class="ai-banner" id="aiBanner" style="display:none"></div>
                 ${sections}
+                ${this.data.ai_raw ? '<div class="ai-card ai-insights-card"><div class="ai-card-header"><h3>&#x2728; AI Analysis</h3></div><div class="ai-insights-text">' + this.data.ai_raw.replace(/\n/g, "<br>") + '</div></div>' : ''}
+                ${this.data.ai_predictions && this.data.ai_predictions.insights ? '<div class="ai-card"><div class="ai-card-header"><h3>&#x1F9E0; AI Predictions</h3></div><div class="ai-insights">' + this.data.ai_predictions.insights.map(i => '<div class="ai-insight-item">&#x1F4A1; ' + i + '</div>').join("") + '</div></div>' : ''}
                 <div class="ai-footer">&#x2728; Powered by AI Agent &middot; Data fetched via MCP tools &middot; ${new Date().toLocaleTimeString()}</div>
             </div>`);
     }

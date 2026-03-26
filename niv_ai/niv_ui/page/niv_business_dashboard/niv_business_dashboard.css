@@ -125,3 +125,20 @@
     .ai-kpi-grid { grid-template-columns: repeat(2, 1fr); }
     .ai-header { flex-direction: column; gap: 12px; }
 }
+
+/* ═══ AI Banner ═══ */
+.ai-banner {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px 16px; border-radius: 10px; margin-bottom: 12px;
+    background: linear-gradient(135deg, rgba(124,58,237,0.06), rgba(59,130,246,0.04));
+    border: 1px solid rgba(124,58,237,0.12);
+    font-size: 13px; color: #7c3aed; font-weight: 500;
+    animation: aiPulse 2s infinite;
+}
+.ai-banner.done { animation: none; background: rgba(16,185,129,0.06); border-color: rgba(16,185,129,0.15); color: #10b981; }
+.ai-banner-spinner { animation: aiSpin 2s linear infinite; }
+.ai-banner-tokens { margin-left: auto; font-size: 11px; color: #9ca3af; }
+
+/* AI Insights */
+.ai-insights-card { border-left: 3px solid #7c3aed; }
+.ai-insights-text { font-size: 13px; line-height: 1.7; color: var(--text-color, #333); max-height: 300px; overflow: auto; }
