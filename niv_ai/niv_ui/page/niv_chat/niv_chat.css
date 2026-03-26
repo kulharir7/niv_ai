@@ -1405,89 +1405,198 @@ pre:hover .code-copy-btn { opacity: 1; }
 }
 
 /* ── Tool Calls Accordion ── */
-.msg-tool-calls { margin: 8px 0 12px 0; }
+/* ═══ Claude-Style Tool Calls ═══ */
+.msg-tool-calls {
+    margin: 8px 0 12px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+/* ── Tool Accordion Container ── */
 .tool-call-accordion {
     border-radius: 12px;
-    margin-bottom: 6px;
+    margin-bottom: 2px;
     overflow: hidden;
-    border: 1px solid var(--niv-border);
+    border: 1px solid rgba(255,255,255,0.06);
+    background: rgba(255,255,255,0.02);
     transition: all 0.2s ease;
 }
-.tool-call-accordion:hover { border-color: rgba(124,58,237,0.3); }
+.tool-call-accordion:hover {
+    border-color: rgba(255,255,255,0.12);
+    background: rgba(255,255,255,0.03);
+}
+
+/* ── Tool Header (collapsed state) ── */
 .tool-call-header {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px 14px;
+    padding: 10px 14px;
     cursor: pointer;
     font-size: 13px;
     transition: all 0.15s ease;
     border-radius: 12px;
     background: transparent;
+    user-select: none;
 }
-.tool-call-header:hover { background: var(--niv-hover); }
-.tool-call-accordion.open .tool-call-header { border-radius: 12px 12px 0 0; background: var(--niv-hover); }
+.tool-call-header:hover { background: rgba(255,255,255,0.04); }
+.tool-call-accordion.open .tool-call-header {
+    border-radius: 12px 12px 0 0;
+    background: rgba(255,255,255,0.04);
+}
+
+/* ── Status Icon (spinner / check / error) ── */
 .tool-status-icon {
-    width: 20px; height: 20px;
+    width: 22px; height: 22px;
     display: flex; align-items: center; justify-content: center;
     border-radius: 50%;
     font-size: 11px;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
 }
-.tool-status-icon.done { background: rgba(16,185,129,0.12); color: #10b981; }
-.tool-status-icon.running { background: rgba(124,58,237,0.12); color: var(--niv-primary); }
-.tool-status-icon.error { background: rgba(239,68,68,0.12); color: #ef4444; }
-@keyframes toolPulse { 0%,100%{opacity:1}50%{opacity:0.5} }
-.tool-call-accordion.running { animation: toolPulse 1.5s ease-in-out infinite; }
-.tool-call-accordion.running .tool-call-header { background: linear-gradient(90deg, rgba(124,58,237,0.04), rgba(124,58,237,0.08), rgba(124,58,237,0.04)); background-size: 200% 100%; animation: toolShimmer 2s ease infinite; }
-@keyframes toolShimmer { 0%{background-position:200% 0}100%{background-position:-200% 0} }
-.tool-label { font-size: 12px; color: var(--niv-text-muted); }
-.tool-name { font-weight: 600; color: var(--niv-text); font-size: 13px; }
-.tool-running-text { font-size: 11px; color: var(--niv-text-muted); font-style: italic; margin-left: 4px; }
+.tool-status-icon.done {
+    background: rgba(16, 185, 129, 0.15);
+    color: #34d399;
+}
+.tool-status-icon.running {
+    background: rgba(251, 146, 60, 0.15);
+    color: #fb923c;
+}
+.tool-status-icon.error {
+    background: rgba(239, 68, 68, 0.15);
+    color: #f87171;
+}
+
+/* ── Running Animation ── */
+.tool-call-accordion.running .tool-call-header {
+    background: linear-gradient(90deg,
+        rgba(251,146,60,0.03) 0%,
+        rgba(251,146,60,0.07) 50%,
+        rgba(251,146,60,0.03) 100%);
+    background-size: 200% 100%;
+    animation: toolShimmer 2s ease infinite;
+}
+@keyframes toolShimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* ── Labels & Text ── */
+.tool-label {
+    font-size: 12px;
+    color: rgba(255,255,255,0.4);
+    font-weight: 500;
+}
+.tool-name {
+    font-weight: 600;
+    color: rgba(255,255,255,0.85);
+    font-size: 13px;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    background: rgba(255,255,255,0.05);
+    padding: 2px 8px;
+    border-radius: 6px;
+    letter-spacing: -0.01em;
+}
+.tool-running-text {
+    font-size: 11px;
+    color: #fb923c;
+    font-style: italic;
+    margin-left: 2px;
+    animation: toolTextPulse 1.5s ease-in-out infinite;
+}
+@keyframes toolTextPulse {
+    0%,100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* ── Chevron ── */
 .tool-chevron {
     margin-left: auto;
     font-size: 10px;
-    color: var(--niv-text-muted);
-    transition: transform 0.2s ease;
+    color: rgba(255,255,255,0.3);
+    transition: transform 0.25s cubic-bezier(0.4,0,0.2,1), opacity 0.15s ease;
     opacity: 0.5;
 }
-.tool-call-accordion:hover .tool-chevron { opacity: 1; }
+.tool-call-accordion:hover .tool-chevron { opacity: 1; color: rgba(255,255,255,0.5); }
 .tool-call-accordion.open .tool-chevron { transform: rotate(90deg); opacity: 1; }
+
+/* ── Tool Body (expanded content) ── */
 .tool-call-body {
     display: none;
-    padding: 10px 14px;
-    border-top: 1px solid var(--niv-border);
+    padding: 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
     font-size: 12px;
-    background: var(--niv-hover);
+    background: rgba(0,0,0,0.15);
 }
 .tool-call-accordion.open .tool-call-body { display: block; }
-.tool-section { margin-bottom: 6px; }
-.tool-section pre {
-    margin: 4px 0;
-    padding: 10px;
-    border-radius: 8px;
-    font-size: 11px;
-    max-height: 200px;
-    overflow: auto;
-    background: var(--niv-bg);
+
+/* ── Input / Output Sections ── */
+.tool-section {
+    padding: 12px 16px;
+    margin: 0;
+}
+.tool-section + .tool-section {
+    border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+.tool-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
 }
 .tool-section strong {
-    font-size: 11px;
+    font-size: 10px;
+    font-weight: 700;
     text-transform: uppercase;
-    color: var(--niv-text-muted);
-    letter-spacing: 0.03em;
+    letter-spacing: 0.08em;
+    color: rgba(255,255,255,0.4);
 }
-.tool-section-label {
+
+/* Input section */
+.tool-input .tool-section-label,
+.tool-input strong { color: #60a5fa; }
+
+/* Output section */
+.tool-output .tool-section-label,
+.tool-output strong { color: #34d399; }
+
+/* ── Code Blocks inside tool sections ── */
+.tool-section pre {
+    margin: 0;
+    padding: 10px 12px;
+    border-radius: 8px;
     font-size: 11px;
-    font-weight: 600;
-    display: block;
-    margin-bottom: 4px;
+    line-height: 1.5;
+    max-height: 220px;
+    overflow: auto;
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.04);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255,255,255,0.1) transparent;
 }
-.tool-input .tool-section-label { color: #60a5fa; }
-.tool-output .tool-section-label { color: #34d399; }
-.tool-input pre { border-left: 3px solid #3b82f6; }
-.tool-output pre { border-left: 3px solid #10b981; }
-.tool-section + .tool-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); }
-/* Legacy tool call items */
+.tool-section pre::-webkit-scrollbar { width: 4px; height: 4px; }
+.tool-section pre::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+.tool-section pre code {
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 11px;
+    color: rgba(255,255,255,0.7);
+}
+.tool-input pre {
+    border-left: 3px solid rgba(96,165,250,0.4);
+}
+.tool-output pre {
+    border-left: 3px solid rgba(52,211,153,0.4);
+}
+
+/* ── Legacy tool-call-item (fallback) ── */
 .tool-call-item {
     display: flex;
     align-items: center;
