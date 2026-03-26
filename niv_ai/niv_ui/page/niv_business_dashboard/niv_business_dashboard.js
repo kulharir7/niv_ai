@@ -203,6 +203,30 @@ class NivBIDashboard {
                 dots + labels +
                 '</svg>';
         })();
+        // Receivables Ageing
+        const recv = this.data.receivables || {};
+        const recvBuckets = recv.buckets || [];
+        const recvTotal = recv.total_outstanding || 0;
+        const topDefault = recv.top_defaulters || [];
+        
+        const recvBars = recvBuckets.map(b => {
+            return '<div class="bi-recv-row">' +
+                '<span class="bi-recv-label">' + b.label + '</span>' +
+                '<div class="bi-recv-bar-wrap"><div class="bi-recv-bar" style="width:' + b.pct + '%;background:' + b.color + '"></div></div>' +
+                '<span class="bi-recv-amt">' + this.fmt(b.amount) + '</span>' +
+                '<span class="bi-recv-pct">' + b.pct + '%</span>' +
+                '</div>';
+        }).join("");
+        
+        const defaulterRows = topDefault.map((d, i) => {
+            return '<div class="bi-def-row">' +
+                '<span class="bi-def-rank">' + (i+1) + '</span>' +
+                '<div class="bi-def-info"><span class="bi-def-name">' + (d.party || "").substring(0, 25) + '</span>' +
+                '<span class="bi-def-meta">' + d.invoices + ' invoices \u00b7 ' + d.days + ' days old</span></div>' +
+                '<span class="bi-def-amt">' + this.fmt(d.amount) + '</span>' +
+                '</div>';
+        }).join("") || '<div class="bi-empty">No overdue found</div>';
+
         this.page.main.html(`
             <div class="bi-dash">
                 <!-- Header -->
@@ -284,6 +308,24 @@ class NivBIDashboard {
                     </div>
 
 
+
+                    <!-- Outstanding Receivables -->
+                    <div class="bi-card">
+                        <div class="bi-card-header">
+                            <h3>&#x23F3; Outstanding Receivables</h3>
+                            <span class="bi-badge-warn">${this.fmt(recvTotal)}</span>
+                        </div>
+                        <div class="bi-recv-list">${recvBars || '<div class="bi-empty">No outstanding</div>'}</div>
+                        <div class="bi-recv-stacked">
+                            ${recvBuckets.map(b => '<div class="bi-recv-seg" style="flex:' + (b.pct || 1) + ';background:' + b.color + '" title="' + b.label + ': ' + b.pct + '%"></div>').join("")}
+                        </div>
+                    </div>
+
+                    <!-- Top Overdue -->
+                    <div class="bi-card">
+                        <div class="bi-card-header"><h3>&#x1F6A8; Top Overdue Parties</h3></div>
+                        <div class="bi-def-list">${defaulterRows}</div>
+                    </div>
 
                     <!-- Loan Portfolio Overview -->
                     <div class="bi-card bi-span-2 bi-loan-card">
