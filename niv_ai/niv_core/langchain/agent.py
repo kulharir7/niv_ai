@@ -74,6 +74,28 @@ def _strip_thinking(text, final=False):
     return text.strip() if final else text
 
 
+def _extract_thinking(text):
+    """Extract thinking content from text before stripping.
+    
+    Returns: (thinking_text, clean_text)
+    """
+    if not text:
+        return "", text
+    
+    thinking_parts = []
+    for opener, closer in _TAG_OPENERS:
+        escaped_opener = re.escape(opener)
+        escaped_closer = re.escape(closer)
+        pattern = re.compile(escaped_opener + r'([\s\S]*?)' + escaped_closer)
+        for match in pattern.finditer(text):
+            thought = match.group(1).strip()
+            if thought:
+                thinking_parts.append(thought)
+    
+    clean = _strip_thinking(text, final=False)
+    return "\n".join(thinking_parts), clean
+
+
 def _has_incomplete_thinking_tag(text):
     """Check if text has an unclosed thinking tag — we should hold the buffer.
     
@@ -213,24 +235,24 @@ def _sanitize_error(error: Exception) -> str:
 # All streaming paths use this helper to avoid code duplication.
 
 def _flush_buffer(buffer, final=False):
-    """Process buffer → return (text_to_yield, remaining_buffer).
+    """Process buffer -> return (text_to_yield, remaining_buffer, thinking_text).
     
-    If final=True, force flush everything (strip thinking, return result).
-    If final=False, hold buffer if there's an incomplete thinking tag.
+    Returns: (clean_text, remaining_buffer, thinking_text)
     """
     if not buffer:
-        return "", ""
+        return "", "", ""
     
     if not final and _has_incomplete_thinking_tag(buffer):
-        return "", buffer  # Hold it
+        return "", buffer, ""  # Hold it
     
-    clean = _strip_thinking(buffer, final=final)
+    thinking, clean = _extract_thinking(buffer)
+    clean = clean.strip() if final else clean
     if clean:
-        return clean, ""
+        return clean, "", thinking
     elif final:
-        return "", ""  # Thinking-only content → nothing to yield
+        return "", "", thinking  # Thinking-only -> still emit thought
     else:
-        return "", buffer  # Still accumulating
+        return "", buffer, ""  # Still accumulating
 
 
 def _stream_llm_tokens(llm_stream):
@@ -251,13 +273,17 @@ def _stream_llm_tokens(llm_stream):
             continue
         
         buffer += content
-        text, buffer = _flush_buffer(buffer, final=False)
+        text, buffer, thinking = _flush_buffer(buffer, final=False)
+        if thinking:
+            yield {"type": "thought", "content": thinking}
         if text:
             yield {"type": "token", "content": text}
     
     # Final flush
     if buffer:
-        text, _ = _flush_buffer(buffer, final=True)
+        text, _, thinking = _flush_buffer(buffer, final=True)
+        if thinking:
+            yield {"type": "thought", "content": thinking}
         if text:
             # Check if the entire output is garbled tool text
             if _is_garbled_tool_text(text):
@@ -449,7 +475,9 @@ def _stream_single_model(agent, messages, config, cbs, dev_mode=False, max_tool_
             # Text content
             if msg.content:
                 buffer += msg.content
-                text, buffer = _flush_buffer(buffer, final=False)
+                text, buffer, thinking = _flush_buffer(buffer, final=False)
+                if thinking:
+                    yield {"type": "thought", "content": thinking}
                 if text:
                     yielded_any_text = True
                     yield {"type": "token", "content": text}
@@ -457,7 +485,9 @@ def _stream_single_model(agent, messages, config, cbs, dev_mode=False, max_tool_
             # Tool calls — flush text buffer first
             if tool_calls or tool_call_chunks:
                 if buffer:
-                    text, buffer = _flush_buffer(buffer, final=True)
+                    text, buffer, thinking = _flush_buffer(buffer, final=True)
+                    if thinking:
+                        yield {"type": "thought", "content": thinking}
                     if text and not _is_garbled_tool_text(text):
                         yielded_any_text = True
                         yield {"type": "token", "content": text}
@@ -498,7 +528,9 @@ def _stream_single_model(agent, messages, config, cbs, dev_mode=False, max_tool_
 
     # ── Final buffer flush ──
     if buffer:
-        text, _ = _flush_buffer(buffer, final=True)
+        text, _, thinking = _flush_buffer(buffer, final=True)
+        if thinking:
+            yield {"type": "thought", "content": thinking}
         if text and not _is_garbled_tool_text(text):
             yielded_any_text = True
             yield {"type": "token", "content": text}
@@ -646,14 +678,18 @@ def _stream_two_model(
             text_content = getattr(chunk, "content", None)
             if text_content:
                 buffer += text_content
-                text, buffer = _flush_buffer(buffer, final=False)
+                text, buffer, thinking = _flush_buffer(buffer, final=False)
+                if thinking:
+                    yield {"type": "thought", "content": thinking}
                 if text:
                     collected_text += text
                     yield {"type": "token", "content": text}
 
         # Final flush of buffer
         if buffer:
-            text, buffer = _flush_buffer(buffer, final=True)
+            text, buffer, thinking = _flush_buffer(buffer, final=True)
+            if thinking:
+                yield {"type": "thought", "content": thinking}
             if text and not _is_garbled_tool_text(text):
                 collected_text += text
                 yield {"type": "token", "content": text}
