@@ -21,6 +21,15 @@ class NivAIDashboard {
         this.page.main.html(this.loadingScreen());
         
         try {
+            // Clear cache if period changed
+            if (period) {
+                await frappe.call({
+                    method: "niv_ai.niv_ui.api.bi_dashboard.clear_bi_cache",
+                    args: { period: this.period }
+                });
+            }
+            
+            // Start the AI job
             const r = await frappe.call({
                 method: "niv_ai.niv_ui.api.bi_dashboard.get_bi_data",
                 args: { period: this.period }
@@ -28,17 +37,69 @@ class NivAIDashboard {
             
             const result = r.message;
             
-            if (result.status === "ok" && result.data) {
-                this.data = result.data;
-                this.render();
-            } else if (result.raw) {
-                this.renderRaw(result.raw);
+            if (result.status === "ready" && result.data) {
+                // Cached result available
+                this.handleResult(result.data);
             } else {
-                this.renderError("AI returned no data. Try again.");
+                // Job started or processing — start polling
+                this.startPolling();
             }
         } catch(e) {
             console.error(e);
-            this.renderError("Failed to connect to AI. Check console.");
+            this.renderError("Failed to start AI analysis. Try again.");
+        }
+    }
+
+    startPolling() {
+        this._pollCount = 0;
+        this._pollTimer = setInterval(async () => {
+            this._pollCount++;
+            
+            // Update loading step animation
+            const steps = document.querySelectorAll(".ai-step");
+            const activeIdx = Math.min(Math.floor(this._pollCount / 5), steps.length - 1);
+            steps.forEach((s, i) => {
+                s.classList.toggle("active", i === activeIdx);
+                if (i < activeIdx) s.classList.add("done");
+            });
+            
+            // Timeout after 3 minutes
+            if (this._pollCount > 36) {
+                clearInterval(this._pollTimer);
+                this.renderError("AI took too long. The model might be busy. Try again.");
+                return;
+            }
+            
+            try {
+                const r = await frappe.call({
+                    method: "niv_ai.niv_ui.api.bi_dashboard.poll_bi_data",
+                    args: { period: this.period }
+                });
+                
+                const result = r.message;
+                
+                if (result.status === "ready" && result.data) {
+                    clearInterval(this._pollTimer);
+                    this.handleResult(result.data);
+                }
+                // If still processing, continue polling
+            } catch(e) {
+                // Ignore poll errors, keep trying
+            }
+        }, 5000); // Poll every 5 seconds
+    }
+
+    handleResult(result) {
+        if (result.status === "ok" && result.data) {
+            this.data = result.data;
+            this.render();
+        } else if (result.raw) {
+            this.renderRaw(result.raw);
+        } else if (result.data) {
+            this.data = result.data;
+            this.render();
+        } else {
+            this.renderError("AI returned no data. Try again.");
         }
     }
 
@@ -50,7 +111,7 @@ class NivAIDashboard {
                     <div class="ai-loading-title">AI is analyzing your business</div>
                     <div class="ai-loading-sub">Querying database using MCP tools...</div>
                     <div class="ai-loading-steps">
-                        <div class="ai-step active">&#x1F50D; Fetching financial data</div>
+                        <div class="ai-step active">&#x1F50D; Fetching financial data...</div>
                         <div class="ai-step">&#x1F3E6; Analyzing loan portfolio</div>
                         <div class="ai-step">&#x1F4CA; Processing trends</div>
                         <div class="ai-step">&#x1F9E0; Generating predictions</div>
