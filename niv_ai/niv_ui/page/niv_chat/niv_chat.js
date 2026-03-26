@@ -2528,14 +2528,26 @@ ${htmlCode}
                                     $msgEl = this.append_message("assistant", "");
                                 }
                                 this.update_typing_text(`Fetching data`);
+                                // Format tool arguments for display
+                                var argsStr = "";
+                                try {
+                                    var args = data.arguments || {};
+                                    if (typeof args === "string") args = JSON.parse(args);
+                                    argsStr = JSON.stringify(args, null, 2);
+                                } catch(e) { argsStr = String(data.arguments || "{}"); }
+                                
                                 var $toolHtml = $(`
                                     <div class="tool-call-accordion running" data-tool="${frappe.utils.escape_html(toolName)}">
-                                        <div class="tool-call-header">
+                                        <div class="tool-call-header" onclick="$(this).closest('.tool-call-accordion').toggleClass('open')">
                                             <span class="tool-status-icon running"><i class="fa fa-circle-o-notch fa-spin" style="font-size:11px"></i></span>
                                             <span class="tool-label">Using</span>
                                             <span class="tool-name">${frappe.utils.escape_html(toolName)}</span>
                                             <span class="tool-running-text">working...</span>
                                             <i class="fa fa-chevron-right tool-chevron"></i>
+                                        </div>
+                                        <div class="tool-call-body">
+                                            <div class="tool-section tool-input"><strong class="tool-section-label">📥 Input:</strong><pre><code>${frappe.utils.escape_html(argsStr)}</code></pre></div>
+                                            <div class="tool-section tool-output" style="display:none;"><strong class="tool-section-label">📤 Output:</strong><pre><code></code></pre></div>
                                         </div>
                                     </div>
                                 `);
@@ -2584,8 +2596,20 @@ ${htmlCode}
                                     $running.find(".tool-running-text").remove();
                                     var resultStr = typeof data.result === "string" ? data.result : JSON.stringify(data.result || {}, null, 2);
                                     resultStr = resultStr.substring(0, 2000);
-                                    $running.find(".tool-call-header").attr("onclick", "$(this).closest('.tool-call-accordion').toggleClass('open')");
-                                    $running.append(`<div class="tool-call-body"><pre><code>${frappe.utils.escape_html(resultStr)}</code></pre></div>`);
+                                    // Show output section with result
+                                    var $outputSection = $running.find(".tool-output");
+                                    if ($outputSection.length) {
+                                        $outputSection.find("code").text(resultStr);
+                                        $outputSection.show();
+                                    } else {
+                                        // Fallback: append output section
+                                        var $body = $running.find(".tool-call-body");
+                                        if (!$body.length) {
+                                            $running.append('<div class="tool-call-body"></div>');
+                                            $body = $running.find(".tool-call-body");
+                                        }
+                                        $body.append(`<div class="tool-section tool-output"><strong class="tool-section-label">📤 Output:</strong><pre><code>${frappe.utils.escape_html(resultStr)}</code></pre></div>`);
+                                    }
                                 }
                             }
                         } else if (data.type === "agent_transfer") {
