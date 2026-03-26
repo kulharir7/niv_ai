@@ -2756,7 +2756,13 @@ ${htmlCode}
                                     this.update_last_assistant_actions();
                                 } else {
                                     this._pendingArtifactId = null;
-                                    this.load_messages(conv_id); // Refresh to get final saved state
+                                    // Don't reload — streaming already rendered content + tool calls with output.
+                                    // load_messages would wipe streaming tool output (tool_results not saved in DB).
+                                    // Just update the final message content and actions.
+                                    if ($msgEl && fullContent) {
+                                        $msgEl.find(".msg-content").html(this.render_markdown(fullContent));
+                                    }
+                                    this.update_last_assistant_actions();
                                 }
                             }
                             resolve();
