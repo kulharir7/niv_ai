@@ -151,6 +151,7 @@ def get_bi_data():
         "pending": _safe_call(_get_pending_approvals),
         "growth": _safe_call(_get_collection_and_growth),
         "branches": _safe_call(_get_branch_performance),
+        "pipeline": _safe_call(_get_tat_and_pipeline),
     }
 
 
@@ -512,6 +513,60 @@ def get_system_info():
 
 
 
+
+
+
+def _get_tat_and_pipeline():
+    """Turnaround time + loan processing pipeline funnel."""
+    data = {"tat": {}, "pipeline": []}
+    try:
+        # TAT: Application to Disbursement (avg days)
+        try:
+            tat = frappe.db.sql(
+                "SELECT AVG(DATEDIFF(ld.disbursement_date, la.creation)) as avg_days, "
+                "MIN(DATEDIFF(ld.disbursement_date, la.creation)) as min_days, "
+                "MAX(DATEDIFF(ld.disbursement_date, la.creation)) as max_days "
+                "FROM `tabLoan Disbursement` ld "
+                "INNER JOIN tabLoan l ON ld.against_loan = l.name "
+                "INNER JOIN `tabLoan Application` la ON l.loan_application = la.name "
+                "WHERE ld.docstatus=1 AND ld.disbursement_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)",
+                as_dict=True)
+            if tat and tat[0].avg_days is not None:
+                data["tat"] = {
+                    "avg": round(float(tat[0].avg_days), 1),
+                    "min": int(tat[0].min_days or 0),
+                    "max": int(tat[0].max_days or 0),
+                }
+        except:
+            pass
+        
+        # Loan Pipeline Funnel
+        try:
+            stages = [
+                ("Applied", "SELECT COUNT(*) FROM `tabLoan Application`"),
+                ("Under Review", "SELECT COUNT(*) FROM `tabLoan Application` WHERE status IN ('Open','Approved')"),
+                ("Sanctioned", "SELECT COUNT(*) FROM tabLoan WHERE docstatus=1"),
+                ("Disbursed", "SELECT COUNT(*) FROM tabLoan WHERE docstatus=1 AND status IN ('Disbursed','Partially Disbursed','Closed','Loan Closure Requested')"),
+                ("Active", "SELECT COUNT(*) FROM tabLoan WHERE docstatus=1 AND status IN ('Disbursed','Partially Disbursed')"),
+                ("Closed", "SELECT COUNT(*) FROM tabLoan WHERE docstatus=1 AND status='Closed'"),
+            ]
+            max_count = 0
+            for label, query in stages:
+                try:
+                    cnt = int(frappe.db.sql(query)[0][0] or 0)
+                    data["pipeline"].append({"stage": label, "count": cnt})
+                    if cnt > max_count:
+                        max_count = cnt
+                except:
+                    data["pipeline"].append({"stage": label, "count": 0})
+            # Calculate percentages
+            for p in data["pipeline"]:
+                p["pct"] = round(p["count"] / max_count * 100) if max_count else 0
+        except:
+            pass
+    except Exception as e:
+        frappe.log_error(f"TAT pipeline error: {e}")
+    return data
 
 def _get_branch_performance():
     """Branch-wise loan performance."""

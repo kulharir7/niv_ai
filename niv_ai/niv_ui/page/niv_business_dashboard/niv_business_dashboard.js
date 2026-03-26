@@ -203,6 +203,23 @@ class NivBIDashboard {
                 dots + labels +
                 '</svg>';
         })();
+        // TAT + Pipeline
+        const pipeData = this.data.pipeline || {};
+        const tat = pipeData.tat || {};
+        const pipeline = pipeData.pipeline || [];
+        
+        const funnelHtml = pipeline.map((p, i) => {
+            const colors = ['#3b82f6','#6366f1','#8b5cf6','#10b981','#f59e0b','#6b7280'];
+            const w = Math.max(30, p.pct);
+            return '<div class="bi-funnel-row">' +
+                '<span class="bi-funnel-label">' + p.stage + '</span>' +
+                '<div class="bi-funnel-bar-wrap"><div class="bi-funnel-bar" style="width:' + w + '%;background:' + colors[i % 6] + '"></div></div>' +
+                '<span class="bi-funnel-count">' + this.fmtN(p.count) + '</span>' +
+                '</div>';
+        }).join("");
+        
+        const tatColor = (tat.avg || 0) <= 7 ? '#10b981' : (tat.avg || 0) <= 15 ? '#f59e0b' : '#ef4444';
+
         // Branch Performance + Quick Stats
         const branchData = this.data.branches || {};
         const branches = branchData.branches || [];
@@ -401,6 +418,34 @@ class NivBIDashboard {
                             <span class="bi-branch-col-label" style="width:70px;text-align:right">Disbursed</span>
                         </div>
                         <div class="bi-branch-list">${branchRows}</div>
+                    </div>
+
+                    <!-- Loan Pipeline Funnel -->
+                    <div class="bi-card">
+                        <div class="bi-card-header"><h3>&#x1F4CA; Loan Pipeline</h3></div>
+                        <div class="bi-funnel-list">${funnelHtml || '<div class="bi-empty">No pipeline data</div>'}</div>
+                    </div>
+
+                    <!-- Turnaround Time -->
+                    <div class="bi-card bi-tat-card">
+                        <div class="bi-card-header"><h3>&#x23F1; Turnaround Time</h3></div>
+                        <div class="bi-tat-body">
+                            <div class="bi-tat-main">
+                                <div class="bi-tat-big" style="color:${tatColor}">${tat.avg || 'N/A'}</div>
+                                <div class="bi-tat-unit">avg days</div>
+                                <div class="bi-tat-sub">Application to Disbursement</div>
+                            </div>
+                            <div class="bi-tat-range">
+                                <div class="bi-tat-range-item">
+                                    <span class="bi-tat-range-label">Fastest</span>
+                                    <span class="bi-tat-range-val green">${tat.min || 0} days</span>
+                                </div>
+                                <div class="bi-tat-range-item">
+                                    <span class="bi-tat-range-label">Slowest</span>
+                                    <span class="bi-tat-range-val red">${tat.max || 0} days</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- EMI Collection -->

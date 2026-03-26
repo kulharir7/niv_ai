@@ -345,3 +345,24 @@
 @media (max-width: 768px) {
     .bi-quick-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ═══ Loan Pipeline Funnel ═══ */
+.bi-funnel-list { display: flex; flex-direction: column; gap: 6px; }
+.bi-funnel-row { display: flex; align-items: center; gap: 8px; }
+.bi-funnel-label { font-size: 11px; color: #6b7280; width: 80px; flex-shrink: 0; text-align: right; }
+.bi-funnel-bar-wrap { flex: 1; height: 18px; background: rgba(0,0,0,0.03); border-radius: 4px; overflow: hidden; }
+.bi-funnel-bar { height: 100%; border-radius: 4px; transition: width 0.8s cubic-bezier(0.16,1,0.3,1); }
+.bi-funnel-count { font-size: 12px; font-weight: 700; color: #1f2937; min-width: 45px; }
+
+/* ═══ TAT ═══ */
+.bi-tat-body { text-align: center; padding: 8px 0; }
+.bi-tat-main { margin-bottom: 16px; }
+.bi-tat-big { font-size: 48px; font-weight: 800; letter-spacing: -0.03em; line-height: 1; }
+.bi-tat-unit { font-size: 14px; color: #6b7280; font-weight: 500; margin-top: 2px; }
+.bi-tat-sub { font-size: 11px; color: #9ca3af; margin-top: 4px; }
+.bi-tat-range { display: flex; justify-content: center; gap: 24px; }
+.bi-tat-range-item { text-align: center; }
+.bi-tat-range-label { display: block; font-size: 10px; color: #9ca3af; text-transform: uppercase; }
+.bi-tat-range-val { display: block; font-size: 16px; font-weight: 700; }
+.bi-tat-range-val.green { color: #10b981; }
+.bi-tat-range-val.red { color: #ef4444; }
