@@ -520,17 +520,7 @@ def _get_pending_approvals():
         data["approvals"] = [{"doctype": p.doctype, "count": p.cnt} for p in pending]
         data["total_pending"] = sum(p.cnt for p in pending)
         
-        # Draft documents (not submitted)
-        drafts = frappe.db.sql(
-            "SELECT dt.name as doctype, COUNT(*) cnt "
-            "FROM tabDocType dt "
-            "INNER JOIN (SELECT doctype, COUNT(*) c FROM tabDocField WHERE fieldname='docstatus' GROUP BY doctype) df ON df.doctype=dt.name "
-            "WHERE dt.istable=0 AND dt.module NOT IN ('Core','Email','Desk','Printing','Website','Custom') "
-            "AND EXISTS (SELECT 1 FROM `tab{0}` WHERE docstatus=0 LIMIT 1) "
-            "LIMIT 1",
-            as_dict=True)
-        
-        # Simpler approach - check common doctypes for drafts
+        # Draft documents (not submitted) - check common doctypes
         draft_doctypes = ["Loan Application", "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice", "Journal Entry", "Payment Entry"]
         draft_list = []
         for dt in draft_doctypes:
