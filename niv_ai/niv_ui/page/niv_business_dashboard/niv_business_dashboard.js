@@ -162,11 +162,47 @@ class NivBIDashboard {
             return '<div class="bi-loan-status-item"><span class="bi-loan-dot" style="background:' + color + '"></span><div class="bi-loan-status-info"><span class="bi-loan-status-name">' + s.status + '</span><span class="bi-loan-status-count">' + s.count + ' loans · ' + this.fmt(s.amount) + '</span></div></div>';
         }).join("");
         
+        // Build SVG area chart for disbursement
         const maxDisb = Math.max(...loanTrend.map(t => t.amount), 1);
-        const disbBars = loanTrend.map(t => {
-            const h = Math.max(6, (t.amount / maxDisb) * 85);
-            return '<div class="bi-disb-col"><div class="bi-disb-bar" style="height:' + h + 'px" title="' + t.count + ' disbursements, ' + this.fmt(t.amount) + '"></div><div class="bi-disb-label">' + t.month + '</div><div class="bi-disb-amt">' + this.fmt(t.amount) + '</div></div>';
-        }).join("");
+        const disbChartHtml = (() => {
+            if (!loanTrend.length) return '<div class="bi-empty">No disbursement data</div>';
+            const w = 460, h = 140, padL = 10, padR = 10, padT = 20, padB = 40;
+            const cw = w - padL - padR, ch = h - padT - padB;
+            const step = cw / Math.max(loanTrend.length - 1, 1);
+            
+            let points = loanTrend.map((t, i) => {
+                const x = padL + i * step;
+                const y = padT + ch - (t.amount / maxDisb) * ch;
+                return {x, y, data: t};
+            });
+            
+            const linePath = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+            const areaPath = linePath + ' L' + points[points.length-1].x.toFixed(1) + ',' + (padT+ch) + ' L' + points[0].x.toFixed(1) + ',' + (padT+ch) + ' Z';
+            
+            const dots = points.map((p, i) => {
+                return '<circle cx="' + p.x.toFixed(1) + '" cy="' + p.y.toFixed(1) + '" r="3.5" fill="#3b82f6" stroke="#fff" stroke-width="1.5" class="bi-svg-dot"><title>' + p.data.count + ' disbursements\n' + this.fmt(p.data.amount) + '</title></circle>';
+            }).join('');
+            
+            const labels = points.map((p, i) => {
+                if (loanTrend.length > 8 && i % 2 !== 0 && i !== loanTrend.length - 1) return '';
+                return '<text x="' + p.x.toFixed(1) + '" y="' + (h - 18) + '" text-anchor="middle" class="bi-svg-label">' + p.data.month + '</text>' +
+                       '<text x="' + p.x.toFixed(1) + '" y="' + (h - 6) + '" text-anchor="middle" class="bi-svg-amt">' + this.fmt(p.data.amount) + '</text>';
+            }).join('');
+            
+            // Grid lines
+            const gridLines = [0.25, 0.5, 0.75].map(pct => {
+                const gy = padT + ch - pct * ch;
+                return '<line x1="' + padL + '" y1="' + gy.toFixed(1) + '" x2="' + (w-padR) + '" y2="' + gy.toFixed(1) + '" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="3,3"/>';
+            }).join('');
+            
+            return '<svg viewBox="0 0 ' + w + ' ' + h + '" class="bi-svg-chart">' +
+                '<defs><linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#3b82f6" stop-opacity="0.3"/><stop offset="100%" stop-color="#3b82f6" stop-opacity="0.02"/></linearGradient></defs>' +
+                gridLines +
+                '<path d="' + areaPath + '" fill="url(#areaGrad)"/>' +
+                '<path d="' + linePath + '" fill="none" stroke="#3b82f6" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' +
+                dots + labels +
+                '</svg>';
+        })();
         this.page.main.html(`
             <div class="bi-dash">
                 <!-- Header -->
@@ -292,7 +328,7 @@ class NivBIDashboard {
                     <!-- Disbursement Trend -->
                     <div class="bi-card">
                         <div class="bi-card-header"><h3>📈 Disbursement Trend</h3></div>
-                        <div class="bi-disb-chart">${disbBars || '<div class="bi-empty">No disbursement data</div>'}</div>
+                        <div class="bi-disb-chart">${disbChartHtml}</div>
                     </div>
 
                     <!-- Customer Insights -->
