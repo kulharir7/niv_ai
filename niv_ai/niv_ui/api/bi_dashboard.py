@@ -150,6 +150,7 @@ def get_bi_data():
         "receivables": _safe_call(_get_receivables_ageing),
         "pending": _safe_call(_get_pending_approvals),
         "growth": _safe_call(_get_collection_and_growth),
+        "branches": _safe_call(_get_branch_performance),
     }
 
 
@@ -509,6 +510,50 @@ def get_system_info():
 
 
 
+
+
+
+def _get_branch_performance():
+    """Branch-wise loan performance."""
+    data = {"branches": [], "quick_stats": {}}
+    try:
+        # Branch-wise loans
+        try:
+            branches = frappe.db.sql(
+                "SELECT IFNULL(branch, 'Unassigned') as branch, COUNT(*) cnt, "
+                "IFNULL(SUM(loan_amount),0) sanctioned, "
+                "IFNULL(SUM(disbursed_amount),0) disbursed, "
+                "IFNULL(SUM(total_amount_paid),0) collected "
+                "FROM tabLoan WHERE docstatus=1 "
+                "GROUP BY branch ORDER BY disbursed DESC LIMIT 10",
+                as_dict=True)
+            data["branches"] = [{
+                "name": b.branch, "loans": b.cnt,
+                "sanctioned": float(b.sanctioned), "disbursed": float(b.disbursed),
+                "collected": float(b.collected),
+                "efficiency": round(float(b.collected) / float(b.disbursed) * 100, 1) if b.disbursed else 0
+            } for b in branches]
+        except:
+            pass
+        
+        # Quick stats
+        try:
+            today = frappe.utils.nowdate()
+            data["quick_stats"] = {
+                "today_collections": float(frappe.db.sql(
+                    "SELECT IFNULL(SUM(amount_paid),0) FROM `tabLoan Repayment` WHERE docstatus=1 AND posting_date=%s", today)[0][0] or 0),
+                "today_disbursements": float(frappe.db.sql(
+                    "SELECT IFNULL(SUM(disbursed_amount),0) FROM `tabLoan Disbursement` WHERE docstatus=1 AND disbursement_date=%s", today)[0][0] or 0),
+                "active_loans": int(frappe.db.sql(
+                    "SELECT COUNT(*) FROM tabLoan WHERE docstatus=1 AND status IN ('Disbursed','Partially Disbursed')")[0][0] or 0),
+                "avg_loan_size": float(frappe.db.sql(
+                    "SELECT IFNULL(AVG(loan_amount),0) FROM tabLoan WHERE docstatus=1")[0][0] or 0),
+            }
+        except:
+            pass
+    except Exception as e:
+        frappe.log_error(f"Branch performance error: {e}")
+    return data
 
 def _get_collection_and_growth():
     """EMI collection rate + new customer/loan growth trends."""

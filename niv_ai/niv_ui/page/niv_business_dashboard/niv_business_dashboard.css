@@ -309,3 +309,39 @@
 .bi-spark-total { font-weight: 700; color: #1f2937; font-size: 14px; }
 .bi-sparkline { width: 100%; height: 40px; }
 .bi-spark-labels { display: flex; justify-content: space-between; font-size: 8px; color: #9ca3af; margin-top: 2px; }
+
+/* ═══ Quick Stats ═══ */
+.bi-quick-card { border-top: 3px solid #3b82f6; }
+.bi-quick-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.bi-quick-item { text-align: center; padding: 12px 8px; border-radius: 10px; background: rgba(0,0,0,0.02); border: 1px solid rgba(0,0,0,0.04); }
+.bi-quick-icon { font-size: 24px; margin-bottom: 4px; }
+.bi-quick-val { font-size: 22px; font-weight: 800; color: #1f2937; letter-spacing: -0.02em; }
+.bi-quick-val.green { color: #10b981; }
+.bi-quick-val.blue { color: #3b82f6; }
+.bi-quick-label { font-size: 10px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 2px; }
+
+/* ═══ Branch Performance ═══ */
+.bi-branch-header-row {
+    display: flex; align-items: center; gap: 8px; padding: 0 8px 6px;
+    border-bottom: 1px solid rgba(0,0,0,0.06); margin-bottom: 4px;
+}
+.bi-branch-col-label { font-size: 9px; color: #9ca3af; text-transform: uppercase; letter-spacing: 0.05em; }
+.bi-branch-list { display: flex; flex-direction: column; gap: 2px; max-height: 280px; overflow-y: auto; }
+.bi-branch-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 12px; }
+.bi-branch-row:hover { background: rgba(0,0,0,0.02); }
+.bi-branch-rank {
+    width: 20px; height: 20px; border-radius: 6px; font-size: 10px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(59,130,246,0.08); color: #3b82f6; flex-shrink: 0;
+}
+.bi-branch-info { flex: 1; min-width: 0; }
+.bi-branch-name { font-size: 12px; font-weight: 600; color: #1f2937; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bi-branch-meta { font-size: 10px; color: #9ca3af; }
+.bi-branch-bar-wrap { width: 80px; height: 6px; background: rgba(0,0,0,0.04); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+.bi-branch-bar { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+.bi-branch-eff { font-size: 11px; font-weight: 700; width: 40px; text-align: right; flex-shrink: 0; }
+.bi-branch-amt { font-size: 11px; font-weight: 600; color: #6b7280; min-width: 65px; text-align: right; flex-shrink: 0; }
+
+@media (max-width: 768px) {
+    .bi-quick-grid { grid-template-columns: repeat(2, 1fr); }
+}
