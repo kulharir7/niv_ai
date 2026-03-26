@@ -164,8 +164,8 @@ class NivBIDashboard {
         
         const maxDisb = Math.max(...loanTrend.map(t => t.amount), 1);
         const disbBars = loanTrend.map(t => {
-            const h = Math.max(4, (t.amount / maxDisb) * 80);
-            return '<div class="bi-disb-col"><div class="bi-disb-bar" style="height:' + h + 'px" title="' + this.fmt(t.amount) + '"></div><div class="bi-disb-label">' + t.month + '</div></div>';
+            const h = Math.max(6, (t.amount / maxDisb) * 85);
+            return '<div class="bi-disb-col"><div class="bi-disb-bar" style="height:' + h + 'px" title="' + t.count + ' disbursements, ' + this.fmt(t.amount) + '"></div><div class="bi-disb-label">' + t.month + '</div><div class="bi-disb-amt">' + this.fmt(t.amount) + '</div></div>';
         }).join("");
         this.page.main.html(`
             <div class="bi-dash">
