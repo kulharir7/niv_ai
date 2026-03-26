@@ -9,6 +9,15 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 
 
+def _safe_call(fn):
+    """Call function safely, return empty dict on error."""
+    try:
+        return fn()
+    except Exception as e:
+        frappe.log_error(f"BI Dashboard error in {fn.__name__}: {e}")
+        return {}
+
+
 # ═══════════════════════════════════════════
 # SMART DISCOVERY — Find financial DocTypes
 # ═══════════════════════════════════════════
@@ -137,9 +146,9 @@ def get_bi_data():
         "recent": get_recent_high_value(),
         "status_breakdown": get_status_breakdown(),
         "system_info": get_system_info(),
-        "loan_portfolio": _get_loan_portfolio(),
-        "receivables": _get_receivables_ageing(),
-        "pending": _get_pending_approvals(),
+        "loan_portfolio": _safe_call(_get_loan_portfolio),
+        "receivables": _safe_call(_get_receivables_ageing),
+        "pending": _safe_call(_get_pending_approvals),
     }
 
 
