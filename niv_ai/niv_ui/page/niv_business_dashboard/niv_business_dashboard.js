@@ -229,6 +229,72 @@ class NivBIDashboard {
                         <div class="bi-recent-list">${recentRows}</div>
                     </div>
 
+        // Loan Portfolio
+        const loan = this.data.loan_portfolio || {};
+        const loanSum = loan.summary || {};
+        const loanStatuses = loan.status_breakdown || [];
+        const loanTrend = loan.disbursement_trend || [];
+        
+        // Loan status donut data
+        const loanStatusCards = loanStatuses.map(s => {
+            const colors = {"Disbursed":"#10b981","Closed":"#6b7280","Loan Closure Requested":"#f59e0b","Partially Disbursed":"#3b82f6","Sanctioned":"#8b5cf6","Cancel":"#ef4444","Terminated":"#ef4444"};
+            const color = colors[s.status] || "#6b7280";
+            return '<div class="bi-loan-status-item"><span class="bi-loan-dot" style="background:' + color + '"></span><div class="bi-loan-status-info"><span class="bi-loan-status-name">' + s.status + '</span><span class="bi-loan-status-count">' + s.count + ' loans · ' + this.fmt(s.amount) + '</span></div></div>';
+        }).join("");
+        
+        // Disbursement trend mini chart
+        const maxDisb = Math.max(...loanTrend.map(t => t.amount), 1);
+        const disbBars = loanTrend.map(t => {
+            const h = Math.max(4, (t.amount / maxDisb) * 80);
+            return '<div class="bi-disb-col"><div class="bi-disb-bar" style="height:' + h + 'px" title="' + this.fmt(t.amount) + '"></div><div class="bi-disb-label">' + t.month + '</div></div>';
+        }).join("");
+
+                    <!-- Loan Portfolio Overview -->
+                    <div class="bi-card bi-span-2 bi-loan-card">
+                        <div class="bi-card-header">
+                            <h3>🏦 Loan Portfolio Overview</h3>
+                            <span class="bi-badge">${this.fmtN(loanSum.active_loans || 0)} Active</span>
+                        </div>
+                        <div class="bi-loan-kpis">
+                            <div class="bi-loan-kpi">
+                                <div class="bi-loan-kpi-label">Total Sanctioned</div>
+                                <div class="bi-loan-kpi-value">${this.fmt(loanSum.total_sanctioned)}</div>
+                            </div>
+                            <div class="bi-loan-kpi">
+                                <div class="bi-loan-kpi-label">Total Disbursed</div>
+                                <div class="bi-loan-kpi-value green">${this.fmt(loanSum.total_disbursed)}</div>
+                            </div>
+                            <div class="bi-loan-kpi">
+                                <div class="bi-loan-kpi-label">Total Collected</div>
+                                <div class="bi-loan-kpi-value blue">${this.fmt(loanSum.total_collected)}</div>
+                            </div>
+                            <div class="bi-loan-kpi">
+                                <div class="bi-loan-kpi-label">Written Off</div>
+                                <div class="bi-loan-kpi-value red">${this.fmt(loanSum.written_off)}</div>
+                            </div>
+                            <div class="bi-loan-kpi">
+                                <div class="bi-loan-kpi-label">New Applications</div>
+                                <div class="bi-loan-kpi-value">${loanSum.new_applications_month || 0} <small>this month</small></div>
+                            </div>
+                            <div class="bi-loan-kpi">
+                                <div class="bi-loan-kpi-label">Closure Requests</div>
+                                <div class="bi-loan-kpi-value orange">${loanSum.closure_requests || 0} <small>pending</small></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Loan Status Breakdown -->
+                    <div class="bi-card">
+                        <div class="bi-card-header"><h3>📊 Loan Status</h3></div>
+                        <div class="bi-loan-status-list">${loanStatusCards || '<div class="bi-empty">No loan data</div>'}</div>
+                    </div>
+
+                    <!-- Disbursement Trend -->
+                    <div class="bi-card">
+                        <div class="bi-card-header"><h3>📈 Disbursement Trend</h3></div>
+                        <div class="bi-disb-chart">${disbBars || '<div class="bi-empty">No disbursement data</div>'}</div>
+                    </div>
+
                     <!-- Customer Insights -->
                     <div class="bi-card">
                         <div class="bi-card-header"><h3>👥 Customer Intelligence</h3></div>
