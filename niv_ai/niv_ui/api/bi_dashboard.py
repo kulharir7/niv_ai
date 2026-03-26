@@ -550,7 +550,7 @@ def _get_loan_portfolio():
                 "DATE_FORMAT(disbursement_date, '%Y-%m') as sort_key, "
                 "COUNT(*) cnt, IFNULL(SUM(disbursed_amount),0) amount "
                 "FROM `tabLoan Disbursement` WHERE docstatus=1 "
-                "AND disbursement_date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH) "
+                "AND disbursement_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) "
                 "GROUP BY month, sort_key ORDER BY sort_key",
                 as_dict=True)
             data["disbursement_trend"] = [{"month": t.month, "count": t.cnt, "amount": t.amount} for t in trend]
