@@ -138,6 +138,7 @@ def get_bi_data():
         "status_breakdown": get_status_breakdown(),
         "system_info": get_system_info(),
         "loan_portfolio": _get_loan_portfolio(),
+        "receivables": _get_receivables_ageing(),
     }
 
 
@@ -491,6 +492,49 @@ def get_system_info():
 # ═══════════════════════════════════════════
 # LOAN PORTFOLIO DATA
 # ═══════════════════════════════════════════
+
+
+
+def _get_receivables_ageing():
+    """Outstanding receivables ageing for NBFC."""
+    data = {"total_outstanding": 0, "buckets": [], "top_defaulters": []}
+    try:
+        if not frappe.db.table_exists("Loan"):
+            return data
+        
+        # Outstanding by ageing bucket
+        buckets = frappe.db.sql(
+            "SELECT "
+            "SUM(CASE WHEN DATEDIFF(CURDATE(), posting_date) <= 30 THEN outstanding_amount ELSE 0 END) as d0_30, "
+            "SUM(CASE WHEN DATEDIFF(CURDATE(), posting_date) BETWEEN 31 AND 60 THEN outstanding_amount ELSE 0 END) as d31_60, "
+            "SUM(CASE WHEN DATEDIFF(CURDATE(), posting_date) BETWEEN 61 AND 90 THEN outstanding_amount ELSE 0 END) as d61_90, "
+            "SUM(CASE WHEN DATEDIFF(CURDATE(), posting_date) > 90 THEN outstanding_amount ELSE 0 END) as d90plus, "
+            "SUM(outstanding_amount) as total "
+            "FROM `tabSales Invoice` WHERE docstatus=1 AND outstanding_amount > 0",
+            as_dict=True)
+        
+        if buckets and buckets[0].total:
+            b = buckets[0]
+            total = float(b.total or 0)
+            data["total_outstanding"] = total
+            data["buckets"] = [
+                {"label": "0-30 days", "amount": float(b.d0_30 or 0), "color": "#10b981", "pct": round(float(b.d0_30 or 0)/total*100) if total else 0},
+                {"label": "31-60 days", "amount": float(b.d31_60 or 0), "color": "#f59e0b", "pct": round(float(b.d31_60 or 0)/total*100) if total else 0},
+                {"label": "61-90 days", "amount": float(b.d61_90 or 0), "color": "#f97316", "pct": round(float(b.d61_90 or 0)/total*100) if total else 0},
+                {"label": "90+ days", "amount": float(b.d90plus or 0), "color": "#ef4444", "pct": round(float(b.d90plus or 0)/total*100) if total else 0},
+            ]
+        
+        # Top overdue parties
+        top = frappe.db.sql(
+            "SELECT customer as party, SUM(outstanding_amount) as amount, "
+            "COUNT(*) as invoices, MIN(posting_date) as oldest "
+            "FROM `tabSales Invoice` WHERE docstatus=1 AND outstanding_amount > 0 "
+            "GROUP BY customer ORDER BY amount DESC LIMIT 5",
+            as_dict=True)
+        data["top_defaulters"] = [{"party": t.party or "Unknown", "amount": float(t.amount), "invoices": t.invoices, "days": (frappe.utils.nowdate() != str(t.oldest)) and (frappe.utils.date_diff(frappe.utils.nowdate(), str(t.oldest))) or 0} for t in top]
+    except Exception as e:
+        frappe.log_error(f"Receivables ageing error: {e}")
+    return data
 
 def _get_loan_portfolio():
     """Get comprehensive loan portfolio data for NBFC dashboard."""
