@@ -203,6 +203,23 @@ class NivBIDashboard {
                 dots + labels +
                 '</svg>';
         })();
+        // Branch Performance + Quick Stats
+        const branchData = this.data.branches || {};
+        const branches = branchData.branches || [];
+        const qStats = branchData.quick_stats || {};
+        
+        const branchRows = branches.map((b, i) => {
+            const effColor = b.efficiency >= 80 ? '#10b981' : b.efficiency >= 50 ? '#f59e0b' : '#ef4444';
+            return '<div class="bi-branch-row">' +
+                '<span class="bi-branch-rank">' + (i+1) + '</span>' +
+                '<div class="bi-branch-info"><span class="bi-branch-name">' + b.name + '</span>' +
+                '<span class="bi-branch-meta">' + b.loans + ' loans</span></div>' +
+                '<div class="bi-branch-bar-wrap"><div class="bi-branch-bar" style="width:' + Math.min(b.efficiency, 100) + '%;background:' + effColor + '"></div></div>' +
+                '<span class="bi-branch-eff" style="color:' + effColor + '">' + b.efficiency + '%</span>' +
+                '<span class="bi-branch-amt">' + this.fmt(b.disbursed) + '</span>' +
+                '</div>';
+        }).join("") || '<div class="bi-empty">No branch data</div>';
+
         // Growth & Collection
         const growth = this.data.growth || {};
         const coll = growth.collection || {};
@@ -370,6 +387,22 @@ class NivBIDashboard {
                         <div class="bi-team-list">${teamRows}</div>
                     </div>
 
+                    <!-- Branch Performance -->
+                    <div class="bi-card bi-span-2">
+                        <div class="bi-card-header">
+                            <h3>&#x1F3E2; Branch Performance</h3>
+                            <span class="bi-badge">${branches.length} branches</span>
+                        </div>
+                        <div class="bi-branch-header-row">
+                            <span style="width:24px"></span>
+                            <span class="bi-branch-col-label" style="flex:1">Branch</span>
+                            <span class="bi-branch-col-label" style="width:100px">Efficiency</span>
+                            <span class="bi-branch-col-label" style="width:50px;text-align:right"></span>
+                            <span class="bi-branch-col-label" style="width:70px;text-align:right">Disbursed</span>
+                        </div>
+                        <div class="bi-branch-list">${branchRows}</div>
+                    </div>
+
                     <!-- EMI Collection -->
                     <div class="bi-card bi-coll-card">
                         <div class="bi-card-header"><h3>&#x1F4B0; EMI Collection</h3></div>
@@ -428,6 +461,33 @@ class NivBIDashboard {
                     <div class="bi-card">
                         <div class="bi-card-header"><h3>&#x1F6A8; Top Overdue Parties</h3></div>
                         <div class="bi-def-list">${defaulterRows}</div>
+                    </div>
+
+                    <!-- Today Quick Stats -->
+                    <div class="bi-card bi-span-2 bi-quick-card">
+                        <div class="bi-card-header"><h3>&#x26A1; Today's Snapshot</h3></div>
+                        <div class="bi-quick-grid">
+                            <div class="bi-quick-item">
+                                <div class="bi-quick-icon">&#x1F4B5;</div>
+                                <div class="bi-quick-val green">${this.fmt(qStats.today_collections)}</div>
+                                <div class="bi-quick-label">Collections Today</div>
+                            </div>
+                            <div class="bi-quick-item">
+                                <div class="bi-quick-icon">&#x1F4E4;</div>
+                                <div class="bi-quick-val blue">${this.fmt(qStats.today_disbursements)}</div>
+                                <div class="bi-quick-label">Disbursed Today</div>
+                            </div>
+                            <div class="bi-quick-item">
+                                <div class="bi-quick-icon">&#x1F4CA;</div>
+                                <div class="bi-quick-val">${this.fmtN(qStats.active_loans)}</div>
+                                <div class="bi-quick-label">Active Loans</div>
+                            </div>
+                            <div class="bi-quick-item">
+                                <div class="bi-quick-icon">&#x1F3AF;</div>
+                                <div class="bi-quick-val">${this.fmt(qStats.avg_loan_size)}</div>
+                                <div class="bi-quick-label">Avg Loan Size</div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Loan Portfolio Overview -->
