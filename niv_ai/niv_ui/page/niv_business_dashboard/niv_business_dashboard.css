@@ -541,3 +541,45 @@
     .bi-pred-grid { grid-template-columns: 1fr; }
     .bi-season-grid { grid-template-columns: repeat(4, 1fr); }
 }
+
+/* ═══ Date Filter + Export ═══ */
+.bi-date-filter {
+    padding: 7px 12px; border-radius: 8px; font-size: 12px;
+    border: 1px solid var(--border-color, #ddd); background: var(--card-bg, #fff);
+    color: #1f2937; cursor: pointer; outline: none;
+}
+.bi-date-filter:focus { border-color: #7c3aed; }
+.bi-btn-export {
+    background: var(--card-bg, #f5f5f5); border: 1px solid var(--border-color, #ddd);
+    border-radius: 8px; padding: 7px 14px; font-size: 12px; cursor: pointer;
+    transition: all 0.2s; color: #6b7280;
+}
+.bi-btn-export:hover { background: #eee; color: #1f2937; }
+
+/* ═══ Drill-down Panel ═══ */
+.bi-drill-panel {
+    background: var(--card-bg, #fff); border: 1px solid rgba(124,58,237,0.2);
+    border-radius: 10px; margin-top: 8px; overflow: hidden;
+    animation: biFadeUp 0.2s ease; box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+.bi-drill-header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 10px 14px; background: rgba(124,58,237,0.04);
+    font-size: 13px; font-weight: 600; color: #7c3aed;
+}
+.bi-drill-header button { background: none; border: none; font-size: 16px; cursor: pointer; color: #9ca3af; }
+.bi-drill-body { padding: 10px 14px; }
+.bi-drill-row {
+    display: flex; justify-content: space-between; padding: 6px 0;
+    font-size: 12px; border-bottom: 1px solid rgba(0,0,0,0.04);
+}
+.bi-drill-row:last-child { border-bottom: none; }
+.bi-drill-row .green { color: #10b981; font-weight: 600; }
+.bi-drill-row .red { color: #ef4444; font-weight: 600; }
+
+/* Clickable cards */
+.bi-fin-card:hover { transform: translateY(-3px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); cursor: pointer; }
+.bi-loan-kpi:hover { background: rgba(0,0,0,0.04); cursor: pointer; }
+.bi-loan-status-item:hover { background: rgba(0,0,0,0.06); cursor: pointer; }
+.bi-npa-row:hover { background: rgba(239,68,68,0.04); cursor: pointer; }
+.bi-appr-row:hover { background: rgba(245,158,11,0.04); cursor: pointer; }

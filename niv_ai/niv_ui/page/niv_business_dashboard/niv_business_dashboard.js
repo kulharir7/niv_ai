@@ -357,6 +357,16 @@ class NivBIDashboard {
                         <p class="bi-subtitle">${info.total_documents ? this.fmtN(info.total_documents) + ' records across ' + info.total_doctypes + ' types · ' + info.total_users + ' users' : 'Loading...'}</p>
                     </div>
                     <div class="bi-header-actions">
+                        <select class="bi-date-filter" id="biDateFilter" onchange="window._biDateChange && window._biDateChange(this.value)">
+                            <option value="this_month">This Month</option>
+                            <option value="last_month">Last Month</option>
+                            <option value="this_quarter">This Quarter</option>
+                            <option value="last_quarter">Last Quarter</option>
+                            <option value="this_year" selected>This Year</option>
+                            <option value="last_year">Last Year</option>
+                            <option value="all">All Time</option>
+                        </select>
+                        <button class="bi-btn-export" onclick="window._biExport && window._biExport()">&#x1F4E5; Export</button>
                         <button class="bi-btn-ai-mode" id="biAiMode" onclick="window._biLoadAI && window._biLoadAI()">&#x2728; Load via AI</button>
                         <button class="bi-btn-refresh" onclick="new NivBIDashboard(cur_page.page)">↻ Refresh</button>
                         <button class="bi-btn-ai" id="biAiBtn">✦ AI Analysis</button>
@@ -742,6 +752,90 @@ class NivBIDashboard {
                 btn.disabled = false;
                 frappe.msgprint("AI analysis failed. Try again.");
             }
+        };
+
+        // Click-to-Drill — KPI cards open detail view
+        document.querySelectorAll(".bi-fin-card").forEach(card => {
+            card.style.cursor = "pointer";
+            card.addEventListener("click", function() {
+                const type = this.classList.contains("income") ? "income" :
+                             this.classList.contains("expense") ? "expense" :
+                             this.classList.contains("profit") ? "profit" : "year-profit";
+                const titles = {income: "Income Details", expense: "Expense Details", profit: "Profit Breakdown", "year-profit": "Year Summary"};
+                const fin = this._biDash?.data?.financial || {};
+                
+                let detail = "";
+                if (type === "income") {
+                    detail = (fin.income_sources || []).map(s => '<div class="bi-drill-row"><span>' + s.doctype + '</span><span class="green">' + (window._biDash?.fmt(s.amount) || s.amount) + '</span></div>').join("");
+                } else if (type === "expense") {
+                    detail = (fin.expense_sources || []).map(s => '<div class="bi-drill-row"><span>' + s.doctype + '</span><span class="red">' + (window._biDash?.fmt(s.amount) || s.amount) + '</span></div>').join("");
+                }
+                if (!detail) detail = '<div class="bi-empty">Click for detailed breakdown</div>';
+                
+                // Show drill panel
+                let existing = document.querySelector(".bi-drill-panel");
+                if (existing) existing.remove();
+                const panel = document.createElement("div");
+                panel.className = "bi-drill-panel";
+                panel.innerHTML = '<div class="bi-drill-header"><span>' + (titles[type] || "Details") + '</span><button onclick="this.closest(\'.bi-drill-panel\').remove()">&#x2715;</button></div><div class="bi-drill-body">' + detail + '</div>';
+                this.after(panel);
+            });
+        });
+
+        // Loan KPI drill-down
+        document.querySelectorAll(".bi-loan-kpi").forEach(kpi => {
+            kpi.style.cursor = "pointer";
+            kpi.addEventListener("click", function() {
+                const label = this.querySelector(".bi-loan-kpi-label")?.textContent || "";
+                if (label.includes("Closure")) {
+                    frappe.set_route("List", "Loan", {"status": "Loan Closure Requested"});
+                } else if (label.includes("Active") || label.includes("Disbursed")) {
+                    frappe.set_route("List", "Loan", {"status": ["in", "Disbursed,Partially Disbursed"]});
+                } else if (label.includes("Application")) {
+                    frappe.set_route("List", "Loan Application");
+                }
+            });
+        });
+
+        // Loan status drill-down
+        document.querySelectorAll(".bi-loan-status-item").forEach(item => {
+            item.style.cursor = "pointer";
+            item.addEventListener("click", function() {
+                const status = this.querySelector(".bi-loan-status-name")?.textContent || "";
+                if (status) frappe.set_route("List", "Loan", {"status": status});
+            });
+        });
+
+        // NPA warning drill-down
+        document.querySelectorAll(".bi-npa-row").forEach(row => {
+            row.style.cursor = "pointer";
+            row.addEventListener("click", function() {
+                const loan = this.querySelector(".bi-npa-loan")?.textContent || "";
+                if (loan) frappe.set_route("Form", "Loan", loan);
+            });
+        });
+
+        // Approval drill-down
+        document.querySelectorAll(".bi-appr-row").forEach(row => {
+            row.style.cursor = "pointer";
+            row.addEventListener("click", function() {
+                const dt = this.querySelector(".bi-appr-dt")?.textContent || "";
+                if (dt) frappe.set_route("List", dt, {"docstatus": 0});
+            });
+        });
+
+        // Export dashboard as image
+        window._biExport = () => {
+            frappe.msgprint({
+                title: "Export Dashboard",
+                message: "Use <b>Ctrl+P</b> to print this page as PDF.<br><br>Or right-click any section and select <b>Inspect</b> to copy data.",
+                indicator: "blue"
+            });
+        };
+
+        // Date filter (placeholder — would need backend support for full implementation)
+        window._biDateChange = (period) => {
+            frappe.show_alert({message: "Filter: " + period + " (Coming soon — full date filtering)", indicator: "blue"}, 3);
         };
 
         // Auto-refresh every 5 minutes
