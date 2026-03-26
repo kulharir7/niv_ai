@@ -1476,6 +1476,17 @@ pre:hover .code-copy-btn { opacity: 1; }
     color: var(--niv-text-muted);
     letter-spacing: 0.03em;
 }
+.tool-section-label {
+    font-size: 11px;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 4px;
+}
+.tool-input .tool-section-label { color: #60a5fa; }
+.tool-output .tool-section-label { color: #34d399; }
+.tool-input pre { border-left: 3px solid #3b82f6; }
+.tool-output pre { border-left: 3px solid #10b981; }
+.tool-section + .tool-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.05); }
 /* Legacy tool call items */
 .tool-call-item {
     display: flex;
