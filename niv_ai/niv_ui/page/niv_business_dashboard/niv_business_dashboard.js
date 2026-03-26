@@ -203,6 +203,29 @@ class NivBIDashboard {
                 dots + labels +
                 '</svg>';
         })();
+        // Growth & Collection
+        const growth = this.data.growth || {};
+        const coll = growth.collection || {};
+        const newLoans = growth.new_loans_trend || [];
+        const newCusts = growth.new_customers_trend || [];
+        
+        // Collection gauge
+        const collRate = coll.rate || 0;
+        const collColor = collRate >= 80 ? '#10b981' : collRate >= 50 ? '#f59e0b' : '#ef4444';
+        const collDeg = Math.min(collRate, 100) * 1.8; // 180 deg max
+        
+        // New loans mini sparkline
+        const maxNewLoans = Math.max(...newLoans.map(l => l.count), 1);
+        const loanSparkW = 200, loanSparkH = 40;
+        const loanSparkStep = loanSparkW / Math.max(newLoans.length - 1, 1);
+        const loanSparkPoints = newLoans.map((l, i) => (loanSparkStep * i).toFixed(0) + ',' + (loanSparkH - (l.count / maxNewLoans) * (loanSparkH - 4)).toFixed(0)).join(' ');
+        const loanSparkArea = loanSparkPoints + ' ' + loanSparkW + ',' + loanSparkH + ' 0,' + loanSparkH;
+        
+        // New customers sparkline
+        const maxNewCusts = Math.max(...newCusts.map(c => c.count), 1);
+        const custSparkPoints = newCusts.map((c, i) => (loanSparkStep * i).toFixed(0) + ',' + (loanSparkH - (c.count / maxNewCusts) * (loanSparkH - 4)).toFixed(0)).join(' ');
+        const custSparkArea = custSparkPoints + ' ' + loanSparkW + ',' + loanSparkH + ' 0,' + loanSparkH;
+
         // Pending Approvals
         const pend = this.data.pending || {};
         const approvals = pend.approvals || [];
@@ -345,6 +368,48 @@ class NivBIDashboard {
                     <div class="bi-card">
                         <div class="bi-card-header"><h3>&#x1F465; Team Activity (24h)</h3></div>
                         <div class="bi-team-list">${teamRows}</div>
+                    </div>
+
+                    <!-- EMI Collection -->
+                    <div class="bi-card bi-coll-card">
+                        <div class="bi-card-header"><h3>&#x1F4B0; EMI Collection</h3></div>
+                        <div class="bi-coll-body">
+                            <div class="bi-coll-gauge">
+                                <svg viewBox="0 0 120 70" class="bi-gauge-svg">
+                                    <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="#e5e7eb" stroke-width="8" stroke-linecap="round"/>
+                                    <path d="M 10 65 A 50 50 0 0 1 110 65" fill="none" stroke="${collColor}" stroke-width="8" stroke-linecap="round" stroke-dasharray="${collDeg} 180" class="bi-gauge-fill"/>
+                                </svg>
+                                <div class="bi-gauge-value" style="color:${collColor}">${collRate}%</div>
+                                <div class="bi-gauge-label">Collection Rate</div>
+                            </div>
+                            <div class="bi-coll-stats">
+                                <div class="bi-coll-stat"><span class="bi-coll-stat-label">Collected</span><span class="bi-coll-stat-val green">${this.fmt(coll.collected_month)}</span></div>
+                                <div class="bi-coll-stat"><span class="bi-coll-stat-label">Outstanding</span><span class="bi-coll-stat-val">${this.fmt(coll.total_outstanding)}</span></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- New Loans + Customers Sparklines -->
+                    <div class="bi-card">
+                        <div class="bi-card-header"><h3>&#x1F4C8; Growth Trends</h3></div>
+                        <div class="bi-spark-section">
+                            <div class="bi-spark-item">
+                                <div class="bi-spark-header"><span>New Loans</span><span class="bi-spark-total">${newLoans.reduce((s,l) => s+l.count, 0)}</span></div>
+                                <svg viewBox="0 0 ${loanSparkW} ${loanSparkH}" class="bi-sparkline">
+                                    <polygon points="${loanSparkArea}" fill="rgba(59,130,246,0.1)"/>
+                                    <polyline points="${loanSparkPoints}" fill="none" stroke="#3b82f6" stroke-width="2"/>
+                                </svg>
+                                <div class="bi-spark-labels">${newLoans.map(l => '<span>' + l.month + '</span>').join('')}</div>
+                            </div>
+                            <div class="bi-spark-item">
+                                <div class="bi-spark-header"><span>Loan Applications</span><span class="bi-spark-total">${newCusts.reduce((s,c) => s+c.count, 0)}</span></div>
+                                <svg viewBox="0 0 ${loanSparkW} ${loanSparkH}" class="bi-sparkline">
+                                    <polygon points="${custSparkArea}" fill="rgba(16,185,129,0.1)"/>
+                                    <polyline points="${custSparkPoints}" fill="none" stroke="#10b981" stroke-width="2"/>
+                                </svg>
+                                <div class="bi-spark-labels">${newCusts.map(c => '<span>' + c.month + '</span>').join('')}</div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Outstanding Receivables -->
