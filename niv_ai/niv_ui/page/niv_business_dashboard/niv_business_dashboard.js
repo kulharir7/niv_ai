@@ -315,6 +315,7 @@ class NivBIDashboard {
                         <p class="bi-subtitle">${info.total_documents ? this.fmtN(info.total_documents) + ' records across ' + info.total_doctypes + ' types · ' + info.total_users + ' users' : 'Loading...'}</p>
                     </div>
                     <div class="bi-header-actions">
+                        <button class="bi-btn-ai-mode" id="biAiMode" onclick="window._biLoadAI && window._biLoadAI()">&#x2728; Load via AI</button>
                         <button class="bi-btn-refresh" onclick="new NivBIDashboard(cur_page.page)">↻ Refresh</button>
                         <button class="bi-btn-ai" id="biAiBtn">✦ AI Analysis</button>
                     </div>
@@ -613,6 +614,50 @@ class NivBIDashboard {
                 content.innerHTML = '<div class="bi-ai-error">Analysis failed. Try again.</div>';
             }
         });
+
+        // AI Mode — reload all data via AI agent
+        window._biLoadAI = async () => {
+            const btn = document.getElementById("biAiMode");
+            btn.innerHTML = "&#x2728; AI Loading...";
+            btn.disabled = true;
+            
+            // Show loading overlay
+            const overlay = document.createElement("div");
+            overlay.className = "bi-ai-overlay";
+            overlay.innerHTML = '<div class="bi-ai-overlay-content"><div class="bi-ai-spinner">&#x2728;</div><div class="bi-ai-overlay-text">AI is analyzing your business data...</div><div class="bi-ai-overlay-sub">Using tools to query database</div></div>';
+            document.querySelector(".bi-dash").prepend(overlay);
+            
+            try {
+                const r = await frappe.call({
+                    method: "niv_ai.niv_ui.api.bi_dashboard.get_ai_dashboard_data",
+                    freeze: false
+                });
+                const result = r.message;
+                overlay.remove();
+                btn.innerHTML = "&#x2728; Load via AI";
+                btn.disabled = false;
+                
+                if (result.data) {
+                    // Show AI response in a panel
+                    const panel = document.createElement("div");
+                    panel.className = "bi-ai-result-panel";
+                    panel.innerHTML = '<div class="bi-ai-result-header"><span>&#x2728; AI Dashboard Analysis</span><button onclick="this.closest(\'.bi-ai-result-panel\').remove()">&#x2715;</button></div>' +
+                        '<pre class="bi-ai-result-json">' + JSON.stringify(result.data, null, 2) + '</pre>';
+                    document.querySelector(".bi-header").after(panel);
+                } else if (result.raw) {
+                    const panel = document.createElement("div");
+                    panel.className = "bi-ai-result-panel";
+                    panel.innerHTML = '<div class="bi-ai-result-header"><span>&#x2728; AI Response</span><button onclick="this.closest(\'.bi-ai-result-panel\').remove()">&#x2715;</button></div>' +
+                        '<div class="bi-ai-result-text">' + (result.raw || "").replace(/\n/g, "<br>") + '</div>';
+                    document.querySelector(".bi-header").after(panel);
+                }
+            } catch(e) {
+                overlay.remove();
+                btn.innerHTML = "&#x2728; Load via AI";
+                btn.disabled = false;
+                frappe.msgprint("AI analysis failed. Try again.");
+            }
+        };
 
         // Auto-refresh every 5 minutes
         if (this._refreshTimer) clearInterval(this._refreshTimer);
