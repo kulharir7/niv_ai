@@ -482,3 +482,62 @@
     padding: 12px 16px; font-size: 13px; line-height: 1.7; color: #1f2937;
     max-height: 400px; overflow: auto;
 }
+
+/* ═══ Smart Predictions ═══ */
+.bi-pred-section { border-top: 3px solid #7c3aed; }
+.bi-badge-ai {
+    font-size: 10px; font-weight: 700; color: #7c3aed;
+    background: rgba(124,58,237,0.08); padding: 3px 10px;
+    border-radius: 12px; text-transform: uppercase; letter-spacing: 0.03em;
+}
+.bi-badge-danger {
+    font-size: 10px; font-weight: 700; color: #ef4444;
+    background: rgba(239,68,68,0.08); padding: 3px 10px; border-radius: 12px;
+}
+.bi-pred-hint { font-size: 11px; color: #9ca3af; }
+
+/* Forecast Cards */
+.bi-pred-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.bi-pred-card {
+    background: rgba(124,58,237,0.03); border: 1px solid rgba(124,58,237,0.08);
+    border-radius: 10px; padding: 14px;
+}
+.bi-pred-month { font-size: 13px; font-weight: 700; color: #7c3aed; margin-bottom: 8px; }
+.bi-pred-row { display: flex; justify-content: space-between; font-size: 12px; color: #6b7280; padding: 2px 0; }
+.bi-pred-row span.green { color: #10b981; font-weight: 600; }
+.bi-pred-row span.red { color: #ef4444; font-weight: 600; }
+.bi-pred-row.profit { border-top: 1px solid rgba(0,0,0,0.06); margin-top: 4px; padding-top: 6px; font-weight: 700; color: #1f2937; }
+.bi-pred-conf { font-size: 10px; color: #9ca3af; margin-top: 6px; text-align: right; }
+
+/* Collection Prediction */
+.bi-coll-pred { text-align: center; padding: 10px 0; }
+.bi-coll-pred-big { font-size: 32px; font-weight: 800; color: #3b82f6; letter-spacing: -0.02em; }
+.bi-coll-pred-label { font-size: 12px; color: #9ca3af; margin-bottom: 12px; }
+.bi-coll-pred-details { display: flex; justify-content: center; gap: 16px; font-size: 11px; color: #6b7280; }
+.bi-coll-pred-details .green { color: #10b981; }
+
+/* NPA Warning */
+.bi-npa-list { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow-y: auto; }
+.bi-npa-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 12px; }
+.bi-npa-row:hover { background: rgba(0,0,0,0.02); }
+.bi-npa-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.bi-npa-info { flex: 1; min-width: 0; }
+.bi-npa-name { font-weight: 600; color: #1f2937; display: block; }
+.bi-npa-loan { font-size: 10px; color: #9ca3af; }
+.bi-npa-amt { font-weight: 700; color: #1f2937; min-width: 60px; text-align: right; }
+.bi-npa-paid { font-size: 10px; color: #ef4444; font-weight: 600; min-width: 55px; text-align: right; }
+
+/* Seasonal Heatmap */
+.bi-season-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 4px; }
+.bi-season-cell {
+    border-radius: 8px; padding: 10px 4px; text-align: center;
+    transition: transform 0.15s; cursor: default;
+}
+.bi-season-cell:hover { transform: scale(1.05); }
+.bi-season-month { display: block; font-size: 10px; font-weight: 600; color: rgba(0,0,0,0.6); }
+.bi-season-val { display: block; font-size: 11px; font-weight: 700; color: rgba(0,0,0,0.8); margin-top: 2px; }
+
+@media (max-width: 768px) {
+    .bi-pred-grid { grid-template-columns: 1fr; }
+    .bi-season-grid { grid-template-columns: repeat(4, 1fr); }
+}
