@@ -1596,6 +1596,93 @@ pre:hover .code-copy-btn { opacity: 1; }
     border-left: 3px solid #10b981;
 }
 
+
+/* ── Tool Header Layout ── */
+.tool-header-text {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.tool-header-main {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+/* ── Summary line (collapsed preview of args) ── */
+.tool-summary {
+    font-size: 11px;
+    color: var(--niv-text-muted, #9ca3af);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 400px;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    opacity: 0.7;
+}
+
+/* ── Duration badge ── */
+.tool-duration {
+    font-size: 10px;
+    color: var(--niv-text-muted, #9ca3af);
+    background: var(--niv-hover, rgba(0,0,0,0.04));
+    padding: 1px 6px;
+    border-radius: 10px;
+    font-weight: 500;
+    margin-left: 4px;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
+/* ── SVG Spinner ── */
+.tool-spinner {
+    animation: toolSpin 1.5s linear infinite;
+}
+@keyframes toolSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ── Copy button ── */
+.tool-copy-btn {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--niv-text-muted, #9ca3af);
+    background: var(--niv-hover, rgba(0,0,0,0.04));
+    border: 1px solid var(--niv-border, rgba(0,0,0,0.08));
+    border-radius: 6px;
+    padding: 2px 8px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    font-weight: 500;
+    line-height: 1.4;
+}
+.tool-copy-btn:hover {
+    background: var(--niv-bg, rgba(0,0,0,0.06));
+    color: var(--niv-text, #374151);
+    border-color: var(--niv-border, rgba(0,0,0,0.15));
+}
+
+/* ── Section label with icon alignment ── */
+.tool-section-label {
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--niv-border, rgba(0,0,0,0.06));
+}
+.tool-section-label svg {
+    flex-shrink: 0;
+    opacity: 0.7;
+}
+
 /* ── Legacy tool-call-item (fallback) ── */
 .tool-call-item {
     display: flex;

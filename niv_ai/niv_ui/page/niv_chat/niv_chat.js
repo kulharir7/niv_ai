@@ -2101,21 +2101,42 @@ ${htmlCode}
             const result = toolResults[i] || null;
             const resultJson = result ? JSON.stringify(result.result || result, null, 2) : "";
             const argsJson = JSON.stringify(tc.arguments || {}, null, 2);
+            // Build summary
+            let _args = tc.arguments || {};
+            let _sumParts = [];
+            if (_args.doctype) _sumParts.push(_args.doctype);
+            if (_args.query) _sumParts.push(_args.query.substring(0, 60));
+            if (_args.limit) _sumParts.push("limit:" + _args.limit);
+            let _sumText = _sumParts.join(" · ");
+            
             html += `
                 <div class="tool-call-accordion">
                     <div class="tool-call-header" onclick="$(this).closest('.tool-call-accordion').toggleClass('open')">
-                        <span class="tool-status-icon done"><i class="fa fa-check"></i></span>
-                        <span class="tool-label">Used</span>
-                        <span class="tool-name">${frappe.utils.escape_html(tc.name || tc.tool || 'tool')}</span>
+                        <span class="tool-status-icon done">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+                        </span>
+                        <div class="tool-header-text">
+                            <div class="tool-header-main">
+                                <span class="tool-label">Used</span>
+                                <span class="tool-name">${frappe.utils.escape_html(tc.name || tc.tool || 'tool')}</span>
+                            </div>
+                            ${_sumText ? '<div class="tool-summary">' + frappe.utils.escape_html(_sumText) + '</div>' : ''}
+                        </div>
                         <i class="fa fa-chevron-right tool-chevron"></i>
                     </div>
                     <div class="tool-call-body">
                         <div class="tool-section tool-input">
-                            <div class="tool-section-label">📥 Input</div>
+                            <div class="tool-section-label">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Input
+                                <button class="tool-copy-btn" onclick="event.stopPropagation(); navigator.clipboard.writeText($(this).closest('.tool-section').find('code').text()); $(this).html('✓ Copied'); setTimeout(()=>$(this).html('Copy'),1500)">Copy</button>
+                            </div>
                             <pre><code>${frappe.utils.escape_html(argsJson)}</code></pre>
                         </div>
                         ${resultJson ? `<div class="tool-section tool-output">
-                            <div class="tool-section-label">📤 Output</div>
+                            <div class="tool-section-label">
+                                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Output
+                                <button class="tool-copy-btn" onclick="event.stopPropagation(); navigator.clipboard.writeText($(this).closest('.tool-section').find('code').text()); $(this).html('✓ Copied'); setTimeout(()=>$(this).html('Copy'),1500)">Copy</button>
+                            </div>
                             <pre><code>${frappe.utils.escape_html(resultJson.substring(0, 2000))}</code></pre>
                         </div>` : ""}
                     </div>
@@ -2542,22 +2563,41 @@ ${htmlCode}
                                     argsStr = JSON.stringify(args, null, 2);
                                 } catch(e) { argsStr = String(data.arguments || "{}"); }
                                 
+                                // Build summary of key args for collapsed view
+                                var summaryParts = [];
+                                try {
+                                    var _a = data.arguments || {};
+                                    if (typeof _a === "string") _a = JSON.parse(_a);
+                                    if (_a.doctype) summaryParts.push(_a.doctype);
+                                    if (_a.query) summaryParts.push(_a.query.substring(0, 60) + (_a.query.length > 60 ? "..." : ""));
+                                    if (_a.limit) summaryParts.push("limit:" + _a.limit);
+                                    if (_a.filters) summaryParts.push("filtered");
+                                } catch(e) {}
+                                var summaryText = summaryParts.length ? summaryParts.join(" · ") : "";
+                                
                                 var $toolHtml = $(`
-                                    <div class="tool-call-accordion running" data-tool="${frappe.utils.escape_html(toolName)}">
+                                    <div class="tool-call-accordion running" data-tool="${frappe.utils.escape_html(toolName)}" data-start="${Date.now()}">
                                         <div class="tool-call-header" onclick="$(this).closest('.tool-call-accordion').toggleClass('open')">
-                                            <span class="tool-status-icon running"><i class="fa fa-circle-o-notch fa-spin" style="font-size:11px"></i></span>
-                                            <span class="tool-label">Using</span>
-                                            <span class="tool-name">${frappe.utils.escape_html(toolName)}</span>
-                                            <span class="tool-running-text">running...</span>
+                                            <span class="tool-status-icon running">
+                                                <svg class="tool-spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+                                            </span>
+                                            <div class="tool-header-text">
+                                                <div class="tool-header-main">
+                                                    <span class="tool-label">Using</span>
+                                                    <span class="tool-name">${frappe.utils.escape_html(toolName)}</span>
+                                                    <span class="tool-running-text">running...</span>
+                                                </div>
+                                                ${summaryText ? '<div class="tool-summary">' + frappe.utils.escape_html(summaryText) + '</div>' : ''}
+                                            </div>
                                             <i class="fa fa-chevron-right tool-chevron"></i>
                                         </div>
                                         <div class="tool-call-body">
                                             <div class="tool-section tool-input">
-                                                <div class="tool-section-label">📥 Input</div>
+                                                <div class="tool-section-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Input</div>
                                                 <pre><code>${frappe.utils.escape_html(argsStr)}</code></pre>
                                             </div>
                                             <div class="tool-section tool-output" style="display:none;">
-                                                <div class="tool-section-label">📤 Output</div>
+                                                <div class="tool-section-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Output</div>
                                                 <pre><code></code></pre>
                                             </div>
                                         </div>
@@ -2603,9 +2643,15 @@ ${htmlCode}
                                 
                                 if ($running && $running.length) {
                                     $running.removeClass("running");
-                                    $running.find(".tool-status-icon").removeClass("running").addClass("done").html('<i class="fa fa-check"></i>');
+                                    $running.find(".tool-status-icon").removeClass("running").addClass("done").html('<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>');
                                     $running.find(".tool-label").text("Used");
                                     $running.find(".tool-running-text").remove();
+                                    // Calculate duration
+                                    var startTime = parseInt($running.attr("data-start") || "0");
+                                    if (startTime) {
+                                        var dur = ((Date.now() - startTime) / 1000).toFixed(1);
+                                        $running.find(".tool-header-main").append('<span class="tool-duration">' + dur + 's</span>');
+                                    }
                                     var resultStr = typeof data.result === "string" ? data.result : JSON.stringify(data.result || {}, null, 2);
                                     resultStr = resultStr.substring(0, 2000);
                                     // Show output section with result
@@ -2614,14 +2660,19 @@ ${htmlCode}
                                         $outputSection.find("code").text(resultStr);
                                         $outputSection.show();
                                     } else {
-                                        // Fallback: append output section
                                         var $body = $running.find(".tool-call-body");
                                         if (!$body.length) {
                                             $running.append('<div class="tool-call-body"></div>');
                                             $body = $running.find(".tool-call-body");
                                         }
-                                        $body.append(`<div class="tool-section tool-output"><strong class="tool-section-label">📤 Output:</strong><pre><code>${frappe.utils.escape_html(resultStr)}</code></pre></div>`);
+                                        $body.append(`<div class="tool-section tool-output"><div class="tool-section-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Output</div><pre><code>${frappe.utils.escape_html(resultStr)}</code></pre></div>`);
                                     }
+                                    // Add copy buttons to both sections
+                                    $running.find(".tool-section").each(function() {
+                                        if (!$(this).find(".tool-copy-btn").length) {
+                                            $(this).find(".tool-section-label").append('<button class="tool-copy-btn" onclick="event.stopPropagation(); var t=$(this).closest('.tool-section').find('code').text(); navigator.clipboard.writeText(t); $(this).html('✓ Copied'); setTimeout(()=>$(this).html('Copy'),1500)">Copy</button>');
+                                        }
+                                    });
                                 }
                             }
                         } else if (data.type === "agent_transfer") {
