@@ -2,7 +2,7 @@
 
 > AI-powered assistant with voice, MCP tools, two-model optimization, smart conversations, Excel/PDF export, vision/OCR, developer mode, and Telegram bot
 
-[![Version](https://img.shields.io/badge/version-1.3.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
+[![Version](https://img.shields.io/badge/version-1.4.0-blue.svg)](https://github.com/kulharir7/niv_ai/releases)
 [![Growth System](https://img.shields.io/badge/Growth System-v15%2B-green.svg)](https://erpnext.com)
 [![License](https://img.shields.io/badge/license-MIT-purple.svg)](LICENSE)
 
@@ -31,6 +31,46 @@ Chanakya Ai (formerly Niv AI) is a production-ready AI assistant that sits insid
 - **ElevenLabs** (primary) / **Edge TTS** (free fallback) — Hindi + English
 - **Optimized pipeline** — Cached config, lightweight text cleaning, fast Edge TTS
 - **Streaming voice** — First audio plays in ~2s, not after full response
+
+
+### 🏦 AI Business Intelligence Dashboard
+- **Hybrid Architecture** — Instant SQL data + Background AI analysis
+- **13 Dashboard Sections** — All real-time from database
+  - Financial KPIs (Income, Expense, Profit, Margin)
+  - Loan Portfolio Overview (Sanctioned, Disbursed, Collected, Active)
+  - Loan Status Breakdown with color-coded indicators
+  - Disbursement Trend (SVG area chart, 12 months)
+  - Branch Performance with efficiency bars
+  - Loan Pipeline Funnel (Applied → Sanctioned → Disbursed → Active → Closed)
+  - Turnaround Time (Application to Disbursement avg days)
+  - EMI Collection Gauge with daily averages
+  - Growth Trends Sparklines (New Loans + Applications)
+  - Pending Approvals + Draft Documents
+  - Team Activity (24h user actions)
+  - Outstanding Receivables Ageing (0-30, 31-60, 61-90, 90+ days)
+  - NPA Early Warning (risky loans with <50% payment)
+- **AI Predictions** — Revenue forecast, collection prediction, seasonal patterns
+- **Background AI Refresh** — AI agent runs MCP tools in background, auto-updates dashboard
+- **Click-to-Drill** — Click any KPI/status to navigate to filtered list view
+- **Date Range Filter** — This Month / Quarter / Year / All Time
+- **Zero Tokens for SQL Data** — Only AI insights consume tokens
+- **URL**: `/app/niv-business-dashboard`
+
+### 🔧 Claude-Style Tool Calling UI
+- **Input/Output Sections** — See exactly what AI queried and what it got back
+  - 📥 **Input** (blue border) — Tool arguments in JSON
+  - 📤 **Output** (green border) — Tool result data
+- **Summary Line** — Key params visible in collapsed view (e.g., "Sales Order · limit:20")
+- **Duration Badge** — Shows how long each tool call took (e.g., "1.2s")
+- **Copy Buttons** — One-click copy on Input/Output sections
+- **SVG Icons** — Clean animated spinner for running, checkmark for done
+- **Monospace Tool Names** — Professional code-style display
+
+### 💭 AI Thinking/Reasoning Display
+- **Thinking Block Extraction** — `<think>` tags parsed and displayed as collapsible blocks
+- **Model Support** — Kimi-K2.5, Qwen3, DeepSeek-R1 thinking modes enabled
+- **Purple Thought Blocks** — "💭 THINKING PROCESS" expandable UI
+- **Stream-Safe** — Thinking buffered during streaming, emitted as separate events
 
 ### 👁️ Vision & Document Upload
 - **Image OCR** — Upload images, AI reads and understands content
@@ -293,3 +333,22 @@ MIT License — see [LICENSE](LICENSE).
 ---
 
 <p align="center">Built for Growth System businesses by <a href="https://github.com/kulharir7">Ravindra Kulhari</a></p>
+
+---
+
+## Changelog
+
+### v1.4.0 (2026-03-26)
+- **AI Business Dashboard** — 13 sections, hybrid SQL+AI, background refresh
+- **Claude-Style Tool UI** — Input/Output, duration badge, copy buttons, SVG icons
+- **Thinking Display** — `<think>` tag extraction, collapsible thought blocks
+- **Smart Predictions** — Revenue forecast, NPA warning, seasonal patterns
+- **Click-to-Drill** — Navigate from dashboard KPIs to filtered list views
+- **Tool Output Fix** — Streaming tool results now persist (don't get wiped by load_messages)
+- **MCP SDK Integration** — 34 tools, pure SDK, zero FAC imports
+
+### v1.3.0 (2026-03-25)
+- Form Guide v6, Smart Auto-Fill, Dashboard v2
+- MCP Client rewrite, FAC v2.3.3 compatibility
+- Tool UI + Thinking indicator modernization
+
