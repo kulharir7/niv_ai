@@ -134,11 +134,48 @@ def _get_business_doctypes():
 # FINANCIAL APIs
 # ═══════════════════════════════════════════
 
+
+def _get_date_range(period="this_year"):
+    """Convert period string to (start_date, end_date)."""
+    from datetime import datetime, date
+    today = date.today()
+    
+    if period == "this_month":
+        start = today.replace(day=1)
+        end = today
+    elif period == "last_month":
+        first_this = today.replace(day=1)
+        end = first_this - __import__("datetime").timedelta(days=1)
+        start = end.replace(day=1)
+    elif period == "this_quarter":
+        q = (today.month - 1) // 3
+        start = date(today.year, q * 3 + 1, 1)
+        end = today
+    elif period == "last_quarter":
+        q = (today.month - 1) // 3
+        if q == 0:
+            start = date(today.year - 1, 10, 1)
+            end = date(today.year - 1, 12, 31)
+        else:
+            start = date(today.year, (q - 1) * 3 + 1, 1)
+            end = date(today.year, q * 3, 1) - __import__("datetime").timedelta(days=1)
+    elif period == "this_year":
+        start = date(today.year, 1, 1)
+        end = today
+    elif period == "last_year":
+        start = date(today.year - 1, 1, 1)
+        end = date(today.year - 1, 12, 31)
+    else:  # all
+        start = date(2019, 1, 1)
+        end = today
+    
+    return str(start), str(end)
+
 @frappe.whitelist()
-def get_bi_data():
+def get_bi_data(period="this_year"):
     """Master BI endpoint."""
     return {
-        "financial": get_financial_summary(),
+        "financial": get_financial_summary(period=period),
         "trend": get_monthly_trend(),
         "top_doctypes": get_top_doctypes_smart(),
         "risk": get_risk_analysis(),
@@ -157,13 +194,14 @@ def get_bi_data():
 
 
 @frappe.whitelist()
-def get_financial_summary():
+def get_financial_summary(period="this_year"):
     """Auto-detect income/expense DocTypes and sum amounts."""
     dts = _get_business_doctypes()
     
     today = datetime.now()
+    period_start, period_end = _get_date_range(period)
     month_start = today.replace(day=1).strftime("%Y-%m-%d")
-    year_start = today.replace(month=1, day=1).strftime("%Y-%m-%d")
+    year_start = period_start  # Use period start instead of fixed Jan 1
     
     income_month = 0
     income_year = 0
