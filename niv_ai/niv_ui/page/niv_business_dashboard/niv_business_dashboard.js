@@ -50,6 +50,70 @@ class NivBIDashboard {
         return Number(n).toLocaleString();
     }
 
+    // Dashboard sections config
+    getSections() {
+        return [
+            {id: "fin-cards", label: "Financial KPIs", icon: "&#x1F4B0;"},
+            {id: "trend-chart", label: "Revenue vs Expense Trend", icon: "&#x1F4C8;"},
+            {id: "risk-alerts", label: "Risk & Alerts", icon: "&#x26A0;"},
+            {id: "top-docs", label: "Top Document Types", icon: "&#x1F3C6;"},
+            {id: "recent-tx", label: "Recent High-Value", icon: "&#x1F4B0;"},
+            {id: "quick-stats", label: "Today\'s Snapshot", icon: "&#x26A1;"},
+            {id: "loan-overview", label: "Loan Portfolio", icon: "&#x1F3E6;"},
+            {id: "loan-status", label: "Loan Status", icon: "&#x1F4CA;"},
+            {id: "disb-trend", label: "Disbursement Trend", icon: "&#x1F4C8;"},
+            {id: "branch-perf", label: "Branch Performance", icon: "&#x1F3E2;"},
+            {id: "pipeline", label: "Loan Pipeline", icon: "&#x1F4CA;"},
+            {id: "tat", label: "Turnaround Time", icon: "&#x23F1;"},
+            {id: "collection", label: "EMI Collection", icon: "&#x1F4B0;"},
+            {id: "growth", label: "Growth Trends", icon: "&#x1F4C8;"},
+            {id: "approvals", label: "Pending Approvals", icon: "&#x1F4CB;"},
+            {id: "team", label: "Team Activity", icon: "&#x1F465;"},
+            {id: "receivables", label: "Outstanding Receivables", icon: "&#x23F3;"},
+            {id: "overdue", label: "Top Overdue Parties", icon: "&#x1F6A8;"},
+            {id: "customers", label: "Customer Intelligence", icon: "&#x1F465;"},
+            {id: "status-dist", label: "Status Distribution", icon: "&#x1F4CA;"},
+        ];
+    }
+
+    getSettings() {
+        try {
+            return JSON.parse(localStorage.getItem("bi_dash_settings") || "{}");
+        } catch(e) { return {}; }
+    }
+
+    saveSettings(settings) {
+        localStorage.setItem("bi_dash_settings", JSON.stringify(settings));
+    }
+
+    isSectionVisible(id) {
+        const s = this.getSettings();
+        return s[id] !== false; // visible by default
+    }
+
+    toggleSettings() {
+        const panel = document.getElementById("biSettingsPanel");
+        if (panel) { panel.classList.toggle("open"); return; }
+
+        const sections = this.getSections();
+        const settings = this.getSettings();
+        let html = '<div class="bi-settings-panel" id="biSettingsPanel"><div class="bi-settings-header"><span>&#x2699; Customize Dashboard</span><button class="bi-settings-close" onclick="document.getElementById(\'biSettingsPanel\').classList.remove(\'open\')">&#x2715;</button></div><div class="bi-settings-body">';
+        sections.forEach(sec => {
+            const checked = settings[sec.id] !== false ? "checked" : "";
+            html += '<label class="bi-settings-item"><input type="checkbox" ' + checked + ' data-section="' + sec.id + '" onchange="window._biToggleSection(this)"/><span>' + sec.icon + ' ' + sec.label + '</span></label>';
+        });
+        html += '</div><div class="bi-settings-footer"><button class="bi-settings-reset" onclick="localStorage.removeItem(\'bi_dash_settings\');location.reload()">Reset All</button></div></div>';
+        document.querySelector(".bi-dash").insertAdjacentHTML("afterbegin", html);
+        setTimeout(() => document.getElementById("biSettingsPanel").classList.add("open"), 10);
+    }
+
+    applyVisibility() {
+        document.querySelectorAll("[data-bi-section]").forEach(el => {
+            const id = el.getAttribute("data-bi-section");
+            el.style.display = this.isSectionVisible(id) ? "" : "none";
+        });
+    }
+
     render() {
         const fin = this.data.financial || {};
         const trend = this.data.trend || [];
@@ -306,6 +370,7 @@ class NivBIDashboard {
                 '</div>';
         }).join("") || '<div class="bi-empty">No overdue found</div>';
 
+        window._biDash = this;
         this.page.main.html(`
             <div class="bi-dash">
                 <!-- Header -->
@@ -315,6 +380,7 @@ class NivBIDashboard {
                         <p class="bi-subtitle">${info.total_documents ? this.fmtN(info.total_documents) + ' records across ' + info.total_doctypes + ' types · ' + info.total_users + ' users' : 'Loading...'}</p>
                     </div>
                     <div class="bi-header-actions">
+                        <button class="bi-btn-settings" onclick="new NivBIDashboard.prototype.toggleSettings.call(window._biDash)">&#x2699;</button>
                         <button class="bi-btn-refresh" onclick="new NivBIDashboard(cur_page.page)">↻ Refresh</button>
                         <button class="bi-btn-ai" id="biAiBtn">✦ AI Analysis</button>
                     </div>
@@ -331,7 +397,7 @@ class NivBIDashboard {
                 </div>
 
                 <!-- Financial Cards Row -->
-                <div class="bi-fin-grid">
+                <div class="bi-fin-grid" data-bi-section="fin-cards">
                     <div class="bi-fin-card income">
                         <div class="bi-fin-label">Income (Month)</div>
                         <div class="bi-fin-value">${this.fmt(fin.income_month)}</div>
@@ -369,19 +435,19 @@ class NivBIDashboard {
                     </div>
 
                     <!-- Risk Analysis -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="risk-alerts">
                         <div class="bi-card-header"><h3>⚠️ Risk & Alerts</h3></div>
                         <div class="bi-risk-list">${riskCards}</div>
                     </div>
 
                     <!-- Top DocTypes -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="top-docs">
                         <div class="bi-card-header"><h3>🏆 Top Document Types</h3></div>
                         <div class="bi-dt-list">${dtRows}</div>
                     </div>
 
                     <!-- Recent Transactions -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="recent-tx">
                         <div class="bi-card-header"><h3>💰 Recent High-Value</h3></div>
                         <div class="bi-recent-list">${recentRows}</div>
                     </div>
@@ -389,7 +455,7 @@ class NivBIDashboard {
 
 
                     <!-- Pending Approvals -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="approvals">
                         <div class="bi-card-header">
                             <h3>&#x1F4CB; Pending Approvals</h3>
                             <span class="bi-badge-warn">${pend.total_pending || 0}</span>
@@ -399,13 +465,13 @@ class NivBIDashboard {
                     </div>
 
                     <!-- Team Activity -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="team">
                         <div class="bi-card-header"><h3>&#x1F465; Team Activity (24h)</h3></div>
                         <div class="bi-team-list">${teamRows}</div>
                     </div>
 
                     <!-- Branch Performance -->
-                    <div class="bi-card bi-span-2">
+                    <div class="bi-card bi-span-2" data-bi-section="branch-perf">
                         <div class="bi-card-header">
                             <h3>&#x1F3E2; Branch Performance</h3>
                             <span class="bi-badge">${branches.length} branches</span>
@@ -421,13 +487,13 @@ class NivBIDashboard {
                     </div>
 
                     <!-- Loan Pipeline Funnel -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="pipeline">
                         <div class="bi-card-header"><h3>&#x1F4CA; Loan Pipeline</h3></div>
                         <div class="bi-funnel-list">${funnelHtml || '<div class="bi-empty">No pipeline data</div>'}</div>
                     </div>
 
                     <!-- Turnaround Time -->
-                    <div class="bi-card bi-tat-card">
+                    <div class="bi-card bi-tat-card" data-bi-section="tat">
                         <div class="bi-card-header"><h3>&#x23F1; Turnaround Time</h3></div>
                         <div class="bi-tat-body">
                             <div class="bi-tat-main">
@@ -449,7 +515,7 @@ class NivBIDashboard {
                     </div>
 
                     <!-- EMI Collection -->
-                    <div class="bi-card bi-coll-card">
+                    <div class="bi-card bi-coll-card" data-bi-section="collection">
                         <div class="bi-card-header"><h3>&#x1F4B0; EMI Collection</h3></div>
                         <div class="bi-coll-body">
                             <div class="bi-coll-gauge">
@@ -468,7 +534,7 @@ class NivBIDashboard {
                     </div>
 
                     <!-- New Loans + Customers Sparklines -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="growth">
                         <div class="bi-card-header"><h3>&#x1F4C8; Growth Trends</h3></div>
                         <div class="bi-spark-section">
                             <div class="bi-spark-item">
@@ -491,7 +557,7 @@ class NivBIDashboard {
                     </div>
 
                     <!-- Outstanding Receivables -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="receivables">
                         <div class="bi-card-header">
                             <h3>&#x23F3; Outstanding Receivables</h3>
                             <span class="bi-badge-warn">${this.fmt(recvTotal)}</span>
@@ -503,13 +569,13 @@ class NivBIDashboard {
                     </div>
 
                     <!-- Top Overdue -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="overdue">
                         <div class="bi-card-header"><h3>&#x1F6A8; Top Overdue Parties</h3></div>
                         <div class="bi-def-list">${defaulterRows}</div>
                     </div>
 
                     <!-- Today Quick Stats -->
-                    <div class="bi-card bi-span-2 bi-quick-card">
+                    <div class="bi-card bi-span-2 bi-quick-card" data-bi-section="quick-stats">
                         <div class="bi-card-header"><h3>&#x26A1; Today's Snapshot</h3></div>
                         <div class="bi-quick-grid">
                             <div class="bi-quick-item">
@@ -536,7 +602,7 @@ class NivBIDashboard {
                     </div>
 
                     <!-- Loan Portfolio Overview -->
-                    <div class="bi-card bi-span-2 bi-loan-card">
+                    <div class="bi-card bi-span-2 bi-loan-card" data-bi-section="loan-overview">
                         <div class="bi-card-header">
                             <h3>🏦 Loan Portfolio Overview</h3>
                             <span class="bi-badge">${this.fmtN(loanSum.active_loans || 0)} Active</span>
@@ -570,25 +636,25 @@ class NivBIDashboard {
                     </div>
 
                     <!-- Loan Status Breakdown -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="loan-status">
                         <div class="bi-card-header"><h3>📊 Loan Status</h3></div>
                         <div class="bi-loan-status-list">${loanStatusCards || '<div class="bi-empty">No loan data</div>'}</div>
                     </div>
 
                     <!-- Disbursement Trend -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="disb-trend">
                         <div class="bi-card-header"><h3>📈 Disbursement Trend</h3></div>
                         <div class="bi-disb-chart">${disbChartHtml}</div>
                     </div>
 
                     <!-- Customer Insights -->
-                    <div class="bi-card">
+                    <div class="bi-card" data-bi-section="customers">
                         <div class="bi-card-header"><h3>👥 Customer Intelligence</h3></div>
                         <div class="bi-cust-grid">${custCards}</div>
                     </div>
 
                     <!-- Status Breakdown -->
-                    <div class="bi-card bi-span-2">
+                    <div class="bi-card bi-span-2" data-bi-section="status-dist">
                         <div class="bi-card-header"><h3>📊 Status Distribution</h3></div>
                         <div class="bi-sb-grid">${statusCards || '<div class="bi-empty">No status data</div>'}</div>
                     </div>
@@ -613,6 +679,19 @@ class NivBIDashboard {
                 content.innerHTML = '<div class="bi-ai-error">Analysis failed. Try again.</div>';
             }
         });
+
+        // Section toggle handler
+        window._biToggleSection = (checkbox) => {
+            const id = checkbox.getAttribute("data-section");
+            const settings = this.getSettings();
+            settings[id] = checkbox.checked;
+            this.saveSettings(settings);
+            const el = document.querySelector('[data-bi-section="' + id + '"]');
+            if (el) el.style.display = checkbox.checked ? "" : "none";
+        };
+
+        // Apply saved visibility
+        this.applyVisibility();
 
         // Auto-refresh every 5 minutes
         if (this._refreshTimer) clearInterval(this._refreshTimer);
