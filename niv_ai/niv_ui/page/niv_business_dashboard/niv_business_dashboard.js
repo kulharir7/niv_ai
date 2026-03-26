@@ -594,28 +594,6 @@ class NivBIDashboard {
                     </div>
                 </div>
 
-                <!-- Quick Chat -->
-                <div class="bi-chat-widget">
-                    <div class="bi-chat-header" onclick="document.querySelector('.bi-chat-body').classList.toggle('open')">
-                        <span class="bi-chat-icon">&#x2728;</span>
-                        <span>Ask AI about your data</span>
-                        <span class="bi-chat-toggle">&#x25B2;</span>
-                    </div>
-                    <div class="bi-chat-body open">
-                        <div class="bi-chat-suggestions">
-                            <button class="bi-chat-suggestion" onclick="document.querySelector('.bi-chat-input').value=this.textContent;document.querySelector('.bi-chat-send').click()">What is our NPA ratio?</button>
-                            <button class="bi-chat-suggestion" onclick="document.querySelector('.bi-chat-input').value=this.textContent;document.querySelector('.bi-chat-send').click()">Top 5 overdue loans</button>
-                            <button class="bi-chat-suggestion" onclick="document.querySelector('.bi-chat-input').value=this.textContent;document.querySelector('.bi-chat-send').click()">Monthly collection trend</button>
-                            <button class="bi-chat-suggestion" onclick="document.querySelector('.bi-chat-input').value=this.textContent;document.querySelector('.bi-chat-send').click()">Branch wise summary</button>
-                        </div>
-                        <div class="bi-chat-messages" id="biChatMessages"></div>
-                        <div class="bi-chat-input-row">
-                            <input type="text" class="bi-chat-input" placeholder="Ask about loans, collections, branches..." onkeydown="if(event.key==='Enter')document.querySelector('.bi-chat-send').click()"/>
-                            <button class="bi-chat-send" onclick="window._biChatSend && window._biChatSend()">&#x27A4;</button>
-                        </div>
-                    </div>
-                </div>
-
                 <div class="bi-footer">
                     Auto-discovered ${info.total_doctypes || 0} document types · ${info.income_doctypes || 0} income · ${info.expense_doctypes || 0} expense · ${info.customer_doctypes || 0} customer · Updated ${new Date().toLocaleTimeString()}
                 </div>
@@ -635,26 +613,6 @@ class NivBIDashboard {
                 content.innerHTML = '<div class="bi-ai-error">Analysis failed. Try again.</div>';
             }
         });
-
-        // Quick Chat handler
-        window._biChatSend = async () => {
-            const input = document.querySelector('.bi-chat-input');
-            const msgs = document.getElementById('biChatMessages');
-            const q = input.value.trim();
-            if (!q) return;
-            input.value = '';
-            msgs.innerHTML += '<div class="bi-chat-msg user">' + frappe.utils.escape_html(q) + '</div>';
-            msgs.innerHTML += '<div class="bi-chat-msg bot loading"><span class="bi-chat-dots"><span>.</span><span>.</span><span>.</span></span></div>';
-            msgs.scrollTop = msgs.scrollHeight;
-            try {
-                const r = await frappe.call({ method: "niv_ai.niv_core.api.chat.simple_chat", args: { message: q, conversation_id: "dashboard-chat" } });
-                const reply = r.message?.response || r.message || "No response";
-                msgs.querySelector('.loading').outerHTML = '<div class="bi-chat-msg bot">' + reply.replace(/\n/g, '<br>') + '</div>';
-            } catch(e) {
-                msgs.querySelector('.loading').outerHTML = '<div class="bi-chat-msg bot error">Could not get response</div>';
-            }
-            msgs.scrollTop = msgs.scrollHeight;
-        };
 
         // Auto-refresh every 5 minutes
         if (this._refreshTimer) clearInterval(this._refreshTimer);
