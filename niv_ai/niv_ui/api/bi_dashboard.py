@@ -503,7 +503,7 @@ def _get_loan_portfolio():
     }
     
     try:
-        if not frappe.db.table_exists("tabLoan"):
+        if not frappe.db.table_exists("Loan"):
             return data
         
         # Portfolio summary
