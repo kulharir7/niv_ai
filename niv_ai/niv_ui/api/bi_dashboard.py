@@ -137,6 +137,7 @@ def get_bi_data():
         "recent": get_recent_high_value(),
         "status_breakdown": get_status_breakdown(),
         "system_info": get_system_info(),
+        "loan_portfolio": _get_loan_portfolio(),
     }
 
 
@@ -269,7 +270,6 @@ def get_monthly_trend(months=6):
             "profit": m_income - m_expense,
         })
     
-    data["loan_portfolio"] = _get_loan_portfolio()
     return data
 
 
