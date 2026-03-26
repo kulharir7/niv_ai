@@ -269,6 +269,7 @@ def get_monthly_trend(months=6):
             "profit": m_income - m_expense,
         })
     
+    data["loan_portfolio"] = _get_loan_portfolio()
     return data
 
 
@@ -485,6 +486,101 @@ def get_system_info():
 
 
 @frappe.whitelist()
+
+
+# ═══════════════════════════════════════════
+# LOAN PORTFOLIO DATA
+# ═══════════════════════════════════════════
+
+def _get_loan_portfolio():
+    """Get comprehensive loan portfolio data for NBFC dashboard."""
+    data = {
+        "summary": {},
+        "status_breakdown": [],
+        "disbursement_trend": [],
+        "collection_data": {},
+        "npa_data": {},
+    }
+    
+    try:
+        if not frappe.db.table_exists("tabLoan"):
+            return data
+        
+        # Portfolio summary
+        total = frappe.db.sql("""
+            SELECT COUNT(*) cnt, IFNULL(SUM(loan_amount),0) total_sanctioned,
+                   IFNULL(SUM(disbursed_amount),0) total_disbursed,
+                   IFNULL(SUM(total_amount_paid),0) total_collected,
+                   IFNULL(SUM(total_principal_paid),0) principal_collected,
+                   IFNULL(SUM(total_interest_payable),0) interest_expected,
+                   IFNULL(SUM(written_off_amount),0) written_off
+            FROM tabLoan WHERE docstatus=1
+        """, as_dict=True)[0]
+        
+        active = frappe.db.sql("""
+            SELECT COUNT(*) cnt, IFNULL(SUM(loan_amount),0) amount,
+                   IFNULL(SUM(disbursed_amount),0) disbursed
+            FROM tabLoan WHERE docstatus=1 AND status IN ('Disbursed','Partially Disbursed')
+        """, as_dict=True)[0]
+        
+        data["summary"] = {
+            "total_loans": total.cnt,
+            "total_sanctioned": total.total_sanctioned,
+            "total_disbursed": total.total_disbursed,
+            "total_collected": total.total_collected,
+            "principal_collected": total.principal_collected,
+            "interest_expected": total.interest_expected,
+            "written_off": total.written_off,
+            "active_loans": active.cnt,
+            "active_amount": active.amount,
+            "active_disbursed": active.disbursed,
+        }
+        
+        # Status breakdown
+        statuses = frappe.db.sql("""
+            SELECT status, COUNT(*) cnt, IFNULL(SUM(loan_amount),0) amount
+            FROM tabLoan WHERE docstatus=1 GROUP BY status ORDER BY cnt DESC
+        """, as_dict=True)
+        data["status_breakdown"] = [{"status": s.status, "count": s.cnt, "amount": s.amount} for s in statuses]
+        
+        # Disbursement trend (last 12 months)
+        try:
+            trend = frappe.db.sql("""
+                SELECT DATE_FORMAT(disbursement_date, '%%b %%y') as month,
+                       DATE_FORMAT(disbursement_date, '%%Y-%%m') as sort_key,
+                       COUNT(*) cnt, IFNULL(SUM(disbursed_amount),0) amount
+                FROM `tabLoan Disbursement` WHERE docstatus=1
+                AND disbursement_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH)
+                GROUP BY month, sort_key ORDER BY sort_key
+            """, as_dict=True)
+            data["disbursement_trend"] = [{"month": t.month, "count": t.cnt, "amount": t.amount} for t in trend]
+        except:
+            pass
+        
+        # New applications this month
+        try:
+            new_apps = frappe.db.sql("""
+                SELECT COUNT(*) cnt FROM `tabLoan Application`
+                WHERE creation >= DATE_FORMAT(CURDATE(), '%%Y-%%m-01')
+            """, as_dict=True)[0]
+            data["summary"]["new_applications_month"] = new_apps.cnt
+        except:
+            data["summary"]["new_applications_month"] = 0
+        
+        # Closure requests
+        try:
+            closures = frappe.db.sql("""
+                SELECT COUNT(*) cnt FROM tabLoan WHERE status='Loan Closure Requested'
+            """, as_dict=True)[0]
+            data["summary"]["closure_requests"] = closures.cnt
+        except:
+            data["summary"]["closure_requests"] = 0
+    
+    except Exception as e:
+        frappe.log_error(f"Loan portfolio error: {e}")
+    
+    return data
+
 def get_ai_analysis():
     """AI analyzes entire business state — on-demand."""
     fin = get_financial_summary()
