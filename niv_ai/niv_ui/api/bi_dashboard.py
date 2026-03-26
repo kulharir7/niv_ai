@@ -533,15 +533,18 @@ def _get_pending_approvals():
                 pass
         data["drafts"] = sorted(draft_list, key=lambda x: x["count"], reverse=True)[:6]
         
-        # Recent activity (last 24h)
+        # Recent activity (last 24h) — combine Version + Comment + Activity Log
         activity = frappe.db.sql(
-            "SELECT owner, COUNT(*) cnt, MAX(modified) last_active "
-            "FROM `tabActivity Log` "
-            "WHERE creation >= DATE_SUB(NOW(), INTERVAL 24 HOUR) "
-            "AND owner NOT IN ('Administrator', 'Guest') "
-            "GROUP BY owner ORDER BY cnt DESC LIMIT 5",
+            "SELECT user, SUM(cnt) as total_actions, MAX(last_active) as last_active FROM ("
+            "  SELECT owner as user, COUNT(*) cnt, MAX(modified) last_active FROM tabVersion "
+            "  WHERE creation >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND owner IS NOT NULL GROUP BY owner "
+            "  UNION ALL "
+            "  SELECT owner as user, COUNT(*) cnt, MAX(modified) last_active FROM `tabActivity Log` "
+            "  WHERE creation >= DATE_SUB(NOW(), INTERVAL 24 HOUR) AND owner IS NOT NULL GROUP BY owner "
+            ") combined WHERE user NOT IN ('Guest', '') "
+            "GROUP BY user ORDER BY total_actions DESC LIMIT 8",
             as_dict=True)
-        data["team_activity"] = [{"user": a.owner.split("@")[0] if "@" in a.owner else a.owner, "actions": a.cnt, "last": str(a.last_active)[:16]} for a in activity]
+        data["team_activity"] = [{"user": a.user.split("@")[0] if "@" in (a.user or "") else (a.user or "Unknown"), "email": a.user, "actions": int(a.total_actions), "last": str(a.last_active)[:16]} for a in activity]
     except Exception as e:
         frappe.log_error(f"Pending approvals error: {e}")
     return data
