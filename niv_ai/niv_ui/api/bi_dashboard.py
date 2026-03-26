@@ -837,6 +837,58 @@ def _get_loan_portfolio():
     
     return data
 
+
+
+@frappe.whitelist()
+def get_ai_dashboard_data():
+    """Get dashboard data via AI agent — asks AI to fetch all metrics using tools."""
+    import json as _json
+    
+    prompt = """You are a business intelligence assistant. Generate a complete dashboard report by querying the database.
+    
+Execute these queries and return the results as a JSON object:
+
+1. **financial**: Run SQL to get this month's total income (credit) and expense (debit) from GL Entry, and year totals
+2. **loan_summary**: Run SQL to get total loans count, total sanctioned amount, total disbursed, total collected (total_amount_paid), active loans count (status IN Disbursed,Partially Disbursed), closure requests count
+3. **loan_status**: Run SQL to get count and sum(loan_amount) GROUP BY status from Loan table
+4. **disbursement_trend**: Run SQL to get monthly disbursement count and sum for last 12 months from Loan Disbursement
+5. **branch_performance**: Run SQL to get branch wise loan count, disbursed amount, collected amount from Loan table
+6. **pending_approvals**: Run SQL to get pending workflow actions count by doctype, and draft document counts for Loan Application, Sales Order, Purchase Order, Payment Entry
+7. **team_activity**: Run SQL to get user activity count from Version table in last 24 hours
+8. **receivables**: Run SQL to get outstanding invoice amounts grouped by ageing buckets (0-30, 31-60, 61-90, 90+ days) from Sales Invoice
+9. **collection**: Run SQL to get today's total collections from Loan Repayment, today's disbursements from Loan Disbursement
+10. **tat**: Run SQL to get average days between Loan Application creation and Loan Disbursement date
+11. **pipeline**: Get counts for each stage: total applications, sanctioned loans, disbursed loans, active loans, closed loans
+
+Return ONLY a valid JSON object with all these keys. No markdown, no explanation — just the JSON."""
+
+    from niv_ai.niv_core.langchain.agent import run_agent
+    
+    try:
+        response = run_agent(
+            message=prompt,
+            conversation_id="ai-dashboard-" + frappe.session.user,
+            user=frappe.session.user,
+            system_prompt="You are a data analyst. Use run_database_query tool to fetch data. Return results as clean JSON only."
+        )
+        
+        # Try to parse JSON from response
+        import re
+        # Find JSON in response
+        json_match = re.search(r'\{[\s\S]*\}', response or "")
+        if json_match:
+            try:
+                data = _json.loads(json_match.group())
+                return {"source": "ai", "data": data, "raw": None}
+            except:
+                pass
+        
+        # If JSON parse fails, return raw text
+        return {"source": "ai", "data": None, "raw": response}
+    except Exception as e:
+        frappe.log_error(f"AI Dashboard error: {e}")
+        return {"source": "error", "data": None, "raw": str(e)}
+
 def get_ai_analysis():
     """AI analyzes entire business state — on-demand."""
     fin = get_financial_summary()

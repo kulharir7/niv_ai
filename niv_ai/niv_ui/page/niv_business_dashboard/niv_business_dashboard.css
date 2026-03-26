@@ -434,3 +434,51 @@
     display: flex; align-items: center; justify-content: center;
 }
 .bi-chat-send:hover { transform: scale(1.05); box-shadow: 0 4px 12px rgba(124,58,237,0.3); }
+
+/* ═══ AI Mode Button ═══ */
+.bi-btn-ai-mode {
+    background: linear-gradient(135deg, #7c3aed, #3b82f6); color: #fff;
+    border: none; border-radius: 8px; padding: 8px 16px; font-size: 13px;
+    font-weight: 600; cursor: pointer; transition: all 0.2s;
+    box-shadow: 0 2px 8px rgba(124,58,237,0.2);
+}
+.bi-btn-ai-mode:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(124,58,237,0.3); }
+.bi-btn-ai-mode:disabled { opacity: 0.6; cursor: wait; }
+
+/* AI Loading Overlay */
+.bi-ai-overlay {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(4px);
+    z-index: 1060; display: flex; align-items: center; justify-content: center;
+    animation: biFadeIn 0.3s ease;
+}
+.bi-ai-overlay-content { text-align: center; color: #fff; }
+.bi-ai-spinner {
+    font-size: 48px; animation: biSpin 2s linear infinite;
+    margin-bottom: 16px;
+}
+@keyframes biSpin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+.bi-ai-overlay-text { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+.bi-ai-overlay-sub { font-size: 13px; opacity: 0.7; }
+
+/* AI Result Panel */
+.bi-ai-result-panel {
+    background: linear-gradient(135deg, rgba(124,58,237,0.04), rgba(59,130,246,0.04));
+    border: 1px solid rgba(124,58,237,0.15); border-radius: 12px;
+    margin-bottom: 14px; overflow: hidden; animation: biFadeUp 0.3s ease;
+}
+.bi-ai-result-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; font-size: 14px; font-weight: 700; color: #7c3aed;
+    border-bottom: 1px solid rgba(124,58,237,0.1);
+}
+.bi-ai-result-header button { background: none; border: none; font-size: 16px; cursor: pointer; color: #9ca3af; }
+.bi-ai-result-json {
+    padding: 12px 16px; font-size: 11px; max-height: 400px; overflow: auto;
+    background: rgba(0,0,0,0.02); margin: 0; color: #1f2937;
+    font-family: 'SF Mono', 'Consolas', monospace;
+}
+.bi-ai-result-text {
+    padding: 12px 16px; font-size: 13px; line-height: 1.7; color: #1f2937;
+    max-height: 400px; overflow: auto;
+}
