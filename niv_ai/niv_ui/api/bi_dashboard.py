@@ -152,6 +152,7 @@ def get_bi_data():
         "growth": _safe_call(_get_collection_and_growth),
         "branches": _safe_call(_get_branch_performance),
         "pipeline": _safe_call(_get_tat_and_pipeline),
+        "predictions": _safe_call(_get_smart_predictions),
     }
 
 
@@ -515,6 +516,132 @@ def get_system_info():
 
 
 
+
+
+
+def _get_smart_predictions():
+    """AI-powered predictions based on historical trends."""
+    data = {"revenue_forecast": [], "collection_prediction": {}, "npa_warning": [], "seasonal": []}
+    try:
+        # --- Revenue Forecast (linear trend from last 6 months → predict next 3) ---
+        try:
+            hist = frappe.db.sql(
+                "SELECT DATE_FORMAT(posting_date, '%Y-%m') as ym, "
+                "IFNULL(SUM(CASE WHEN voucher_type IN ('Sales Invoice','Journal Entry') THEN credit ELSE 0 END),0) as income, "
+                "IFNULL(SUM(CASE WHEN voucher_type IN ('Purchase Invoice','Journal Entry') THEN debit ELSE 0 END),0) as expense "
+                "FROM `tabGL Entry` WHERE is_cancelled=0 "
+                "AND posting_date >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) "
+                "GROUP BY ym ORDER BY ym",
+                as_dict=True)
+            
+            if len(hist) >= 3:
+                incomes = [float(h.income) for h in hist]
+                expenses = [float(h.expense) for h in hist]
+                
+                # Simple linear regression for prediction
+                def predict_next(values, n_predict=3):
+                    n = len(values)
+                    if n < 2: return [values[-1]] * n_predict if values else [0] * n_predict
+                    x_mean = (n - 1) / 2
+                    y_mean = sum(values) / n
+                    num = sum((i - x_mean) * (v - y_mean) for i, v in enumerate(values))
+                    den = sum((i - x_mean) ** 2 for i in range(n))
+                    slope = num / den if den else 0
+                    intercept = y_mean - slope * x_mean
+                    return [max(0, intercept + slope * (n + i)) for i in range(n_predict)]
+                
+                pred_income = predict_next(incomes)
+                pred_expense = predict_next(expenses)
+                
+                import datetime
+                today = datetime.date.today()
+                for i in range(3):
+                    m = today.month + i + 1
+                    y = today.year + (m - 1) // 12
+                    m = ((m - 1) % 12) + 1
+                    month_label = datetime.date(y, m, 1).strftime('%b %y')
+                    data["revenue_forecast"].append({
+                        "month": month_label,
+                        "predicted_income": round(pred_income[i]),
+                        "predicted_expense": round(pred_expense[i]),
+                        "predicted_profit": round(pred_income[i] - pred_expense[i]),
+                        "confidence": max(40, min(85, 85 - i * 15))
+                    })
+        except Exception as e:
+            frappe.log_error(f"Revenue forecast error: {e}")
+        
+        # --- Collection Prediction (this week based on daily avg) ---
+        try:
+            daily = frappe.db.sql(
+                "SELECT IFNULL(AVG(daily_total),0) as avg_daily FROM ("
+                "  SELECT posting_date, SUM(amount_paid) as daily_total "
+                "  FROM `tabLoan Repayment` WHERE docstatus=1 "
+                "  AND posting_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) "
+                "  GROUP BY posting_date"
+                ") t", as_dict=True)
+            
+            avg_daily = float(daily[0].avg_daily) if daily else 0
+            import datetime
+            today = datetime.date.today()
+            days_left = 7 - today.weekday()  # days left this week
+            
+            this_week = frappe.db.sql(
+                "SELECT IFNULL(SUM(amount_paid),0) as collected "
+                "FROM `tabLoan Repayment` WHERE docstatus=1 "
+                "AND posting_date >= DATE_SUB(CURDATE(), INTERVAL WEEKDAY(CURDATE()) DAY)",
+                as_dict=True)
+            
+            collected_so_far = float(this_week[0].collected) if this_week else 0
+            predicted_week = collected_so_far + (avg_daily * days_left)
+            
+            data["collection_prediction"] = {
+                "avg_daily": avg_daily,
+                "collected_this_week": collected_so_far,
+                "predicted_this_week": predicted_week,
+                "days_left": days_left
+            }
+        except Exception as e:
+            frappe.log_error(f"Collection prediction error: {e}")
+        
+        # --- NPA Early Warning (loans with missed payments) ---
+        try:
+            risky = frappe.db.sql(
+                "SELECT l.name, l.applicant, l.loan_amount, l.disbursed_amount, "
+                "l.total_amount_paid, l.total_payment, "
+                "ROUND((1 - IFNULL(l.total_amount_paid,0) / NULLIF(l.total_payment,0)) * 100, 1) as risk_pct "
+                "FROM tabLoan l WHERE l.docstatus=1 AND l.status='Disbursed' "
+                "AND l.total_payment > 0 "
+                "AND (l.total_amount_paid / l.total_payment) < 0.5 "
+                "ORDER BY (l.total_payment - l.total_amount_paid) DESC LIMIT 8",
+                as_dict=True)
+            data["npa_warning"] = [{
+                "loan": r.name, "applicant": r.applicant or "Unknown",
+                "amount": float(r.loan_amount), "paid_pct": round(100 - float(r.risk_pct or 100), 1),
+                "risk": "high" if float(r.risk_pct or 0) > 70 else "medium"
+            } for r in risky]
+        except Exception as e:
+            frappe.log_error(f"NPA warning error: {e}")
+        
+        # --- Seasonal Patterns ---
+        try:
+            seasonal = frappe.db.sql(
+                "SELECT MONTH(disbursement_date) as m, MONTHNAME(disbursement_date) as month_name, "
+                "COUNT(*) cnt, IFNULL(SUM(disbursed_amount),0) amt "
+                "FROM `tabLoan Disbursement` WHERE docstatus=1 "
+                "AND disbursement_date >= DATE_SUB(CURDATE(), INTERVAL 24 MONTH) "
+                "GROUP BY m, month_name ORDER BY m",
+                as_dict=True)
+            avg_count = sum(s.cnt for s in seasonal) / max(len(seasonal), 1)
+            data["seasonal"] = [{
+                "month": s.month_name[:3], "count": s.cnt, "amount": float(s.amt),
+                "vs_avg": round((s.cnt / avg_count - 1) * 100) if avg_count else 0
+            } for s in seasonal]
+        except Exception as e:
+            frappe.log_error(f"Seasonal error: {e}")
+    
+    except Exception as e:
+        frappe.log_error(f"Smart predictions error: {e}")
+    return data
 
 def _get_tat_and_pipeline():
     """Turnaround time + loan processing pipeline funnel."""

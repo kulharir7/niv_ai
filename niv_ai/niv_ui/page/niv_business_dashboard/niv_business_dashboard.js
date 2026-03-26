@@ -203,6 +203,48 @@ class NivBIDashboard {
                 dots + labels +
                 '</svg>';
         })();
+        // Smart Predictions
+        const pred = this.data.predictions || {};
+        const forecast = pred.revenue_forecast || [];
+        const collPred = pred.collection_prediction || {};
+        const npaWarn = pred.npa_warning || [];
+        const seasonal = pred.seasonal || [];
+        
+        // Forecast cards
+        const forecastCards = forecast.map(f => {
+            const profitColor = f.predicted_profit >= 0 ? '#10b981' : '#ef4444';
+            return '<div class="bi-pred-card">' +
+                '<div class="bi-pred-month">' + f.month + '</div>' +
+                '<div class="bi-pred-row"><span>Income</span><span class="green">' + this.fmt(f.predicted_income) + '</span></div>' +
+                '<div class="bi-pred-row"><span>Expense</span><span class="red">' + this.fmt(f.predicted_expense) + '</span></div>' +
+                '<div class="bi-pred-row profit"><span>Profit</span><span style="color:' + profitColor + '">' + this.fmt(f.predicted_profit) + '</span></div>' +
+                '<div class="bi-pred-conf">' + f.confidence + '% confidence</div>' +
+                '</div>';
+        }).join("");
+        
+        // NPA Warning rows
+        const npaRows = npaWarn.map(n => {
+            const riskColor = n.risk === 'high' ? '#ef4444' : '#f59e0b';
+            return '<div class="bi-npa-row">' +
+                '<span class="bi-npa-dot" style="background:' + riskColor + '"></span>' +
+                '<div class="bi-npa-info"><span class="bi-npa-name">' + (n.applicant || '').substring(0, 20) + '</span>' +
+                '<span class="bi-npa-loan">' + n.loan + '</span></div>' +
+                '<span class="bi-npa-amt">' + this.fmt(n.amount) + '</span>' +
+                '<span class="bi-npa-paid">' + n.paid_pct + '% paid</span>' +
+                '</div>';
+        }).join("") || '<div class="bi-empty">No high-risk loans detected</div>';
+        
+        // Seasonal heatmap
+        const maxSeasonal = Math.max(...seasonal.map(s => s.count), 1);
+        const seasonalCells = seasonal.map(s => {
+            const intensity = Math.max(0.1, s.count / maxSeasonal);
+            const color = s.vs_avg >= 0 ? '16,185,129' : '239,68,68';
+            return '<div class="bi-season-cell" style="background:rgba(' + color + ',' + intensity + ')" title="' + s.month + ': ' + s.count + ' disbursements (' + (s.vs_avg >= 0 ? '+' : '') + s.vs_avg + '% vs avg)">' +
+                '<span class="bi-season-month">' + s.month + '</span>' +
+                '<span class="bi-season-val">' + (s.vs_avg >= 0 ? '+' : '') + s.vs_avg + '%</span>' +
+                '</div>';
+        }).join("");
+
         // TAT + Pipeline
         const pipeData = this.data.pipeline || {};
         const tat = pipeData.tat || {};
@@ -534,6 +576,49 @@ class NivBIDashboard {
                                 <div class="bi-quick-label">Avg Loan Size</div>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- Revenue Forecast -->
+                    <div class="bi-card bi-span-2 bi-pred-section">
+                        <div class="bi-card-header">
+                            <h3>&#x1F52E; Revenue Forecast</h3>
+                            <span class="bi-badge-ai">AI Predicted</span>
+                        </div>
+                        <div class="bi-pred-grid">${forecastCards || '<div class="bi-empty">Not enough data for prediction</div>'}</div>
+                    </div>
+
+                    <!-- Collection Prediction -->
+                    <div class="bi-card">
+                        <div class="bi-card-header">
+                            <h3>&#x1F4B5; Collection Prediction</h3>
+                        </div>
+                        <div class="bi-coll-pred">
+                            <div class="bi-coll-pred-big">${this.fmt(collPred.predicted_this_week)}</div>
+                            <div class="bi-coll-pred-label">Predicted this week</div>
+                            <div class="bi-coll-pred-details">
+                                <span>Collected: <strong class="green">${this.fmt(collPred.collected_this_week)}</strong></span>
+                                <span>Avg/day: <strong>${this.fmt(collPred.avg_daily)}</strong></span>
+                                <span>${collPred.days_left || 0} days left</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- NPA Early Warning -->
+                    <div class="bi-card">
+                        <div class="bi-card-header">
+                            <h3>&#x1F6A8; NPA Early Warning</h3>
+                            <span class="bi-badge-danger">${npaWarn.length} risky</span>
+                        </div>
+                        <div class="bi-npa-list">${npaRows}</div>
+                    </div>
+
+                    <!-- Seasonal Patterns -->
+                    <div class="bi-card bi-span-2">
+                        <div class="bi-card-header">
+                            <h3>&#x1F321; Seasonal Patterns</h3>
+                            <span class="bi-pred-hint">Disbursement activity vs average (24 months)</span>
+                        </div>
+                        <div class="bi-season-grid">${seasonalCells || '<div class="bi-empty">Not enough data</div>'}</div>
                     </div>
 
                     <!-- Loan Portfolio Overview -->
