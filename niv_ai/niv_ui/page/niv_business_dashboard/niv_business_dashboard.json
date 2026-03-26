@@ -8,9 +8,9 @@
   "modified": "2026-03-26 12:51:41.013996",
   "modified_by": "Administrator",
   "module": "Niv UI",
-  "name": "niv-ai-dashboard",
+  "name": "niv-business-dashboard",
   "owner": "Administrator",
-  "page_name": "niv-ai-dashboard",
+  "page_name": "niv-business-dashboard",
   "roles": [
     {
       "role": "System Manager"
@@ -32,5 +32,5 @@
   "standard": "Yes",
   "style": null,
   "system_page": 0,
-  "title": "Niv AI Dashboard"
+  "title": "Niv Business Dashboard"
 }
