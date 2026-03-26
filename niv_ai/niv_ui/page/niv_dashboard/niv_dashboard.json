@@ -1,9 +1,11 @@
 {
   "content": null,
-  "creation": "2026-02-09 00:00:00",
+  "creation": "2026-03-25 23:00:00",
   "docstatus": 0,
   "doctype": "Page",
-  "modified": "2026-02-09 00:00:00",
+  "icon": "chart-line",
+  "idx": 0,
+  "modified": "2026-03-26 12:51:40.831382",
   "modified_by": "Administrator",
   "module": "Niv UI",
   "name": "niv-dashboard",
@@ -12,9 +14,17 @@
   "roles": [
     {
       "role": "System Manager"
+    },
+    {
+      "role": "Administrator"
+    },
+    {
+      "role": "All"
     }
   ],
+  "script": null,
   "standard": "Yes",
+  "style": null,
   "system_page": 0,
   "title": "Niv Dashboard"
 }
