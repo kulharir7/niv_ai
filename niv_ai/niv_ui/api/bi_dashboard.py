@@ -159,17 +159,16 @@ Query these and return JSON:
 Return ONLY valid JSON."""
 
     try:
-        from niv_ai.niv_core.langchain.agent import run_agent
-        response = run_agent(
-            message=prompt,
+        from niv_ai.niv_core.api.chat import send_message
+        response = send_message(
             conversation_id=f"ai-dashboard-{period}",
-            user=user,
-            system_prompt="Data analyst. Use run_database_query tool. Return clean JSON only."
+            message=prompt,
         )
+        response_text = response if isinstance(response, str) else str(response)
         
-        result = {"source": "ai", "period": period, "raw": response, "status": "text"}
-        if response:
-            json_match = re.search(r'\{[\s\S]*\}', response)
+        result = {"source": "ai", "period": period, "raw": response_text, "status": "text"}
+        if response_text:
+            json_match = re.search(r'\{[\s\S]*\}', response_text)
             if json_match:
                 try:
                     result["data"] = json.loads(json_match.group())
@@ -187,9 +186,9 @@ Return ONLY valid JSON."""
 @frappe.whitelist()
 def get_ai_analysis():
     """Quick AI analysis."""
-    from niv_ai.niv_core.langchain.agent import run_agent
+    from niv_ai.niv_core.api.chat import send_message
     try:
-        r = run_agent(message="Give 5 business insights from database.", conversation_id="ai-quick", user=frappe.session.user)
+        r = send_message(conversation_id="ai-analysis", message="Give 5 business insights by querying the database.")
         return {"analysis": r}
     except Exception as e:
         return {"analysis": str(e)}
