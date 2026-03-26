@@ -14,10 +14,11 @@ class NivBIDashboard {
         this.init();
     }
 
-    async init() {
+    async init(period) {
+        this.period = period || this.period || "this_year";
         this.page.main.html(this.skeleton());
         try {
-            const r = await frappe.call({ method: "niv_ai.niv_ui.api.bi_dashboard.get_bi_data" });
+            const r = await frappe.call({ method: "niv_ai.niv_ui.api.bi_dashboard.get_bi_data", args: { period: this.period } });
             this.data = r.message || {};
             this.render();
         } catch(e) {
@@ -368,7 +369,7 @@ class NivBIDashboard {
                         </select>
                         <button class="bi-btn-export" onclick="window._biExport && window._biExport()">&#x1F4E5; Export</button>
                         <button class="bi-btn-ai-mode" id="biAiMode" onclick="window._biLoadAI && window._biLoadAI()">&#x2728; Load via AI</button>
-                        <button class="bi-btn-refresh" onclick="new NivBIDashboard(cur_page.page)">↻ Refresh</button>
+                        <button class="bi-btn-refresh" onclick="window._biDash && window._biDash.init()">↻ Refresh</button>
                         <button class="bi-btn-ai" id="biAiBtn">✦ AI Analysis</button>
                     </div>
                 </div>
@@ -835,8 +836,12 @@ class NivBIDashboard {
 
         // Date filter (placeholder — would need backend support for full implementation)
         window._biDateChange = (period) => {
-            frappe.show_alert({message: "Filter: " + period + " (Coming soon — full date filtering)", indicator: "blue"}, 3);
+            this.init(period);
         };
+
+        // Set date filter to current period
+        const dateFilter = document.getElementById("biDateFilter");
+        if (dateFilter) dateFilter.value = this.period || "this_year";
 
         // Auto-refresh every 5 minutes
         if (this._refreshTimer) clearInterval(this._refreshTimer);
