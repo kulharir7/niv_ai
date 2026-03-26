@@ -119,15 +119,15 @@ def get_llm(provider_name=None, model=None, streaming=True, callbacks=None):
     # Enable thinking mode for models that support it (Kimi, Qwen3, DeepSeek-R1)
     model_lower = (model or "").lower()
     thinking_models = ["kimi", "qwen3", "deepseek-r1", "qwq", "thinking"]
-    extra = {}
+    extra_kwargs = {}
     if any(t in model_lower for t in thinking_models):
-        extra["extra_body"] = {"think": True}
+        extra_kwargs["model_kwargs"] = {"extra_body": {"think": True}}
     return ChatOpenAI(
         base_url=provider.base_url,
         api_key=api_key,
         max_retries=2,
         request_timeout=120,
-        **extra,
+        **extra_kwargs,
         **common_kwargs,
     )
 
