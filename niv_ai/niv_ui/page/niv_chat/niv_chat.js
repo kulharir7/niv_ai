@@ -2110,8 +2110,14 @@ ${htmlCode}
                         <i class="fa fa-chevron-right tool-chevron"></i>
                     </div>
                     <div class="tool-call-body">
-                        <div class="tool-section"><strong>Input:</strong><pre><code>${frappe.utils.escape_html(argsJson)}</code></pre></div>
-                        ${resultJson ? `<div class="tool-section"><strong>Output:</strong><pre><code>${frappe.utils.escape_html(resultJson.substring(0, 2000))}</code></pre></div>` : ""}
+                        <div class="tool-section tool-input">
+                            <div class="tool-section-label">📥 Input</div>
+                            <pre><code>${frappe.utils.escape_html(argsJson)}</code></pre>
+                        </div>
+                        ${resultJson ? `<div class="tool-section tool-output">
+                            <div class="tool-section-label">📤 Output</div>
+                            <pre><code>${frappe.utils.escape_html(resultJson.substring(0, 2000))}</code></pre>
+                        </div>` : ""}
                     </div>
                 </div>
             `;
@@ -2542,12 +2548,18 @@ ${htmlCode}
                                             <span class="tool-status-icon running"><i class="fa fa-circle-o-notch fa-spin" style="font-size:11px"></i></span>
                                             <span class="tool-label">Using</span>
                                             <span class="tool-name">${frappe.utils.escape_html(toolName)}</span>
-                                            <span class="tool-running-text">working...</span>
+                                            <span class="tool-running-text">running...</span>
                                             <i class="fa fa-chevron-right tool-chevron"></i>
                                         </div>
                                         <div class="tool-call-body">
-                                            <div class="tool-section tool-input"><strong class="tool-section-label">📥 Input:</strong><pre><code>${frappe.utils.escape_html(argsStr)}</code></pre></div>
-                                            <div class="tool-section tool-output" style="display:none;"><strong class="tool-section-label">📤 Output:</strong><pre><code></code></pre></div>
+                                            <div class="tool-section tool-input">
+                                                <div class="tool-section-label">📥 Input</div>
+                                                <pre><code>${frappe.utils.escape_html(argsStr)}</code></pre>
+                                            </div>
+                                            <div class="tool-section tool-output" style="display:none;">
+                                                <div class="tool-section-label">📤 Output</div>
+                                                <pre><code></code></pre>
+                                            </div>
                                         </div>
                                     </div>
                                 `);
