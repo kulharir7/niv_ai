@@ -203,6 +203,28 @@ class NivBIDashboard {
                 dots + labels +
                 '</svg>';
         })();
+        // Pending Approvals
+        const pend = this.data.pending || {};
+        const approvals = pend.approvals || [];
+        const drafts = pend.drafts || [];
+        const teamAct = pend.team_activity || [];
+        
+        const approvalRows = approvals.map(a => {
+            return '<div class="bi-appr-row"><span class="bi-appr-dt">' + a.doctype + '</span><span class="bi-appr-cnt">' + a.count + '</span></div>';
+        }).join("") || '<div class="bi-empty">No pending approvals</div>';
+        
+        const draftRows = drafts.map(d => {
+            return '<div class="bi-appr-row"><span class="bi-appr-dt">' + d.doctype + '</span><span class="bi-appr-cnt draft">' + d.count + '</span></div>';
+        }).join("");
+        
+        const teamRows = teamAct.map((t, i) => {
+            const colors = ["#3b82f6","#10b981","#f59e0b","#8b5cf6","#ef4444"];
+            return '<div class="bi-team-row">' +
+                '<div class="bi-team-avatar" style="background:' + colors[i % 5] + '">' + (t.user || "?")[0].toUpperCase() + '</div>' +
+                '<div class="bi-team-info"><span class="bi-team-name">' + t.user + '</span><span class="bi-team-meta">' + t.actions + ' actions</span></div>' +
+                '</div>';
+        }).join("") || '<div class="bi-empty">No activity in 24h</div>';
+
         // Receivables Ageing
         const recv = this.data.receivables || {};
         const recvBuckets = recv.buckets || [];
@@ -308,6 +330,22 @@ class NivBIDashboard {
                     </div>
 
 
+
+                    <!-- Pending Approvals -->
+                    <div class="bi-card">
+                        <div class="bi-card-header">
+                            <h3>&#x1F4CB; Pending Approvals</h3>
+                            <span class="bi-badge-warn">${pend.total_pending || 0}</span>
+                        </div>
+                        <div class="bi-appr-list">${approvalRows}</div>
+                        ${draftRows ? '<div class="bi-appr-divider">Drafts</div><div class="bi-appr-list">' + draftRows + '</div>' : ''}
+                    </div>
+
+                    <!-- Team Activity -->
+                    <div class="bi-card">
+                        <div class="bi-card-header"><h3>&#x1F465; Team Activity (24h)</h3></div>
+                        <div class="bi-team-list">${teamRows}</div>
+                    </div>
 
                     <!-- Outstanding Receivables -->
                     <div class="bi-card">
