@@ -2612,35 +2612,43 @@ ${htmlCode}
                         } else if (data.type === "tool_result") {
                             if (is_active && $msgEl) {
                                 const toolName = data.tool || "";
+                                console.log("[Niv] tool_result received:", toolName, "result length:", (data.result||"").length);
                                 // Skip unknown/internal tool results
                                 if (!toolName || toolName === "unknown_tool" || toolName === "unknown" || 
                                     toolName.startsWith("transfer_")) {
+                                    console.log("[Niv] Skipping tool result for:", toolName);
                                     continue;
                                 }
                                 
-                                // IMPROVED: Match tool results to calls using a queue
-                                // Priority: 1) Exact name match, 2) Oldest running tool (FIFO queue)
+                                // Match tool results to calls
+                                // Priority: 1) Exact running match, 2) Any running, 3) Exact name (already done), 4) Last tool
                                 var $running = null;
                                 
-                                // First try exact name match
-                                var $exactMatch = $msgEl.find(`.tool-call-accordion.running[data-tool="${toolName}"]`).first();
+                                // Try exact name match on running tools
+                                var $exactMatch = $msgEl.find('.tool-call-accordion.running[data-tool="' + toolName + '"]').first();
                                 if ($exactMatch.length) {
                                     $running = $exactMatch;
                                 } else {
-                                    // Fallback: use FIFO order (oldest running tool)
-                                    // Tools are appended in order, so first .running in DOM is oldest
+                                    // Any running tool (FIFO)
                                     var $allRunning = $msgEl.find(".tool-call-accordion.running");
-                                    if ($allRunning.length === 1) {
-                                        // Only one running, must be this one
+                                    if ($allRunning.length) {
                                         $running = $allRunning.first();
-                                    } else if ($allRunning.length > 1) {
-                                        // Multiple running - log warning but use first (oldest)
-                                        console.warn(`[Niv] Tool result for '${toolName}' but ${$allRunning.length} tools running. Using oldest.`);
-                                        $running = $allRunning.first();
+                                    } else {
+                                        // No running tools — match by name (already completed) or last tool
+                                        var $byName = $msgEl.find('.tool-call-accordion[data-tool="' + toolName + '"]').last();
+                                        if ($byName.length && !$byName.find(".tool-output:visible").length) {
+                                            $running = $byName;
+                                        } else {
+                                            // Last resort: last tool accordion without output
+                                            var $lastTool = $msgEl.find(".tool-call-accordion").last();
+                                            if ($lastTool.length && !$lastTool.find(".tool-output:visible").length) {
+                                                $running = $lastTool;
+                                            }
+                                        }
                                     }
-                                    // If no running tools, result is orphaned (tool_call event was skipped)
                                 }
                                 
+                                console.log("[Niv] Tool result matching:", toolName, "found $running:", !!($running && $running.length), "all accordions:", $msgEl.find(".tool-call-accordion").length);
                                 if ($running && $running.length) {
                                     $running.removeClass("running");
                                     $running.find(".tool-status-icon").removeClass("running").addClass("done").html('<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>');
