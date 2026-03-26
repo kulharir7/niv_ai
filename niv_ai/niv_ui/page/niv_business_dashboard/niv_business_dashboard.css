@@ -260,3 +260,31 @@
 .bi-def-name { font-size: 12px; font-weight: 600; color: #1f2937; display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bi-def-meta { font-size: 10px; color: #9ca3af; }
 .bi-def-amt { font-size: 13px; font-weight: 700; color: #ef4444; flex-shrink: 0; }
+
+/* ═══ Pending Approvals ═══ */
+.bi-appr-list { display: flex; flex-direction: column; gap: 4px; }
+.bi-appr-row { display: flex; align-items: center; justify-content: space-between; padding: 6px 10px; border-radius: 6px; }
+.bi-appr-row:hover { background: rgba(0,0,0,0.02); }
+.bi-appr-dt { font-size: 12px; color: #1f2937; font-weight: 500; }
+.bi-appr-cnt {
+    font-size: 11px; font-weight: 700; color: #f59e0b;
+    background: rgba(245,158,11,0.1); padding: 2px 8px; border-radius: 10px;
+}
+.bi-appr-cnt.draft { color: #6b7280; background: rgba(107,114,128,0.1); }
+.bi-appr-divider {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: #9ca3af; margin: 8px 0 4px; padding-top: 8px;
+    border-top: 1px solid rgba(0,0,0,0.05);
+}
+
+/* ═══ Team Activity ═══ */
+.bi-team-list { display: flex; flex-direction: column; gap: 8px; }
+.bi-team-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; }
+.bi-team-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-weight: 700; font-size: 13px; flex-shrink: 0;
+}
+.bi-team-info { flex: 1; }
+.bi-team-name { font-size: 13px; font-weight: 600; color: #1f2937; display: block; }
+.bi-team-meta { font-size: 11px; color: #9ca3af; }

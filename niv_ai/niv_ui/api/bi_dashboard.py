@@ -139,6 +139,7 @@ def get_bi_data():
         "system_info": get_system_info(),
         "loan_portfolio": _get_loan_portfolio(),
         "receivables": _get_receivables_ageing(),
+        "pending": _get_pending_approvals(),
     }
 
 
@@ -494,6 +495,56 @@ def get_system_info():
 # ═══════════════════════════════════════════
 
 
+
+
+
+def _get_pending_approvals():
+    """Pending workflow approvals and recent team activity."""
+    data = {"approvals": [], "team_activity": [], "total_pending": 0}
+    try:
+        # Pending workflow actions
+        pending = frappe.db.sql(
+            "SELECT reference_doctype as doctype, status, COUNT(*) cnt "
+            "FROM `tabWorkflow Action` WHERE status='Open' "
+            "GROUP BY reference_doctype, status ORDER BY cnt DESC LIMIT 8",
+            as_dict=True)
+        data["approvals"] = [{"doctype": p.doctype, "count": p.cnt} for p in pending]
+        data["total_pending"] = sum(p.cnt for p in pending)
+        
+        # Draft documents (not submitted)
+        drafts = frappe.db.sql(
+            "SELECT dt.name as doctype, COUNT(*) cnt "
+            "FROM tabDocType dt "
+            "INNER JOIN (SELECT doctype, COUNT(*) c FROM tabDocField WHERE fieldname='docstatus' GROUP BY doctype) df ON df.doctype=dt.name "
+            "WHERE dt.istable=0 AND dt.module NOT IN ('Core','Email','Desk','Printing','Website','Custom') "
+            "AND EXISTS (SELECT 1 FROM `tab{0}` WHERE docstatus=0 LIMIT 1) "
+            "LIMIT 1",
+            as_dict=True)
+        
+        # Simpler approach - check common doctypes for drafts
+        draft_doctypes = ["Loan Application", "Sales Order", "Purchase Order", "Sales Invoice", "Purchase Invoice", "Journal Entry", "Payment Entry"]
+        draft_list = []
+        for dt in draft_doctypes:
+            try:
+                cnt = frappe.db.count(dt, {"docstatus": 0})
+                if cnt > 0:
+                    draft_list.append({"doctype": dt, "count": cnt})
+            except:
+                pass
+        data["drafts"] = sorted(draft_list, key=lambda x: x["count"], reverse=True)[:6]
+        
+        # Recent activity (last 24h)
+        activity = frappe.db.sql(
+            "SELECT owner, COUNT(*) cnt, MAX(modified) last_active "
+            "FROM `tabActivity Log` "
+            "WHERE creation >= DATE_SUB(NOW(), INTERVAL 24 HOUR) "
+            "AND owner NOT IN ('Administrator', 'Guest') "
+            "GROUP BY owner ORDER BY cnt DESC LIMIT 5",
+            as_dict=True)
+        data["team_activity"] = [{"user": a.owner.split("@")[0] if "@" in a.owner else a.owner, "actions": a.cnt, "last": str(a.last_active)[:16]} for a in activity]
+    except Exception as e:
+        frappe.log_error(f"Pending approvals error: {e}")
+    return data
 
 def _get_receivables_ageing():
     """Outstanding receivables ageing for NBFC."""
