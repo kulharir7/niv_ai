@@ -149,6 +149,7 @@ def get_bi_data():
         "loan_portfolio": _safe_call(_get_loan_portfolio),
         "receivables": _safe_call(_get_receivables_ageing),
         "pending": _safe_call(_get_pending_approvals),
+        "growth": _safe_call(_get_collection_and_growth),
     }
 
 
@@ -506,6 +507,64 @@ def get_system_info():
 
 
 
+
+
+
+def _get_collection_and_growth():
+    """EMI collection rate + new customer/loan growth trends."""
+    data = {"collection": {}, "new_loans_trend": [], "new_customers_trend": []}
+    try:
+        # EMI Collection this month vs expected
+        try:
+            month_start = frappe.utils.get_first_day(frappe.utils.nowdate())
+            collected = frappe.db.sql(
+                "SELECT IFNULL(SUM(amount_paid),0) as paid FROM `tabLoan Repayment` "
+                "WHERE docstatus=1 AND posting_date >= %s", month_start, as_dict=True)
+            expected = frappe.db.sql(
+                "SELECT IFNULL(SUM(total_payment),0) as expected FROM tabLoan "
+                "WHERE docstatus=1 AND status IN ('Disbursed','Partially Disbursed')",
+                as_dict=True)
+            paid = float(collected[0].paid) if collected else 0
+            exp = float(expected[0].expected) if expected else 0
+            # Monthly expected = total_payment / loan_tenure approx
+            data["collection"] = {
+                "collected_month": paid,
+                "total_outstanding": exp,
+                "rate": round(paid / exp * 100, 1) if exp > 0 else 0
+            }
+        except:
+            pass
+        
+        # New loans per month (last 6 months)
+        try:
+            loans = frappe.db.sql(
+                "SELECT DATE_FORMAT(creation, '%b %y') as month, "
+                "DATE_FORMAT(creation, '%Y-%m') as sk, "
+                "COUNT(*) cnt, IFNULL(SUM(loan_amount),0) amt "
+                "FROM tabLoan WHERE docstatus=1 "
+                "AND creation >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) "
+                "GROUP BY month, sk ORDER BY sk",
+                as_dict=True)
+            data["new_loans_trend"] = [{"month": l.month, "count": l.cnt, "amount": float(l.amt)} for l in loans]
+        except:
+            pass
+        
+        # New customers (Loan Applications) per month
+        try:
+            custs = frappe.db.sql(
+                "SELECT DATE_FORMAT(creation, '%b %y') as month, "
+                "DATE_FORMAT(creation, '%Y-%m') as sk, "
+                "COUNT(*) cnt "
+                "FROM `tabLoan Application` "
+                "WHERE creation >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) "
+                "GROUP BY month, sk ORDER BY sk",
+                as_dict=True)
+            data["new_customers_trend"] = [{"month": c.month, "count": c.cnt} for c in custs]
+        except:
+            pass
+    except Exception as e:
+        frappe.log_error(f"Collection growth error: {e}")
+    return data
 
 def _get_pending_approvals():
     """Pending workflow approvals and recent team activity."""

@@ -288,3 +288,24 @@
 .bi-team-info { flex: 1; }
 .bi-team-name { font-size: 13px; font-weight: 600; color: #1f2937; display: block; }
 .bi-team-meta { font-size: 11px; color: #9ca3af; }
+
+/* ═══ Collection Gauge ═══ */
+.bi-coll-body { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.bi-coll-gauge { position: relative; text-align: center; }
+.bi-gauge-svg { width: 140px; height: 80px; }
+.bi-gauge-fill { transition: stroke-dasharray 1s ease; }
+.bi-gauge-value { font-size: 28px; font-weight: 800; margin-top: -20px; }
+.bi-gauge-label { font-size: 11px; color: #9ca3af; margin-top: -2px; }
+.bi-coll-stats { display: flex; gap: 20px; }
+.bi-coll-stat { text-align: center; }
+.bi-coll-stat-label { display: block; font-size: 10px; color: #9ca3af; text-transform: uppercase; }
+.bi-coll-stat-val { display: block; font-size: 16px; font-weight: 700; color: #1f2937; }
+.bi-coll-stat-val.green { color: #10b981; }
+
+/* ═══ Sparklines ═══ */
+.bi-spark-section { display: flex; flex-direction: column; gap: 16px; }
+.bi-spark-item { }
+.bi-spark-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 12px; color: #6b7280; font-weight: 500; }
+.bi-spark-total { font-weight: 700; color: #1f2937; font-size: 14px; }
+.bi-sparkline { width: 100%; height: 40px; }
+.bi-spark-labels { display: flex; justify-content: space-between; font-size: 8px; color: #9ca3af; margin-top: 2px; }
