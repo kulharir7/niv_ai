@@ -2668,9 +2668,19 @@ ${htmlCode}
                                         $body.append(`<div class="tool-section tool-output"><div class="tool-section-label"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> Output</div><pre><code>${frappe.utils.escape_html(resultStr)}</code></pre></div>`);
                                     }
                                     // Add copy buttons to both sections
+                                    // Add copy buttons to sections
                                     $running.find(".tool-section").each(function() {
                                         if (!$(this).find(".tool-copy-btn").length) {
-                                            $(this).find(".tool-section-label").append('<button class="tool-copy-btn" onclick="event.stopPropagation(); var t=$(this).closest('.tool-section').find('code').text(); navigator.clipboard.writeText(t); $(this).html('✓ Copied'); setTimeout(()=>$(this).html('Copy'),1500)">Copy</button>');
+                                            var $copyBtn = $('<button class="tool-copy-btn">Copy</button>');
+                                            $copyBtn.on("click", function(e) {
+                                                e.stopPropagation();
+                                                var txt = $(this).closest(".tool-section").find("code").text();
+                                                navigator.clipboard.writeText(txt);
+                                                $(this).html("\u2713 Copied");
+                                                var btn = $(this);
+                                                setTimeout(function() { btn.html("Copy"); }, 1500);
+                                            });
+                                            $(this).find(".tool-section-label").append($copyBtn);
                                         }
                                     });
                                 }
