@@ -1,3 +1,47 @@
+## [1.4.0] - 2026-03-26 — AI Business Intelligence & Claude-Style UI
+
+### Added
+- **AI Business Intelligence Dashboard** (`/app/niv-business-dashboard`)
+  - 13 real-time sections: Financial KPIs, Loan Portfolio, Status, Disbursement Trend, Branch Performance, Pipeline Funnel, TAT, EMI Collection, Growth Sparklines, Pending Approvals, Team Activity, Receivables Ageing, NPA Warning
+  - Hybrid architecture: instant SQL data + background AI analysis
+  - AI Predictions: revenue forecast, collection prediction, seasonal patterns
+  - SVG area charts, gauge charts, sparklines — no external chart library
+  - Click-to-Drill: KPI cards navigate to filtered list views
+  - Date range filter: This Month / Quarter / Year / All Time
+  - Background job + polling (no HTTP timeout)
+  - 5-minute cache for AI results
+- **Claude-Style Tool Calling UI** in Niv Chat
+  - Input/Output sections with color-coded borders (blue/green)
+  - Summary line in collapsed view (e.g., "Sales Order · limit:20")
+  - Duration badge showing tool execution time
+  - Copy buttons on Input/Output sections
+  - SVG animated spinner + checkmark icons
+  - Monospace tool names with subtle background
+- **AI Thinking/Reasoning Display**
+  - `<think>` tag extraction from model responses
+  - Thinking content emitted as `type: "thought"` SSE events
+  - Collapsible purple thought blocks in chat UI
+  - `think: true` parameter for Ollama thinking models
+- **Smart Predictions Engine**
+  - Linear regression revenue forecasting (3 months ahead)
+  - Collection prediction based on 30-day daily average
+  - NPA early warning (loans with <50% payment)
+  - Seasonal pattern heatmap (24-month disbursement analysis)
+
+### Fixed
+- Tool output now persists after streaming (load_messages no longer wipes it)
+- Disbursement trend chart DATE_FORMAT escaping
+- Dashboard page searchbar visibility (roles + page_modules)
+- Team activity query (combined Version + Activity Log tables)
+- Pending approvals broken `tab{0}` SQL query removed
+- Multiple pyc cache issues resolved
+
+### Changed
+- Dashboard renamed: `niv-ai-dashboard` → `niv-business-dashboard`
+- Tool UI completely redesigned from basic accordion to Claude-style
+- Thinking tags extracted instead of stripped — sent as events to frontend
+- `_flush_buffer()` now returns 3 values (text, buffer, thinking)
+
 ## [1.1.0] - 2026-02-20 — Polish & Reliability
 
 ### Added
