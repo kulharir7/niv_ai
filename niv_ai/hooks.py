@@ -18,6 +18,8 @@ page_modules = {
     "niv-chat-shared": "niv_ai.niv_ui.page.niv_chat_shared",
     "niv-credits": "niv_ai.niv_ui.page.niv_credits",
     "niv-dashboard": "niv_ai.niv_ui.page.niv_dashboard",
+    "niv-ai-dashboard": "niv_ai.niv_ui.page.niv_ai_dashboard",
+    "niv-settings": "niv_ai.niv_ui.page.niv_settings",
 }
 
 # Fixtures — disabled, data is seeded via install.py instead
