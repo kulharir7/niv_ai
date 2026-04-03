@@ -5330,114 +5330,75 @@ body.niv-widget-mode .niv-message {
 
 
 /* ═══════════════════════════════════════════════════════════════════
-   VOICE MODE UI FIXES (v2 - April 2026)
+   VOICE OVERLAY TEXT FIX v5 — Safe, scoped to voice-overlay only
    ═══════════════════════════════════════════════════════════════════ */
 
-/* ─── Response Text - Better Visibility ─── */
-.voice-response-text {
-    font-size: 16px !important;
+/* Response text - positioned above control bar, z-index higher than orb */
+.niv-voice-overlay .voice-response-text {
+    position: absolute !important;
+    top: 35% !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 85% !important;
+    max-width: 550px !important;
+    max-height: 180px !important;
+    padding: 18px 24px !important;
+    font-size: 17px !important;
+    line-height: 1.7 !important;
     color: #ffffff !important;
-    max-width: 90% !important;
-    max-height: 250px !important;
-    overflow-y: auto !important;
-    line-height: 1.8 !important;
-    background: rgba(0, 0, 0, 0.6) !important;
-    border-radius: 16px !important;
-    padding: 16px 24px !important;
-    margin-bottom: 130px !important;
-    border: 1px solid rgba(255, 255, 255, 0.15) !important;
-    backdrop-filter: blur(20px) !important;
-    -webkit-backdrop-filter: blur(20px) !important;
-    text-align: center !important;
-    word-wrap: break-word !important;
-    /* Smooth text appearance */
-    transition: opacity 0.2s ease, transform 0.2s ease !important;
-    opacity: 1 !important;
-    transform: translateY(0) !important;
-}
-
-.voice-response-text:not(:empty) {
-    display: block !important;
-    animation: voiceTextFadeIn 0.3s ease-out !important;
-}
-
-@keyframes voiceTextFadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* ─── Transcript Text - User's Speech ─── */
-.voice-transcript {
-    font-size: 18px !important;
-    color: rgba(255, 255, 255, 0.95) !important;
-    font-weight: 500 !important;
-    text-align: center !important;
-    max-width: 80% !important;
-    margin-bottom: 24px !important;
-    padding: 12px 24px !important;
-    background: rgba(255, 255, 255, 0.1) !important;
+    background: rgba(0, 0, 0, 0.75) !important;
     border-radius: 20px !important;
+    border: 1px solid rgba(100, 200, 255, 0.3) !important;
+    text-align: left !important;
+    overflow-y: auto !important;
+    word-wrap: break-word !important;
+    backdrop-filter: blur(16px) !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+    z-index: 100 !important;
+}
+
+/* Transcript - above response text */
+.niv-voice-overlay .voice-transcript {
+    position: absolute !important;
+    top: 15% !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 80% !important;
+    max-width: 500px !important;
+    padding: 14px 24px !important;
+    font-size: 17px !important;
+    color: rgba(255, 255, 255, 0.95) !important;
+    background: rgba(255, 255, 255, 0.12) !important;
+    border-radius: 24px !important;
+    text-align: center !important;
     backdrop-filter: blur(10px) !important;
+    z-index: 100 !important;
 }
 
-.voice-transcript:not(:empty) {
-    display: block !important;
+/* Speaking state glow on response */
+.niv-voice-overlay[data-voice-state="speaking"] .voice-response-text {
+    border-color: rgba(100, 200, 255, 0.5) !important;
+    box-shadow: 0 0 25px rgba(100, 200, 255, 0.2), 0 8px 32px rgba(0, 0, 0, 0.4) !important;
 }
 
-/* ─── Voice Status Text ─── */
-.voice-status-text {
-    font-size: 16px !important;
-    color: rgba(255, 255, 255, 0.8) !important;
-    margin-top: 20px !important;
-    font-weight: 500 !important;
-    letter-spacing: 0.5px !important;
+/* Hide empty */
+.niv-voice-overlay .voice-transcript:empty,
+.niv-voice-overlay .voice-response-text:empty {
+    display: none !important;
 }
 
-/* ─── Speaking State - Pulsing Response ─── */
-[data-voice-state="speaking"] .voice-response-text {
-    border-color: rgba(100, 200, 255, 0.4) !important;
-    box-shadow: 0 0 20px rgba(100, 200, 255, 0.2) !important;
-}
-
-/* ─── Processing State - Thinking Animation ─── */
-[data-voice-state="processing"] .voice-status-text::after {
-    content: '...';
-    animation: thinkingDots 1.5s infinite;
-}
-
-@keyframes thinkingDots {
-    0%, 20% { content: '.'; }
-    40% { content: '..'; }
-    60%, 100% { content: '...'; }
-}
-
-/* ─── Listening State - Active Mic ─── */
-[data-voice-state="listening"] .voice-orb {
-    border-color: rgba(100, 255, 150, 0.5) !important;
-    box-shadow: 0 0 40px rgba(100, 255, 150, 0.3) !important;
-}
-
-/* ─── Error State ─── */
-[data-voice-state="error"] .voice-status-text {
-    color: #ff6b6b !important;
-}
-
-/* ─── Mobile Responsive ─── */
+/* Mobile adjustments */
 @media (max-width: 768px) {
-    .voice-response-text {
-        max-width: 95% !important;
+    .niv-voice-overlay .voice-response-text {
+        top: 30% !important;
+        width: 92% !important;
+        max-height: 160px !important;
         font-size: 15px !important;
         padding: 14px 18px !important;
-        max-height: 200px !important;
     }
-    .voice-transcript {
-        font-size: 16px !important;
-        max-width: 90% !important;
+    .niv-voice-overlay .voice-transcript {
+        top: 12% !important;
+        width: 90% !important;
+        font-size: 15px !important;
     }
 }

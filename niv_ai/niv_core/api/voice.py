@@ -448,8 +448,8 @@ def _get_voice_config():
     mistral_voice_hi = ""
     try:
         mistral_api_key = settings.get_password("mistral_api_key") if getattr(settings, "mistral_api_key", None) else None
-        mistral_voice_en = getattr(settings, "mistral_voice_en", "") or "en_paul_cheerful"
-        mistral_voice_hi = getattr(settings, "mistral_voice_hi", "") or "en_paul_cheerful"
+        mistral_voice_en = getattr(settings, "mistral_voice_en", "") or "gb_jane_sarcasm"
+        mistral_voice_hi = getattr(settings, "mistral_voice_hi", "") or "gb_jane_sarcasm"
     except Exception:
         pass
 
@@ -665,9 +665,8 @@ def _tts_elevenlabs(text, voice_id=None, config=None):
 def _tts_mistral(text, voice=None, config=None):
     """Generate speech using Mistral Voxtral TTS API.
     
-    Model: voxtral-mini-tts-2603 (4B params, Hindi+English, ~90ms latency)
-    API: POST /v1/audio/speech
-    Returns base64 audio_data in JSON response.
+    Model: voxtral-mini-tts-2603
+    Default voice: gb_jane_sarcasm (female British)
     """
     if not config:
         config = _get_voice_config()
@@ -676,13 +675,9 @@ def _tts_mistral(text, voice=None, config=None):
     if not api_key:
         return None
     
-    # Select voice based on language
+    # Use Jane (female) voice by default
     if not voice:
-        lang = _detect_language(text)
-        if lang == "hi":
-            voice = config.get("mistral_voice_hi") or "en_paul_cheerful"
-        else:
-            voice = config.get("mistral_voice_en") or "en_paul_cheerful"
+        voice = "gb_jane_sarcasm"
     
     try:
         import base64 as b64
@@ -954,9 +949,10 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
 
     config = _get_voice_config()
 
-    # ── Try Mistral Voxtral TTS first (best quality, Hindi+English, ~90ms) ──
+    # ── Try Mistral FIRST with Jane (female) voice ──
     if engine in (None, "auto", "mistral") and config.get("mistral_api_key"):
-        result = _tts_mistral(text, config=config)
+        # Use gb_jane_sarcasm — only female voice in Mistral
+        result = _tts_mistral(text, voice="gb_jane_sarcasm", config=config)
         if result:
             return result
 
@@ -966,7 +962,7 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
         if result:
             return result
 
-    # ── Try Edge TTS (free, human-like) ──
+    # ── Try Edge TTS (fallback) ──
     if engine in (None, "auto", "edge"):
         edge_voice = voice if (voice and "Neural" in str(voice)) else None
         result = _tts_edge(text, edge_voice)
@@ -1013,19 +1009,21 @@ def stream_tts(text, voice=None, language=None):
     if not voice or voice == "auto":
         voice = "hi-IN-SwaraNeural" if lang in ("hi", "hindi") else "en-IN-NeerjaExpressiveNeural"
 
-    # FAST PATH: Try Mistral first with proper language-based voice
-    # Use full config read to ensure mistral_api_key is loaded
+    # FAST PATH: Mistral Jane (female) voice
     config = _get_voice_config()
     if config.get("mistral_api_key"):
-        # Use language parameter
-        mistral_voice = config.get("mistral_voice_hi") if lang in ("hi", "hindi") else config.get("mistral_voice_en")
-        mistral_voice = mistral_voice or "en_paul_cheerful"
-        
-        result = _stream_tts_mistral(text, mistral_voice, config)
+        # gb_jane_sarcasm — only female voice in Mistral
+        result = _stream_tts_mistral(text, "gb_jane_sarcasm", config)
         if result:
             return result
 
-    # Fallback: Edge TTS directly
+    # Fallback: Edge TTS
+    edge_voice = "hi-IN-SwaraNeural" if lang in ("hi", "hindi") else "en-IN-NeerjaExpressiveNeural"
+    result = _edge_tts_fast(text, edge_voice)
+    if result:
+        return result
+
+    # Final fallback
     result = _edge_tts_fast(text, voice)
     if result:
         return result
@@ -1143,6 +1141,7 @@ def stt_from_base64(**kwargs):
     check_rate_limit()
     
     audio_base64 = frappe.form_dict.get("audio_base64", "")
+    language_hint = frappe.form_dict.get("language", "")  # "hi" or "en"
     if not audio_base64:
         return {"text": "", "error": "No audio data"}
     
@@ -1166,7 +1165,7 @@ def stt_from_base64(**kwargs):
                         "https://api.mistral.ai/v1/audio/transcriptions",
                         headers={"Authorization": "Bearer {0}".format(mistral_key)},
                         files={"file": ("audio.webm", f, "audio/webm")},
-                        data={"model": stt_model},
+                        data={"model": stt_model, "language": language_hint or "auto"},
                         timeout=15,
                     )
                 

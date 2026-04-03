@@ -738,6 +738,7 @@ def stream_agent(
     dev_mode: bool = False,
     page_context: dict = None,
     attachments: list = None,
+    voice_mode: bool = False,
 ):
     """Stream agent — yields SSE event dicts.
     
@@ -763,7 +764,13 @@ def stream_agent(
     # Skip two-model if: no fast model, dev mode, or already routed to fast model (simple queries)
     # Skip two-model for image uploads — vision context confuses fast model
     has_images = bool(attachments and any(a.get("file_url","").lower().split(".")[-1] in ("jpg","jpeg","png","gif","webp","bmp") for a in (attachments if isinstance(attachments, list) else [])))
-    use_two_model = not dev_mode and fast_model_name and model != fast_model_name and not has_images
+    # Voice mode: use FAST model directly (skip slow 480B model)
+    if voice_mode and fast_model_name:
+        model = fast_model_name  # Force fast model for voice
+        frappe.logger().info(f"Voice mode: using fast model {model}")
+    
+    # Skip two-model for voice mode (single model = faster response)
+    use_two_model = not dev_mode and not voice_mode and fast_model_name and model != fast_model_name and not has_images
 
     yielded_any_token = False
 

@@ -3133,6 +3133,22 @@ ${htmlCode}
 
     setup_voice_mode() {
         this.$voiceOverlay = this.wrapper.find(".niv-voice-overlay");
+        
+        // STOP voice when tab hidden/minimized/changed
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden && this.voiceState !== "idle") {
+                console.log("Tab hidden - stopping voice mode");
+                this.force_stop_voice();
+            }
+        });
+        
+        // STOP voice when window loses focus
+        window.addEventListener("blur", () => {
+            if (this.voiceState !== "idle" && this.$voiceOverlay.is(":visible")) {
+                console.log("Window blur - stopping voice mode");
+                this.force_stop_voice();
+            }
+        });
         this.$voiceOrb = this.$voiceOverlay.find(".voice-orb");
         this.$voiceStatus = this.$voiceOverlay.find(".voice-status-text");
         this.$voiceTranscript = this.$voiceOverlay.find(".voice-transcript");
@@ -3149,11 +3165,12 @@ ${htmlCode}
         this.voiceSilenceStart = null;
         this.voiceAudio = null;
         this.voicePlaybackSource = null;
-        this.voiceContinuous = true;
+        this.voiceContinuous = true; // Always continuous for natural conversation
         
         // Streaming TTS queue (Phase 2)
         this.voiceAudioQueue = [];
         this.voiceIsPlaying = false;
+        this.voiceTtsQueued = false;  // Reset TTS tracker
         this.voiceSentenceBuffer = "";
         this.voiceStreamDone = false;
         this.voiceStreamingMode = false;  // true when using SSE + sentence TTS
@@ -3210,7 +3227,11 @@ ${htmlCode}
         this.$voiceOrb.on("click", () => this.voice_orb_clicked());
 
         // Control bar buttons
-        this.$voiceOverlay.find(".voice-end-btn").on("click", () => this.close_voice_mode());
+        this.$voiceOverlay.find(".voice-end-btn").on("click", () => {
+            console.log("End button clicked");
+            this.force_stop_voice();
+            this.close_voice_mode();
+        });
         this.$voiceOverlay.find(".voice-mute-btn").on("click", function() {
             $(this).toggleClass("active");
             if (self.voiceStream) {
@@ -3224,9 +3245,20 @@ ${htmlCode}
             }
         });
 
-        // ESC to close
+        // ESC to close - force stop everything
         this.$voiceOverlay.on("keydown", (e) => {
-            if (e.key === "Escape") this.close_voice_mode();
+            if (e.key === "Escape") {
+                this.force_stop_voice();
+                this.close_voice_mode();
+            }
+        });
+        
+        // Also listen globally for ESC when overlay is visible
+        $(document).on("keydown", (e) => {
+            if (e.key === "Escape" && this.$voiceOverlay.is(":visible")) {
+                this.force_stop_voice();
+                this.close_voice_mode();
+            }
         });
     }
 
@@ -3240,10 +3272,35 @@ ${htmlCode}
     }
 
     close_voice_mode() {
+        this.force_stop_voice();
+        this.$voiceOverlay.fadeOut(200);
+        $("body").css("overflow", "");
+    }
+    
+    force_stop_voice() {
+        // Stop ALL voice activity immediately
+        console.log("Force stopping all voice activity");
+        
+        // Stop recording
         this.stop_voice_recording();
+        
+        // Stop playback
         this.stop_voice_playback();
+        
+        // Stop monitor
         this.stop_voice_monitor();
+        
+        // Cancel animations
         this.cancel_voice_animation();
+        
+        // Clear audio queue
+        this.voiceAudioQueue = [];
+        this.voiceIsPlaying = false;
+        this.voiceSentenceBuffer = "";
+        this.voiceStreamDone = true;
+        this.voiceStreamingMode = false;
+        
+        // Stop all streams
         if (this.voiceStream) {
             this.voiceStream.getTracks().forEach(t => t.stop());
             this.voiceStream = null;
@@ -3252,15 +3309,23 @@ ${htmlCode}
             this.voiceMonitorStream.getTracks().forEach(t => t.stop());
             this.voiceMonitorStream = null;
         }
+        
+        // Close audio context
         if (this.voiceAudioCtx && this.voiceAudioCtx.state !== "closed") {
             this.voiceAudioCtx.close().catch(() => {});
             this.voiceAudioCtx = null;
             this.voiceAnalyser = null;
             this.voiceMonitorAnalyser = null;
         }
-        this.$voiceOverlay.fadeOut(200);
+        
+        // Stop browser speech synthesis
+        if ("speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+        }
+        
+        // Reset state
         this.voiceState = "idle";
-        $("body").css("overflow", "");
+        this.$voiceOverlay.attr("data-voice-state", "idle");
     }
 
     voice_orb_clicked() {
@@ -3308,7 +3373,15 @@ ${htmlCode}
                 await this.voiceAudioCtx.resume();
             }
 
-            this.voiceStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            this.voiceStream = await navigator.mediaDevices.getUserMedia({
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    sampleRate: 16000,  // 16kHz optimal for speech
+                    channelCount: 1     // Mono for speech
+                }
+            });
 
             // Setup analyser for visualization
             const source = this.voiceAudioCtx.createMediaStreamSource(this.voiceStream);
@@ -3324,7 +3397,10 @@ ${htmlCode}
                     mimeType = "audio/mp4";
                 }
             }
-            this.voiceMediaRecorder = new MediaRecorder(this.voiceStream, { mimeType });
+            this.voiceMediaRecorder = new MediaRecorder(this.voiceStream, { 
+                mimeType,
+                audioBitsPerSecond: 128000  // 128kbps for better quality
+            });
             this.voiceAudioChunks = [];
 
             this.voiceMediaRecorder.ondataavailable = (e) => {
@@ -3332,7 +3408,7 @@ ${htmlCode}
             };
             this.voiceMediaRecorder.onstop = () => this.process_voice_recording();
 
-            this.voiceMediaRecorder.start(250); // collect in 250ms chunks
+            this.voiceMediaRecorder.start(500); // 500ms chunks for better quality
             this.set_voice_state("listening");
             this.voice_visualize_input();
             this.voice_start_silence_detection();
@@ -3413,8 +3489,8 @@ ${htmlCode}
 
     voice_start_silence_detection() {
         this.voiceSilenceStart = null;
-        const silenceThreshold = 10;
-        const silenceDuration = 1500; // 1.5 seconds for faster turn-taking
+        const silenceThreshold = 15;  // More sensitive
+        const silenceDuration = 1000; // 1 second for fast turn-taking
 
         this.voiceSilenceTimer = setInterval(() => {
             if (this.voiceState !== "listening" || !this.voiceAnalyser) return;
@@ -3462,17 +3538,16 @@ ${htmlCode}
                 reader.readAsDataURL(blob);
             });
             
-            // Show browser transcript as interim while server processes
-            if (this.voiceBrowserTranscript && this.voiceBrowserTranscript.trim()) {
-                this.$voiceTranscript.html(
-                    '<span style="opacity:0.6">' + this.voiceBrowserTranscript + '</span> <span style="font-size:0.8em">⏳</span>'
-                );
-            }
+            // Show "Processing..." immediately
+            this.$voiceTranscript.html('<span style="opacity:0.7">🎤 Processing...</span>');
             
             // Call server STT (Faster-Whisper)
             const sttResult = await frappe.call({
                 method: "niv_ai.niv_core.api.voice.stt_from_base64",
-                args: { audio_base64: base64Data },
+                args: { 
+                    audio_base64: base64Data,
+                    language: /[ऀ-ॿ]/.test(document.body.innerText) ? "hi" : "en"
+                },
             });
             
             const serverTranscript = (sttResult.message && sttResult.message.text) ? sttResult.message.text.trim() : "";
@@ -3685,11 +3760,17 @@ ${htmlCode}
                 args: { file_url: audioUrl },
             }).catch(() => {});
 
-            if (this.voiceContinuous && this.voiceState === "speaking") {
-                // Auto-start next recording immediately
-                if (this.$voiceOverlay.is(":visible")) {
-                    this.start_voice_recording();
-                }
+            // Auto-restart listening only if overlay visible AND not force-stopped
+            if (this.$voiceOverlay.is(":visible") && !document.hidden && this.voiceState !== "idle") {
+                setTimeout(() => {
+                    // Double-check everything before auto-restart
+                    if (this.$voiceOverlay.is(":visible") && 
+                        !document.hidden && 
+                        this.voiceState !== "listening" && 
+                        this.voiceState !== "idle") {
+                        this.start_voice_recording();
+                    }
+                }, 200);
             } else {
                 this.set_voice_state("idle");
             }
@@ -3820,6 +3901,7 @@ ${htmlCode}
         this.voiceSentenceBuffer = "";
         this.voiceStreamDone = false;
         this.voiceStreamingMode = true;
+        this.voiceTtsQueued = false;  // CRITICAL: Reset to prevent duplicate TTS
 
         // Ensure conversation exists
         if (!this.current_conversation) {
@@ -3836,12 +3918,13 @@ ${htmlCode}
         this.append_message("user", transcript);
         this.scroll_to_bottom();
 
-        // Use SSE streaming
+        // Use SSE streaming (voice_mode=1 skips two-model for faster response)
         const params = {
             conversation_id: this.current_conversation,
             message: transcript,
             attachments: "[]",
             context: JSON.stringify(this.get_current_context()),
+            voice_mode: 1,
         };
         if (this.selected_model) params.model = this.selected_model;
 
@@ -3896,8 +3979,8 @@ ${htmlCode}
                         // Feed token to sentence buffer for streaming TTS
                         this.voice_on_stream_token(data.content);
                         
-                        // Switch to speaking state once we start getting content
-                        if (this.voiceState === "processing") {
+                        // Switch to speaking state immediately on first token
+                        if (this.voiceState === "processing" && fullContent.length > 5) {
                             this.set_voice_state("speaking");
                         }
                     } else if (data.type === "done") {
@@ -3930,8 +4013,10 @@ ${htmlCode}
             }
         }
 
-        // If no audio was queued (e.g. very short response), handle it
-        if (this.voiceAudioQueue.length === 0 && !this.voiceIsPlaying && fullContent) {
+        // If no audio was queued during streaming (e.g. very short response), handle it
+        // Check voiceTtsQueued to prevent duplicate TTS
+        if (!this.voiceTtsQueued && this.voiceAudioQueue.length === 0 && !this.voiceIsPlaying && fullContent) {
+            console.log("No TTS queued during stream, queueing full content");
             this.voice_queue_sentence_tts(this.cleanTextForTTS(fullContent));
         }
     }
@@ -3943,16 +4028,27 @@ ${htmlCode}
     voice_on_stream_token(token) {
         this.voiceSentenceBuffer += token;
 
-        // Check for sentence boundary: . ! ? followed by space/newline, or double newline
-        const match = this.voiceSentenceBuffer.match(/^(.*?[.!?])\s+(.*)$/s);
+        // Check for sentence/clause boundary: . ! ? , ; : or newline
+        // Start speaking on comma/semicolon too for faster response
+        const match = this.voiceSentenceBuffer.match(/^(.*?[.!?,;:])\s+(.*)$/s);
         if (match) {
-            const sentence = match[1].trim();
+            const chunk = match[1].trim();
             this.voiceSentenceBuffer = match[2] || "";
-            if (sentence && sentence.length > 5) {
-                const clean = this.cleanTextForTTS(sentence);
+            // Speak chunks with 20+ chars (don't wait for long sentences)
+            if (chunk && chunk.length >= 20) {
+                const clean = this.cleanTextForTTS(chunk);
+                if (clean && clean.length > 10) {
+                    this.voice_queue_sentence_tts(clean);
+                }
+            } else if (chunk && chunk.length >= 5 && /[.!?]$/.test(chunk)) {
+                // Short complete sentences still get spoken
+                const clean = this.cleanTextForTTS(chunk);
                 if (clean && clean.length > 3) {
                     this.voice_queue_sentence_tts(clean);
                 }
+            } else {
+                // Too short, put back
+                this.voiceSentenceBuffer = chunk + " " + this.voiceSentenceBuffer;
             }
         }
         
@@ -3987,6 +4083,8 @@ ${htmlCode}
      * Queue a sentence for TTS generation and playback.
      */
     async voice_queue_sentence_tts(sentence) {
+        // Track that we queued something (to prevent duplicate full-content TTS)
+        this.voiceTtsQueued = true;
         // Detect language for proper voice selection
         const hasHindi = /[ऀ-ॿ]/.test(sentence) || 
                          /\b(kya|hai|haan|nahi|aap|main|kaise|mera|kitna|kab|kahan|kaun|kyun|karo|dikhao|batao|accha|theek|bahut|abhi)\b/i.test(sentence);

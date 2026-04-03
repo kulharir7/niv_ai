@@ -104,6 +104,13 @@ def stream_chat(**kwargs):
         page_context = kwargs.get("context") or frappe.form_dict.get("context")
         model = kwargs.get("model") or frappe.form_dict.get("model")
 
+    # Parse voice_mode (skip two-model for faster response)
+    if frappe.request.method == "POST":
+        voice_mode = data.get("voice_mode") or frappe.form_dict.get("voice_mode")
+    else:
+        voice_mode = kwargs.get("voice_mode") or frappe.form_dict.get("voice_mode")
+    voice_mode = int(voice_mode or 0)
+
     # Parse page context JSON
     if page_context and isinstance(page_context, str):
         try:
@@ -237,6 +244,7 @@ def stream_chat(**kwargs):
                 model=model or None,
                 page_context=page_context,
                 attachments=attachments,
+                voice_mode=bool(voice_mode if 'voice_mode' in dir() else 0),
             ):
                 _heartbeat_db()
                 event_type = event.get("type", "")
