@@ -3280,11 +3280,11 @@ ${htmlCode}
         this.$voiceOverlay.attr("data-voice-state", state);
 
         const statusMap = {
-            idle: "🎤 Tap to speak",
-            listening: "👂 Listening...",
-            processing: "🧠 Thinking...",
-            speaking: "🔊 Speaking...",
-            error: "❌ " + (extra || "Something went wrong"),
+            idle: "Tap to speak",
+            listening: "Listening...",
+            processing: "Thinking...",
+            speaking: "Speaking...",
+            error: extra || "Something went wrong",
         };
         this.$voiceStatus.text(statusMap[state] || "");
 
@@ -3888,10 +3888,7 @@ ${htmlCode}
 
                     if (data.type === "token" || data.type === "chunk") {
                         fullContent += data.content;
-                        // Show response text with smooth scroll
-                        this.$voiceResponse.text(fullContent);
-                        this.$voiceResponse.css('opacity', '1');
-                        this.$voiceResponse[0].scrollTop = this.$voiceResponse[0].scrollHeight;
+                        this.$voiceResponse.text(fullContent.substring(Math.max(0, fullContent.length - 200)));
 
                         // Feed token to sentence buffer for streaming TTS
                         this.voice_on_stream_token(data.content);
@@ -3987,11 +3984,6 @@ ${htmlCode}
      * Queue a sentence for TTS generation and playback.
      */
     async voice_queue_sentence_tts(sentence) {
-        // Detect language for proper voice selection
-        const hasHindi = /[ऀ-ॿ]/.test(sentence) || 
-                         /\b(kya|hai|haan|nahi|aap|main|kaise|mera|kitna|kab|kahan|kaun|kyun|karo|dikhao|batao|accha|theek|bahut|abhi)\b/i.test(sentence);
-        const language = hasHindi ? 'hi' : 'en';
-        
         // Use raw fetch (faster than frappe.call - no jQuery overhead)
         try {
             const resp = await fetch('/api/method/niv_ai.niv_core.api.voice.stream_tts', {
@@ -4000,7 +3992,7 @@ ${htmlCode}
                     'Content-Type': 'application/json',
                     'X-Frappe-CSRF-Token': frappe.csrf_token,
                 },
-                body: JSON.stringify({ text: sentence, language: language }),
+                body: JSON.stringify({ text: sentence }),
                 credentials: 'include',
             });
             const data = await resp.json();

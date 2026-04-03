@@ -736,7 +736,7 @@ def _tts_mistral(text, voice=None, config=None):
 def _stream_tts_mistral(text, voice=None, config=None):
     """Fast Mistral TTS for streaming — minimal overhead."""
     if not config:
-        config = _get_voice_config_cached()
+        config = _get_voice_config()
     
     api_key = config.get("mistral_api_key") or config.get("api_key")
     if not api_key:
@@ -993,7 +993,7 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
 
 
 @frappe.whitelist(allow_guest=False)
-def stream_tts(text, voice=None):
+def stream_tts(text, voice=None, language=None):
     """Generate TTS for a single sentence/chunk — OPTIMIZED for speed.
     
     Uses cached config, lightweight cleaning, no SSML, direct Edge TTS.
@@ -1008,15 +1008,20 @@ def stream_tts(text, voice=None):
     if not text.strip():
         return {"audio_url": None}
 
-    # Resolve voice — use cached config (no DB read)
+    # Resolve voice and language
+    lang = language or frappe.form_dict.get("language", "") or _detect_language(text)
     if not voice or voice == "auto":
-        lang = frappe.form_dict.get("language", "") or _detect_language(text)
         voice = "hi-IN-SwaraNeural" if lang in ("hi", "hindi") else "en-IN-NeerjaExpressiveNeural"
 
-    # FAST PATH: Try Mistral first (pass None voice — let Mistral pick)
-    config = _get_voice_config_cached()
+    # FAST PATH: Try Mistral first with proper language-based voice
+    # Use full config read to ensure mistral_api_key is loaded
+    config = _get_voice_config()
     if config.get("mistral_api_key"):
-        result = _stream_tts_mistral(text, None, config)
+        # Use language parameter
+        mistral_voice = config.get("mistral_voice_hi") if lang in ("hi", "hindi") else config.get("mistral_voice_en")
+        mistral_voice = mistral_voice or "en_paul_cheerful"
+        
+        result = _stream_tts_mistral(text, mistral_voice, config)
         if result:
             return result
 
