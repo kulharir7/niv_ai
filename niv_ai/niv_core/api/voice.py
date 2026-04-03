@@ -442,6 +442,20 @@ def _get_voice_config():
     except Exception:
         pass
 
+    # Mistral API config
+    mistral_api_key = None
+    mistral_voice_en = ""
+    mistral_voice_hi = ""
+    try:
+        mistral_api_key = settings.get_password("mistral_api_key") if getattr(settings, "mistral_api_key", None) else None
+        mistral_voice_en = getattr(settings, "mistral_voice_en", "") or "en_paul_cheerful"
+        mistral_voice_hi = getattr(settings, "mistral_voice_hi", "") or "en_paul_cheerful"
+    except Exception:
+        pass
+    # Fallback: hardcoded Mistral API key if not in Settings
+    if not mistral_api_key:
+        mistral_api_key = '***REMOVED***'
+
     return {
         "api_key": api_key,
         "base_url": base_url.rstrip("/") if base_url else "",
@@ -456,6 +470,9 @@ def _get_voice_config():
         "elevenlabs_api_key": elevenlabs_api_key,
         "elevenlabs_voice_en": elevenlabs_voice_en,
         "elevenlabs_voice_hi": elevenlabs_voice_hi,
+        "mistral_api_key": mistral_api_key,
+        "mistral_voice_en": mistral_voice_en,
+        "mistral_voice_hi": mistral_voice_hi,
     }
 
 
@@ -644,6 +661,130 @@ def _tts_elevenlabs(text, voice_id=None, config=None):
     return None
 
 
+
+
+# ─── Mistral Voxtral TTS ─────────────────────────────────────────────────
+
+def _tts_mistral(text, voice=None, config=None):
+    """Generate speech using Mistral Voxtral TTS API.
+    
+    Model: voxtral-mini-tts-2603 (4B params, Hindi+English, ~90ms latency)
+    API: POST /v1/audio/speech
+    Returns base64 audio_data in JSON response.
+    """
+    if not config:
+        config = _get_voice_config()
+    
+    api_key = config.get("mistral_api_key") or config.get("api_key")
+    if not api_key:
+        return None
+    
+    # Select voice based on language
+    if not voice:
+        lang = _detect_language(text)
+        if lang == "hi":
+            voice = config.get("mistral_voice_hi") or "en_paul_cheerful"
+        else:
+            voice = config.get("mistral_voice_en") or "en_paul_cheerful"
+    
+    try:
+        import base64 as b64
+        
+        resp = requests.post(
+            "https://api.mistral.ai/v1/audio/speech",
+            headers={
+                "Authorization": "Bearer " + api_key,
+                "Content-Type": "application/json",
+            },
+            json={
+                "input": text,
+                "model": "voxtral-mini-tts-2603",
+                "voice": voice,
+                "response_format": "mp3",
+            },
+            timeout=30,
+        )
+        
+        if resp.status_code != 200:
+            frappe.logger().warning("Mistral TTS failed ({0}): {1}".format(resp.status_code, resp.text[:200]))
+            return None
+        
+        data = resp.json()
+        audio_b64 = data.get("audio_data")
+        if not audio_b64:
+            frappe.logger().warning("Mistral TTS: no audio_data in response")
+            return None
+        
+        audio_bytes = b64.b64decode(audio_b64)
+        
+        output_dir = frappe.get_site_path("public", "files")
+        filename = "tts_mistral_{0}.mp3".format(uuid.uuid4().hex[:12])
+        output_path = os.path.join(output_dir, filename)
+        
+        with open(output_path, "wb") as f:
+            f.write(audio_bytes)
+        
+        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+            return {
+                "audio_url": "/files/{0}".format(filename),
+                "engine": "mistral",
+                "voice": voice,
+            }
+    except Exception as e:
+        frappe.logger().warning("Mistral TTS error: {0}".format(e))
+    
+    return None
+
+
+def _stream_tts_mistral(text, voice=None, config=None):
+    """Fast Mistral TTS for streaming — minimal overhead."""
+    if not config:
+        config = _get_voice_config_cached()
+    
+    api_key = config.get("mistral_api_key") or config.get("api_key")
+    if not api_key:
+        return None
+    
+    if not voice or voice == "auto":
+        lang = _detect_language(text)
+        voice = config.get("mistral_voice_hi") or "en_paul_cheerful" if lang == "hi" else config.get("mistral_voice_en") or "en_paul_cheerful"
+    
+    try:
+        import base64 as b64
+        
+        resp = requests.post(
+            "https://api.mistral.ai/v1/audio/speech",
+            headers={
+                "Authorization": "Bearer " + api_key,
+                "Content-Type": "application/json",
+            },
+            json={
+                "input": text,
+                "model": "voxtral-mini-tts-2603",
+                "voice": voice,
+                "response_format": "mp3",
+            },
+            timeout=15,
+        )
+        
+        if resp.status_code == 200:
+            data = resp.json()
+            audio_b64 = data.get("audio_data")
+            if audio_b64:
+                audio_bytes = b64.b64decode(audio_b64)
+                output_dir = frappe.get_site_path("public", "files")
+                filename = "tts_s_m_{0}.mp3".format(uuid.uuid4().hex[:8])
+                output_path = os.path.join(output_dir, filename)
+                with open(output_path, "wb") as f:
+                    f.write(audio_bytes)
+                if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
+                    return {"audio_url": "/files/{0}".format(filename), "engine": "mistral", "voice": voice}
+    except Exception as e:
+        frappe.logger().warning("Mistral stream TTS error: {0}".format(e))
+    
+    return None
+
+
 # ─── OpenAI TTS ──────────────────────────────────────────────────────────
 
 def _tts_openai(text, voice, model, response_format, config):
@@ -816,7 +957,13 @@ def text_to_speech(text, voice=None, model=None, response_format="wav", engine=N
 
     config = _get_voice_config()
 
-    # ── Try ElevenLabs first (most human-like, multilingual, Hindi+English) ──
+    # ── Try Mistral Voxtral TTS first (best quality, Hindi+English, ~90ms) ──
+    if engine in (None, "auto", "mistral") and config.get("mistral_api_key"):
+        result = _tts_mistral(text, config=config)
+        if result:
+            return result
+
+    # ── Try ElevenLabs (multilingual, Hindi+English) ──
     if engine in (None, "auto", "elevenlabs") and config.get("elevenlabs_api_key"):
         result = _tts_elevenlabs(text, config=config)
         if result:
@@ -869,7 +1016,14 @@ def stream_tts(text, voice=None):
         lang = frappe.form_dict.get("language", "") or _detect_language(text)
         voice = "hi-IN-SwaraNeural" if lang in ("hi", "hindi") else "en-IN-NeerjaExpressiveNeural"
 
-    # FAST PATH: Edge TTS directly (no SSML, no ElevenLabs, no config overhead)
+    # FAST PATH: Try Mistral first (pass None voice — let Mistral pick)
+    config = _get_voice_config_cached()
+    if config.get("mistral_api_key"):
+        result = _stream_tts_mistral(text, None, config)
+        if result:
+            return result
+
+    # Fallback: Edge TTS directly
     result = _edge_tts_fast(text, voice)
     if result:
         return result
@@ -932,12 +1086,12 @@ def speech_to_text(audio_file, engine=None):
         frappe.throw(f"Audio file not found: {audio_file}")
 
     # ── Try Mistral Voxtral STT first (fast, multilingual, Hindi+English) ──
-    if stt_engine in ("auto", "voxtral", "mistral", "api") and config.get("api_key"):
-        provider_type = config.get("provider_type", "openai")
-        if provider_type == "mistral":
-            stt_model = "voxtral-mini-transcribe-realtime-2602"
-        else:
-            stt_model = "whisper-1"
+    mistral_key = config.get("mistral_api_key") or config.get("api_key")
+    mistral_base = "https://api.mistral.ai/v1"
+    provider_type = config.get("provider_type", "openai")
+    
+    if stt_engine in ("auto", "voxtral", "mistral", "api") and mistral_key:
+        stt_model = "voxtral-mini-transcribe-2507"
 
         data = {"model": stt_model}
         lang = config.get("tts_language", "")
@@ -947,8 +1101,8 @@ def speech_to_text(audio_file, engine=None):
         try:
             with open(file_path, "rb") as f:
                 resp = requests.post(
-                    f"{config['base_url']}/audio/transcriptions",
-                    headers={"Authorization": f"Bearer {config['api_key']}"},
+                    "{0}/audio/transcriptions".format(mistral_base),
+                    headers={"Authorization": "Bearer {0}".format(mistral_key)},
                     files={"file": (os.path.basename(audio_file), f, "audio/webm")},
                     data=data,
                     timeout=15,
@@ -958,11 +1112,11 @@ def speech_to_text(audio_file, engine=None):
                 result = resp.json()
                 text = result.get("text", "")
                 if text.strip():
-                    return {"text": text, "engine": f"voxtral ({stt_model})", "language": result.get("language", "")}
+                    return {"text": text, "engine": "voxtral ({0})".format(stt_model), "language": result.get("language", "")}
             else:
-                frappe.logger().warning(f"Voxtral STT failed ({resp.status_code}): {resp.text[:200]}")
+                frappe.logger().warning("Voxtral STT failed ({0}): {1}".format(resp.status_code, resp.text[:200]))
         except Exception as e:
-            frappe.logger().warning(f"Voxtral STT error: {e}")
+            frappe.logger().warning("Voxtral STT error: {0}".format(e))
 
     # ── Fallback: Local Faster-Whisper ──
     if stt_engine in ("auto", "whisper", "whisper-local"):
@@ -998,17 +1152,17 @@ def stt_from_base64(**kwargs):
         tmp.write(audio_bytes)
         tmp.close()
         
-        # Try Voxtral/API STT first (fast, accurate, Hindi+English)
+        # Try Mistral Voxtral STT first (fast, accurate, Hindi+English)
         config = _get_voice_config()
-        if config.get("api_key"):
-            provider_type = config.get("provider_type", "openai")
-            stt_model = "voxtral-mini-transcribe-realtime-2602" if provider_type == "mistral" else "whisper-1"
+        mistral_key = config.get("mistral_api_key") or config.get("api_key")
+        if mistral_key:
+            stt_model = "voxtral-mini-transcribe-2507"
             
             try:
                 with open(tmp.name, "rb") as f:
                     resp = requests.post(
-                        f"{config['base_url']}/audio/transcriptions",
-                        headers={"Authorization": f"Bearer {config['api_key']}"},
+                        "https://api.mistral.ai/v1/audio/transcriptions",
+                        headers={"Authorization": "Bearer {0}".format(mistral_key)},
                         files={"file": ("audio.webm", f, "audio/webm")},
                         data={"model": stt_model},
                         timeout=15,
@@ -1025,12 +1179,12 @@ def stt_from_base64(**kwargs):
                         return {
                             "text": text,
                             "language": api_result.get("language", ""),
-                            "engine": f"voxtral ({stt_model})",
+                            "engine": "voxtral ({0})".format(stt_model),
                         }
                 else:
-                    frappe.logger().warning(f"Voxtral STT failed ({resp.status_code}): {resp.text[:200]}")
+                    frappe.logger().warning("Voxtral STT failed ({0}): {1}".format(resp.status_code, resp.text[:200]))
             except Exception as e:
-                frappe.logger().warning(f"Voxtral STT error: {e}")
+                frappe.logger().warning("Voxtral STT error: {0}".format(e))
         
         # Fallback: Local Faster-Whisper
         result = _stt_whisper(tmp.name)
@@ -1202,6 +1356,7 @@ def get_tts_status():
     config = _get_voice_config()
     openai_available = bool(config.get("api_key")) and config.get("provider_type") != "mistral"
     return {
+        "mistral": bool(config.get("mistral_api_key")),
         "elevenlabs": bool(config.get("elevenlabs_api_key")),
         "piper": _is_piper_available(),
         "openai": openai_available,
