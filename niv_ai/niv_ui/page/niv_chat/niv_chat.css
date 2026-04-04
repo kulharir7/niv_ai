@@ -5402,3 +5402,74 @@ body.niv-widget-mode .niv-message {
         font-size: 15px !important;
     }
 }
+
+
+/* ─── Niv AI Avatar ─────────────────────────────────── */
+.niv-avatar {
+    width: 100%; height: 100%;
+    position: absolute; top: 0; left: 0;
+    z-index: 3;
+    pointer-events: none;
+}
+
+/* Blink animation */
+@keyframes avBlink {
+    0%, 95%, 100% { transform: scaleY(1); }
+    97% { transform: scaleY(0.1); }
+}
+.av-eyes { animation: avBlink 4s ease-in-out infinite; transform-origin: center 73px; }
+
+/* Halo rotation (for thinking) */
+@keyframes avHaloSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+.av-halo { transform-origin: 80px 80px; opacity: 0; transition: opacity 0.3s; }
+
+/* Mouth speaking animation */
+@keyframes avSpeak {
+    0%, 100% { d: path("M62 100 Q80 115 98 100"); }
+    25% { d: path("M62 100 Q80 108 98 100"); }
+    50% { d: path("M62 100 Q80 118 98 100"); }
+    75% { d: path("M62 100 Q80 105 98 100"); }
+}
+
+/* Wave pulse */
+@keyframes avWavePulse {
+    0%, 100% { opacity: 0.3; transform: translateX(0); }
+    50% { opacity: 1; transform: translateX(3px); }
+}
+
+/* Ear glow pulse */
+@keyframes avEarGlow {
+    0%, 100% { opacity: 0.4; r: 6; }
+    50% { opacity: 1; r: 9; }
+}
+
+/* ─── State: Idle ─── */
+[data-voice-state="idle"] .av-mouth { transition: d 0.3s; }
+[data-voice-state="idle"] .av-waves { opacity: 0; }
+[data-voice-state="idle"] .av-ears { opacity: 0; }
+
+/* ─── State: Listening ─── */
+[data-voice-state="listening"] .av-eyes { animation: none; }
+[data-voice-state="listening"] .av-eye-l,
+[data-voice-state="listening"] .av-eye-r { ry: 10; transition: ry 0.3s; }
+[data-voice-state="listening"] .av-ears { opacity: 1; }
+[data-voice-state="listening"] .av-ears circle { animation: avEarGlow 1s ease-in-out infinite; }
+[data-voice-state="listening"] .av-brows path { transform: translateY(-3px); transition: transform 0.3s; }
+
+/* ─── State: Processing/Thinking ─── */
+[data-voice-state="processing"] .av-halo { opacity: 1; animation: avHaloSpin 3s linear infinite; }
+[data-voice-state="processing"] .av-brows path:first-child { transform: translateY(-2px) rotate(-5deg); transition: transform 0.3s; }
+[data-voice-state="processing"] .av-brows path:last-child { transform: translateY(-2px) rotate(5deg); transition: transform 0.3s; }
+[data-voice-state="processing"] .av-pupil-l,
+[data-voice-state="processing"] .av-pupil-r { cy: 71; transition: cy 0.3s; }
+
+/* ─── State: Speaking ─── */
+[data-voice-state="speaking"] .av-mouth { animation: avSpeak 0.4s ease-in-out infinite; }
+[data-voice-state="speaking"] .av-waves { opacity: 1; }
+[data-voice-state="speaking"] .av-waves path { animation: avWavePulse 0.8s ease-in-out infinite; }
+[data-voice-state="speaking"] .av-eyes { animation: avBlink 5s ease-in-out infinite; }
+
+/* ─── State: Error ─── */
+[data-voice-state="error"] .av-mouth { d: path("M65 108 Q80 98 95 108"); }
+[data-voice-state="error"] .av-brows path:first-child { transform: rotate(8deg); transform-origin: 60px 60px; }
+[data-voice-state="error"] .av-brows path:last-child { transform: rotate(-8deg); transform-origin: 100px 60px; }

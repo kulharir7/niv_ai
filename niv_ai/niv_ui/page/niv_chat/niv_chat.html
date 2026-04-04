@@ -267,7 +267,49 @@
             <div class="voice-orb-wrapper">
                 <div class="voice-orb" role="button" tabindex="0">
                     <div class="voice-orb-glow"></div>
-                    <div class="voice-orb-inner"></div>
+                    <div class="voice-orb-inner">
+                        <svg class="niv-avatar" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+                            <!-- Face base -->
+                            <circle cx="80" cy="80" r="65" fill="url(#av-grad)" />
+                            <!-- Halo ring (thinking animation) -->
+                            <circle class="av-halo" cx="80" cy="80" r="72" fill="none" stroke="rgba(6,182,212,0.4)" stroke-width="2" stroke-dasharray="12 8" />
+                            <!-- Eyes -->
+                            <g class="av-eyes">
+                                <ellipse class="av-eye-l" cx="60" cy="72" rx="8" ry="9" fill="#fff" />
+                                <ellipse class="av-eye-r" cx="100" cy="72" rx="8" ry="9" fill="#fff" />
+                                <circle class="av-pupil-l" cx="62" cy="73" r="4.5" fill="#1e1b4b" />
+                                <circle class="av-pupil-r" cx="102" cy="73" r="4.5" fill="#1e1b4b" />
+                                <!-- Eye shine -->
+                                <circle cx="64" cy="70" r="1.8" fill="rgba(255,255,255,0.9)" />
+                                <circle cx="104" cy="70" r="1.8" fill="rgba(255,255,255,0.9)" />
+                            </g>
+                            <!-- Eyebrows -->
+                            <g class="av-brows">
+                                <path d="M48 62 Q60 55 72 62" fill="none" stroke="#c4b5fd" stroke-width="2.5" stroke-linecap="round" />
+                                <path d="M88 62 Q100 55 112 62" fill="none" stroke="#c4b5fd" stroke-width="2.5" stroke-linecap="round" />
+                            </g>
+                            <!-- Mouth -->
+                            <path class="av-mouth" d="M62 100 Q80 115 98 100" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round" />
+                            <!-- Sound waves (speaking) -->
+                            <g class="av-waves" opacity="0">
+                                <path d="M130 70 Q140 80 130 90" fill="none" stroke="#06B6D4" stroke-width="2" stroke-linecap="round" />
+                                <path d="M137 63 Q152 80 137 97" fill="none" stroke="#06B6D4" stroke-width="1.5" stroke-linecap="round" opacity="0.6" />
+                            </g>
+                            <!-- Ear glow (listening) -->
+                            <g class="av-ears" opacity="0">
+                                <circle cx="15" cy="80" r="6" fill="#06B6D4" opacity="0.7" />
+                                <circle cx="145" cy="80" r="6" fill="#06B6D4" opacity="0.7" />
+                            </g>
+                            <!-- Gradient def -->
+                            <defs>
+                                <radialGradient id="av-grad" cx="50%" cy="40%" r="65%">
+                                    <stop offset="0%" stop-color="#8B5CF6" />
+                                    <stop offset="50%" stop-color="#6D28D9" />
+                                    <stop offset="100%" stop-color="#4C1D95" />
+                                </radialGradient>
+                            </defs>
+                        </svg>
+                    </div>
                     <div class="voice-orb-ring ring-1"></div>
                     <div class="voice-orb-ring ring-2"></div>
                     <div class="voice-orb-ring ring-3"></div>
