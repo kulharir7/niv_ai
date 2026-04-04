@@ -4185,6 +4185,7 @@ ${htmlCode}
         this.voiceSentenceBuffer = "";
         this.voiceStreamDone = false;
         this.voiceStreamingMode = true;
+        this.voiceFillerPlayed = false;  // One filler per turn
 
         // Ensure conversation exists
         if (!this.current_conversation) {
@@ -4275,6 +4276,12 @@ ${htmlCode}
                         }
                         this.load_balance();
                         this.auto_title(transcript);
+                    } else if (data.type === "tool_call" || data.type === "tool_result") {
+                        // Filler while MCP tool runs (mic is muted during speaking)
+                        if (!this.voiceFillerPlayed && data.type === "tool_call") {
+                            this.voiceFillerPlayed = true;
+                            this.voice_play_filler();
+                        }
                     } else if (data.type === "error") {
                         this.voiceStreamDone = true;
                         this.set_voice_state("error", data.content || "Stream error");
@@ -4296,6 +4303,44 @@ ${htmlCode}
         // If no audio was queued (e.g. very short response), handle it
         if (this.voiceAudioQueue.length === 0 && !this.voiceIsPlaying && fullContent) {
             this.voice_queue_sentence_tts(this.cleanTextForTTS(fullContent));
+        }
+    }
+
+    /**
+     * Play filler phrase while MCP tools run.
+     * Mic is muted via voice_mute_mic (Phase 1.5) so no echo.
+     * Uses browser TTS = instant, no server call.
+     */
+    voice_play_filler() {
+        const fillers = [
+            "Ek second, check karti hoon.",
+            "Dekhti hoon, ruko.",
+            "Haan, abhi check karti hoon.",
+            "Let me check that for you.",
+            "One moment, looking it up.",
+            "Hmm, let me find that.",
+        ];
+        const filler = fillers[Math.floor(Math.random() * fillers.length)];
+
+        this.$voiceResponse.text(filler);
+        this.set_voice_state("speaking");
+        this.voice_mute_mic(true);  // Explicitly mute mic before filler plays
+
+        if ("speechSynthesis" in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(filler);
+            const voices = window.speechSynthesis.getVoices();
+            const hindiVoice = voices.find(v => v.lang && v.lang.startsWith("hi"));
+            if (hindiVoice) utterance.voice = hindiVoice;
+            utterance.lang = "hi-IN";
+            utterance.rate = 1.1;
+            utterance.onend = () => {
+                if (!this.voiceIsPlaying && this.voiceAudioQueue.length === 0) {
+                    this.set_voice_state("processing");
+                }
+            };
+            utterance.onerror = () => {};
+            window.speechSynthesis.speak(utterance);
         }
     }
 
