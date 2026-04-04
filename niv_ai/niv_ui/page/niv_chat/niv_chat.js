@@ -3827,14 +3827,26 @@ ${htmlCode}
                 reader.readAsDataURL(blob);
             });
             
-            // Show browser transcript as interim while server processes
-            if (this.voiceBrowserTranscript && this.voiceBrowserTranscript.trim()) {
-                this.$voiceTranscript.html(
-                    '<span style="opacity:0.6">' + this.voiceBrowserTranscript + '</span> <span style="font-size:0.8em">⏳</span>'
-                );
+            // Phase 1.2: Use browser transcript IMMEDIATELY if available (skip STT wait)
+            const browserText = (this.voiceBrowserTranscript || "").trim();
+            
+            if (browserText && browserText.length > 1) {
+                // Browser transcript available — start LLM immediately (saves 2-3 sec!)
+                this.$voiceTranscript.text(browserText);
+                this.voice_send_streaming(browserText);
+                
+                // Fire server STT in background (for logging/analytics, don't block)
+                frappe.call({
+                    method: "niv_ai.niv_core.api.voice.stt_from_base64",
+                    args: { audio_base64: base64Data },
+                }).catch(() => {});
+                
+                return;
             }
             
-            // Call server STT (Faster-Whisper)
+            // No browser transcript — fall back to server STT (wait for it)
+            this.$voiceTranscript.html('<span style="opacity:0.6">Listening...</span>');
+            
             const sttResult = await frappe.call({
                 method: "niv_ai.niv_core.api.voice.stt_from_base64",
                 args: { audio_base64: base64Data },
@@ -3842,19 +3854,13 @@ ${htmlCode}
             
             const serverTranscript = (sttResult.message && sttResult.message.text) ? sttResult.message.text.trim() : "";
             
-            // Use server transcript if available, fall back to browser
-            const transcript = serverTranscript || (this.voiceBrowserTranscript || "").trim();
-            
-            if (!transcript) {
+            if (!serverTranscript) {
                 this.set_voice_state("error", "Couldn't understand. Try again.");
                 return;
             }
             
-            // Show final transcript
-            this.$voiceTranscript.text(transcript);
-            
-            // Use streaming voice mode
-            this.voice_send_streaming(transcript);
+            this.$voiceTranscript.text(serverTranscript);
+            this.voice_send_streaming(serverTranscript);
             return;
             
         } catch (sttErr) {
