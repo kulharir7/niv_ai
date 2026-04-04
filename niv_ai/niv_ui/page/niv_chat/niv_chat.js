@@ -3557,6 +3557,25 @@ ${htmlCode}
             localStorage.setItem("niv_tts_voice", this.selectedTtsVoice);
         });
         
+        // STT language selector
+        this.$voiceLangSelect = this.$voiceSettingsPanel.find(".voice-select-lang");
+        if (this.$voiceLangSelect.length === 0) {
+            // Auto-create lang selector if not in HTML
+            const langHtml = '<div style="margin-top:8px"><label style="font-size:12px;opacity:0.7">Recognition Language</label>'
+                + '<select class="voice-select-lang" style="width:100%;padding:6px;border-radius:6px;border:1px solid rgba(255,255,255,0.2);background:rgba(255,255,255,0.1);color:#fff;margin-top:4px">'
+                + '<option value="hi-IN">Hindi (हिन्दी + Hinglish)</option>'
+                + '<option value="en-IN">English (India)</option>'
+                + '<option value="en-US">English (US)</option>'
+                + '</select></div>';
+            this.$voiceSettingsPanel.find(".voice-settings-close").before(langHtml);
+            this.$voiceLangSelect = this.$voiceSettingsPanel.find(".voice-select-lang");
+        }
+        const savedLang = localStorage.getItem("niv_voice_lang") || "hi-IN";
+        this.$voiceLangSelect.val(savedLang);
+        this.$voiceLangSelect.on("change", (e) => {
+            localStorage.setItem("niv_voice_lang", e.target.value);
+        });
+        
         // Continuous toggle change
         this.$voiceContinuousToggle.on("change", (e) => {
             this.voiceContinuous = e.target.checked;
@@ -3716,7 +3735,9 @@ ${htmlCode}
                 this.voiceSpeechRecog = new SpeechRecog();
                 this.voiceSpeechRecog.continuous = true;
                 this.voiceSpeechRecog.interimResults = true;
-                this.voiceSpeechRecog.lang = "en-IN";
+                this.voiceSpeechRecog.maxAlternatives = 3;
+                // hi-IN handles Hindi, Hinglish, and English spoken by Indian users
+                this.voiceSpeechRecog.lang = localStorage.getItem("niv_voice_lang") || "hi-IN";
                 this.voiceSpeechRecog.onresult = (event) => {
                     let finalTranscript = "";
                     let interimTranscript = "";
