@@ -4374,7 +4374,7 @@ ${htmlCode}
     voice_on_stream_token(token) {
         this.voiceSentenceBuffer += token;
 
-        // Check for sentence boundary: . ! ? followed by space/newline, or double newline
+        // 1. Sentence boundary: . ! ? followed by space/newline
         const match = this.voiceSentenceBuffer.match(/^(.*?[.!?])\s+(.*)$/s);
         if (match) {
             const sentence = match[1].trim();
@@ -4385,12 +4385,39 @@ ${htmlCode}
                     this.voice_queue_sentence_tts(clean);
                 }
             }
+            return;
+        }
+
+        // 2. Comma/semicolon/colon split when buffer > 12 words (faster chunks)
+        const wordCount = this.voiceSentenceBuffer.trim().split(/\s+/).length;
+        if (wordCount > 12) {
+            const commaMatch = this.voiceSentenceBuffer.match(/^(.*?[,;:])\s+(.*)$/s);
+            if (commaMatch) {
+                const chunk = commaMatch[1].trim();
+                this.voiceSentenceBuffer = commaMatch[2] || "";
+                if (chunk && chunk.length > 5) {
+                    const clean = this.cleanTextForTTS(chunk);
+                    if (clean && clean.length > 3) {
+                        this.voice_queue_sentence_tts(clean);
+                    }
+                }
+                return;
+            }
+        }
+
+        // 3. Max buffer limit: force flush at 20 words
+        if (wordCount > 20) {
+            const clean = this.cleanTextForTTS(this.voiceSentenceBuffer.trim());
+            this.voiceSentenceBuffer = "";
+            if (clean && clean.length > 3) {
+                this.voice_queue_sentence_tts(clean);
+            }
+            return;
         }
         
-        // Also check for newline-based breaks (paragraphs)
+        // 4. Newline-based breaks (paragraphs)
         if (this.voiceSentenceBuffer.includes("\n\n")) {
             const parts = this.voiceSentenceBuffer.split("\n\n");
-            // Queue all complete paragraphs
             for (let i = 0; i < parts.length - 1; i++) {
                 const clean = this.cleanTextForTTS(parts[i].trim());
                 if (clean && clean.length > 3) {
