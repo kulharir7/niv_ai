@@ -4162,6 +4162,11 @@ ${htmlCode}
     }
 
     stop_voice_playback() {
+        // Abort LLM stream if running (saves API cost)
+        if (this.voiceAbortController) {
+            this.voiceAbortController.abort();
+            this.voiceAbortController = null;
+        }
         this.stop_voice_monitor();
         if (this.voiceAudio) {
             this.voiceAudio.pause();
@@ -4269,6 +4274,9 @@ ${htmlCode}
 
         let fullContent = "";
 
+        // AbortController for cancelling stream on interrupt
+        this.voiceAbortController = new AbortController();
+
         try {
             const response = await fetch(
                 "/api/method/niv_ai.niv_core.api.stream.stream_chat",
@@ -4281,6 +4289,7 @@ ${htmlCode}
                     },
                     body: JSON.stringify(params),
                     credentials: "include",
+                    signal: this.voiceAbortController.signal,
                 }
             );
 
@@ -4354,6 +4363,11 @@ ${htmlCode}
                 }
             }
         } catch (err) {
+            // AbortError is expected on interrupt — not a real error
+            if (err.name === "AbortError") {
+                this.voiceStreamDone = true;
+                return;
+            }
             console.error("Voice streaming error:", err);
             this.voiceStreamDone = true;
             
