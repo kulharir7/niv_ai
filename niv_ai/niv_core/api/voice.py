@@ -1009,30 +1009,18 @@ def stream_tts(text, voice=None, language=None):
     if not voice or voice == "auto":
         voice = "hi-IN-SwaraNeural" if lang in ("hi", "hindi") else "en-IN-NeerjaExpressiveNeural"
 
-    # Smart language routing: Hindi → Edge Swara, English → Mistral Jane
+    # Mistral TTS for ALL languages (2.85s vs Edge 3.3s — Mistral faster!)
     config = _get_voice_config_cached()
-    
-    if lang in ("hi", "hindi"):
-        # Hindi text → Edge TTS Swara (native Hindi voice, best quality)
-        result = _edge_tts_fast(text, "hi-IN-SwaraNeural")
+    if config.get("mistral_api_key"):
+        result = _stream_tts_mistral(text, "gb_jane_sarcasm", config)
         if result:
             return result
-        # Fallback: Mistral with Hindi-capable voice
-        if config.get("mistral_api_key"):
-            hi_voice = config.get("mistral_voice_hi") or "gb_jane_sarcasm"
-            result = _stream_tts_mistral(text, hi_voice, config)
-            if result:
-                return result
-    else:
-        # English text → Mistral Jane (natural human-like English)
-        if config.get("mistral_api_key"):
-            result = _stream_tts_mistral(text, "gb_jane_sarcasm", config)
-            if result:
-                return result
-        # Fallback: Edge TTS Neerja (Indian English)
-        result = _edge_tts_fast(text, "en-IN-NeerjaExpressiveNeural")
-        if result:
-            return result
+
+    # Fallback: Edge TTS
+    edge_voice = "hi-IN-SwaraNeural" if lang in ("hi", "hindi") else "en-IN-NeerjaExpressiveNeural"
+    result = _edge_tts_fast(text, edge_voice)
+    if result:
+        return result
 
     # Final fallback: browser TTS
     return {"audio_url": None, "engine": "browser", "text": text}
