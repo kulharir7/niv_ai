@@ -4266,6 +4266,7 @@ ${htmlCode}
         this.voiceStreamDone = false;
         this.voiceStreamingMode = true;
         this.voiceFillerPlayed = false;  // One filler per turn
+        this.voiceSentencesQueued = 0;  // Track queued sentences (prevent double speak)
         this.voicePreloadedAudio = null;  // Reset preload cache
 
         // Ensure conversation exists
@@ -4400,8 +4401,9 @@ ${htmlCode}
             }
         }
 
-        // If no audio was queued (e.g. very short response), handle it
-        if (this.voiceAudioQueue.length === 0 && !this.voiceIsPlaying && fullContent) {
+        // Only queue full response if NO sentences were queued during streaming
+        // (prevents double-speak bug where full response replays after sentences)
+        if (this.voiceSentencesQueued === 0 && fullContent) {
             this.voice_queue_sentence_tts(this.cleanTextForTTS(fullContent));
         }
     }
@@ -4623,6 +4625,7 @@ ${htmlCode}
      * Queue a sentence for TTS generation and playback.
      */
     async voice_queue_sentence_tts(sentence) {
+        this.voiceSentencesQueued++;
         // Use raw fetch (faster than frappe.call - no jQuery overhead)
         try {
             const resp = await fetch('/api/method/niv_ai.niv_core.api.voice.stream_tts', {
