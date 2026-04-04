@@ -4192,6 +4192,7 @@ ${htmlCode}
         this.voiceStreamDone = false;
         this.voiceStreamingMode = true;
         this.voiceFillerPlayed = false;  // One filler per turn
+        this.voicePreloadedAudio = null;  // Reset preload cache
 
         // Ensure conversation exists
         if (!this.current_conversation) {
@@ -4309,6 +4310,23 @@ ${htmlCode}
         // If no audio was queued (e.g. very short response), handle it
         if (this.voiceAudioQueue.length === 0 && !this.voiceIsPlaying && fullContent) {
             this.voice_queue_sentence_tts(this.cleanTextForTTS(fullContent));
+        }
+    }
+
+    /**
+     * Preload the next audio URL in queue for gapless playback.
+     */
+    voice_preload_next() {
+        if (this.voiceAudioQueue.length === 0) return;
+        const nextItem = this.voiceAudioQueue[0];
+        // Only preload server audio URLs, not browser_tts objects
+        if (nextItem && typeof nextItem === "string") {
+            const preload = new Audio();
+            preload.preload = "auto";
+            preload.src = nextItem;
+            this.voicePreloadedAudio = preload;
+        } else {
+            this.voicePreloadedAudio = null;
         }
     }
 
@@ -4511,13 +4529,16 @@ ${htmlCode}
             return;
         }
 
-        // Server audio URL
+        // Server audio URL — use preloaded audio if available
         const url = item;
-        const audio = new Audio(url);
+        const audio = this.voicePreloadedAudio || new Audio(url);
+        this.voicePreloadedAudio = null;
         this.voiceAudio = audio;
 
+        // Preload NEXT audio in queue while this one plays
+        this.voice_preload_next();
+
         audio.onended = () => {
-            // Cleanup the streamed TTS file
             frappe.call({
                 method: "niv_ai.niv_core.api.voice.cleanup_voice_file",
                 args: { file_url: url },
@@ -4527,6 +4548,7 @@ ${htmlCode}
 
         audio.onerror = () => {
             console.warn("Audio playback error for:", url);
+            this.voicePreloadedAudio = null;
             this.voice_play_next_in_queue();
         };
 
