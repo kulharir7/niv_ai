@@ -3647,11 +3647,18 @@ ${htmlCode}
         const statusMap = {
             idle: "Tap to speak",
             listening: "Listening...",
-            processing: "Thinking...",
+            processing: extra || "Thinking...",
             speaking: "Speaking...",
             error: extra || "Something went wrong",
         };
         this.$voiceStatus.text(statusMap[state] || "");
+
+        // Rotate thinking status while processing
+        if (state === "processing" && !extra) {
+            this.voice_start_thinking_rotation();
+        } else {
+            this.voice_stop_thinking_rotation();
+        }
 
         if (state === "idle") {
             this.$voiceTranscript.text("");
@@ -4284,10 +4291,20 @@ ${htmlCode}
                         this.load_balance();
                         this.auto_title(transcript);
                     } else if (data.type === "tool_call" || data.type === "tool_result") {
-                        // Filler while MCP tool runs (mic is muted during speaking)
-                        if (!this.voiceFillerPlayed && data.type === "tool_call") {
-                            this.voiceFillerPlayed = true;
-                            this.voice_play_filler();
+                        // Show tool status + filler while MCP tool runs
+                        if (data.type === "tool_call") {
+                            const toolName = data.tool || "";
+                            const toolStatus = this.voice_tool_status(toolName);
+                            this.$voiceStatus.text(toolStatus);
+                            if (!this.voiceFillerPlayed) {
+                                this.voiceFillerPlayed = true;
+                                this.voice_play_filler();
+                            }
+                        }
+                    } else if (data.type === "thought") {
+                        // Show thinking indicator
+                        if (this.voiceState === "processing") {
+                            this.$voiceStatus.text("Analyzing...");
                         }
                     } else if (data.type === "error") {
                         this.voiceStreamDone = true;
@@ -4328,6 +4345,48 @@ ${htmlCode}
         } else {
             this.voicePreloadedAudio = null;
         }
+    }
+
+    /**
+     * Rotate thinking status text for natural feel.
+     */
+    voice_start_thinking_rotation() {
+        this.voice_stop_thinking_rotation();
+        const phrases = ["Thinking...", "Analyzing...", "Preparing..."];
+        let idx = 0;
+        this.voiceThinkingTimer = setInterval(() => {
+            if (this.voiceState !== "processing") {
+                this.voice_stop_thinking_rotation();
+                return;
+            }
+            idx = (idx + 1) % phrases.length;
+            this.$voiceStatus.text(phrases[idx]);
+        }, 2000);
+    }
+
+    voice_stop_thinking_rotation() {
+        if (this.voiceThinkingTimer) {
+            clearInterval(this.voiceThinkingTimer);
+            this.voiceThinkingTimer = null;
+        }
+    }
+
+    /**
+     * Get human-readable status for a tool name.
+     */
+    voice_tool_status(toolName) {
+        const t = (toolName || "").toLowerCase();
+        if (t.includes("search") || t.includes("find") || t.includes("get") || t.includes("list"))
+            return "Searching...";
+        if (t.includes("create") || t.includes("insert") || t.includes("add"))
+            return "Creating...";
+        if (t.includes("report") || t.includes("count") || t.includes("sum"))
+            return "Generating report...";
+        if (t.includes("update") || t.includes("edit") || t.includes("set"))
+            return "Updating...";
+        if (t.includes("delete") || t.includes("remove"))
+            return "Processing...";
+        return "Checking data...";
     }
 
     /**
