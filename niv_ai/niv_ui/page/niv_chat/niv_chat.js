@@ -4169,10 +4169,17 @@ ${htmlCode}
             this.voiceAudio.onended = null;
             this.voiceAudio = null;
         }
-        // Also stop browser speechSynthesis if playing
+        // Stop browser speechSynthesis if playing
         if ("speechSynthesis" in window) {
             window.speechSynthesis.cancel();
         }
+        // Clear pending TTS queue and preload
+        this.voiceAudioQueue = [];
+        this.voiceIsPlaying = false;
+        this.voicePreloadedAudio = null;
+        this.voiceStreamDone = true;
+        // Unmute mic
+        this.voice_mute_mic(false);
         this.cancel_voice_animation();
     }
 
@@ -4494,16 +4501,13 @@ ${htmlCode}
      * Prevents echo feedback when AI audio plays through speakers.
      */
     voice_mute_mic(mute) {
+        // Mute recording stream only — keep monitor stream active for interrupt detection
         if (this.voiceStream) {
             this.voiceStream.getAudioTracks().forEach(track => {
                 track.enabled = !mute;
             });
         }
-        if (this.voiceMonitorStream) {
-            this.voiceMonitorStream.getAudioTracks().forEach(track => {
-                track.enabled = !mute;
-            });
-        }
+        // NOTE: voiceMonitorStream intentionally NOT muted — it detects user speech for interrupt
     }
 
     /**
