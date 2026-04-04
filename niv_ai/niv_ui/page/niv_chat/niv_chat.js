@@ -4188,6 +4188,40 @@ ${htmlCode}
             return;
         }
 
+        // Phase 2.2: Instant reply for simple queries (no server call)
+        const quickReply = this.voice_get_quick_reply(transcript);
+        if (quickReply) {
+            this.$voiceTranscript.text(transcript);
+            this.set_voice_state("speaking");
+            this.voice_mute_mic(true);
+            if ("speechSynthesis" in window) {
+                window.speechSynthesis.cancel();
+                const utt = new SpeechSynthesisUtterance(quickReply);
+                const voices = window.speechSynthesis.getVoices();
+                const hiVoice = voices.find(v => v.lang && v.lang.startsWith("hi"));
+                if (hiVoice) utt.voice = hiVoice;
+                utt.lang = "hi-IN";
+                utt.rate = 1.05;
+                utt.onend = () => {
+                    this.voice_mute_mic(false);
+                    if (this.voiceContinuous && this.$voiceOverlay.is(":visible")) {
+                        this.start_voice_recording();
+                    } else {
+                        this.set_voice_state("idle");
+                    }
+                };
+                utt.onerror = () => {
+                    this.voice_mute_mic(false);
+                    this.set_voice_state("idle");
+                };
+                window.speechSynthesis.speak(utt);
+            } else {
+                this.voice_mute_mic(false);
+                this.set_voice_state("idle");
+            }
+            return;
+        }
+
         this.set_voice_state("processing");
         this.$voiceTranscript.text(transcript);
         this.$voiceResponse.text("");
@@ -4345,6 +4379,34 @@ ${htmlCode}
         } else {
             this.voicePreloadedAudio = null;
         }
+    }
+
+    /**
+     * Instant reply for simple greetings/acknowledgments.
+     * Returns reply string or null if not a simple query.
+     */
+    voice_get_quick_reply(transcript) {
+        const t = (transcript || "").trim().toLowerCase().replace(/[.!?,]/g, "");
+        const map = {
+            "hi": "Hello! Kaise madad kar sakti hoon?",
+            "hello": "Hello! Kaise madad kar sakti hoon?",
+            "hey": "Hey! Bolo, kya chahiye?",
+            "hii": "Hello! Batao kya help chahiye?",
+            "namaste": "Namaste! Kaise help kar sakti hoon?",
+            "thanks": "Welcome!",
+            "thank you": "You're welcome!",
+            "thankyou": "You're welcome!",
+            "ok": "Okay!",
+            "okay": "Okay!",
+            "bye": "Bye! Take care!",
+            "goodbye": "Goodbye! Have a nice day!",
+            "good morning": "Good morning! Kaise help karoon?",
+            "good evening": "Good evening! Batao kya chahiye?",
+            "good night": "Good night! Take care!",
+            "shukriya": "Koi baat nahi!",
+            "dhanyavaad": "Koi baat nahi!",
+        };
+        return map[t] || null;
     }
 
     /**
