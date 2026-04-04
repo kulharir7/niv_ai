@@ -3779,7 +3779,7 @@ ${htmlCode}
     voice_start_silence_detection() {
         this.voiceSilenceStart = null;
         const silenceThreshold = 10;
-        const silenceDuration = 1500; // 1.5 seconds for faster turn-taking
+        const silenceDuration = 900; // 0.9 seconds — fast turn-taking for voice chat
 
         this.voiceSilenceTimer = setInterval(() => {
             if (this.voiceState !== "listening" || !this.voiceAnalyser) return;
@@ -4300,6 +4300,23 @@ ${htmlCode}
     }
 
     /**
+     * Mute/unmute the active microphone stream.
+     * Prevents echo feedback when AI audio plays through speakers.
+     */
+    voice_mute_mic(mute) {
+        if (this.voiceStream) {
+            this.voiceStream.getAudioTracks().forEach(track => {
+                track.enabled = !mute;
+            });
+        }
+        if (this.voiceMonitorStream) {
+            this.voiceMonitorStream.getAudioTracks().forEach(track => {
+                track.enabled = !mute;
+            });
+        }
+    }
+
+    /**
      * Called for each token during SSE streaming in voice mode.
      * Buffers tokens and sends complete sentences to TTS.
      */
@@ -4383,6 +4400,7 @@ ${htmlCode}
     voice_play_next_in_queue() {
         if (this.voiceAudioQueue.length === 0) {
             this.voiceIsPlaying = false;
+            this.voice_mute_mic(false);  // Unmute mic when AI done speaking
             if (this.voiceStreamDone) {
                 this.voiceStreamingMode = false;
                 if (this.voiceContinuous && this.$voiceOverlay.is(":visible")) {
@@ -4396,6 +4414,7 @@ ${htmlCode}
 
         this.voiceIsPlaying = true;
         this.set_voice_state("speaking");
+        this.voice_mute_mic(true);  // Mute mic during AI speech (prevent echo)
         const item = this.voiceAudioQueue.shift();
 
         // Browser TTS fallback item
