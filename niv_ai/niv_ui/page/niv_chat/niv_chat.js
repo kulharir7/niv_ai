@@ -3608,9 +3608,19 @@ ${htmlCode}
             }
         });
 
-        // ESC to close
-        this.$voiceOverlay.on("keydown", (e) => {
-            if (e.key === "Escape") this.close_voice_mode();
+        // Keyboard shortcuts for voice mode
+        $(document).on("keydown.voicemode", (e) => {
+            if (!this.$voiceOverlay.is(":visible")) return;
+            
+            // Space → toggle recording (only if not typing in input)
+            if (e.key === " " && !$(e.target).is("input, textarea, select")) {
+                e.preventDefault();
+                this.voice_orb_clicked();
+            }
+            // Escape → close voice mode
+            if (e.key === "Escape") {
+                this.close_voice_mode();
+            }
         });
     }
 
@@ -3624,6 +3634,7 @@ ${htmlCode}
     }
 
     close_voice_mode() {
+        $(document).off("keydown.voicemode");  // Remove keyboard listeners
         this.stop_voice_recording();
         this.stop_voice_playback();
         this.stop_voice_monitor();
@@ -3671,6 +3682,13 @@ ${htmlCode}
             error: extra || "Something went wrong",
         };
         this.$voiceStatus.text(statusMap[state] || "");
+
+        // Mobile haptic feedback
+        if (navigator.vibrate) {
+            if (state === "listening") navigator.vibrate(50);       // Short tap
+            else if (state === "speaking") navigator.vibrate(30);   // Gentle
+            else if (state === "error") navigator.vibrate([50, 50, 50]); // Alert
+        }
 
         // Rotate thinking status while processing
         if (state === "processing" && !extra) {
