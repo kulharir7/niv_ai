@@ -757,11 +757,6 @@ def stream_agent(
     )
 
     system_prompt = _build_system_prompt(conversation_id, dev_mode, page_context)
-    
-    # Voice mode: add concise instruction for faster TTS
-    if voice_mode:
-        system_prompt += "\n\n[VOICE MODE] User is in voice chat. Keep responses SHORT and conversational (2-3 sentences max). No markdown, no code blocks, no bullet lists. Speak naturally like a human conversation."
-    
     messages = _build_messages(message, conversation_id, system_prompt, attachments=attachments)
     _setup_user_api_key(user)
     MAX_TOOL_CALLS = 40 if dev_mode else 12
