@@ -2531,15 +2531,27 @@ ${htmlCode}
                                 }
                                 let $thought = $thoughtWrapper.find(".niv-thought-block");
                                 if (!$thought.length) {
-                                    $thought = $('<div class="niv-thought-block"></div>');
+                                    $thought = $('<div class="niv-thought-block niv-tb-open niv-tb-streaming"></div>');
+                                    $thought.append(
+                                        '<div class="niv-tb-header">' +
+                                            '<span class="niv-tb-icon">💭</span>' +
+                                            '<span class="niv-tb-label">Thinking</span>' +
+                                            '<span class="niv-tb-timer"></span>' +
+                                            '<span class="niv-tb-chevron"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></span>' +
+                                        '</div>' +
+                                        '<div class="niv-tb-body"><div class="thought-text"></div></div>'
+                                    );
                                     $thoughtWrapper.append($thought);
+                                    // Start thinking timer
+                                    var _tbStart = Date.now();
+                                    $thought.data("startTime", _tbStart);
+                                    var _tbTimer = setInterval(function() {
+                                        var s = Math.floor((Date.now() - _tbStart) / 1000);
+                                        $thought.find(".niv-tb-timer").text(s + "s");
+                                    }, 1000);
+                                    $thought.data("timerInterval", _tbTimer);
                                 }
-                                // Use a separate div for thought content to append tokens correctly
-                                let $thoughtContent = $thought.find(".thought-text");
-                                if (!$thoughtContent.length) {
-                                    $thoughtContent = $('<div class="thought-text"></div>');
-                                    $thought.append($thoughtContent);
-                                }
+                                var $thoughtContent = $thought.find(".thought-text");
                                 $thoughtContent.append(data.content.replace(/\n/g, '<br>'));
                                 this.scroll_to_bottom_if_near();
                             }
@@ -2734,6 +2746,8 @@ ${htmlCode}
                                 // Agent finished, could show indicator
                             }
                         } else if (data.type === "done") {
+                                // Auto-collapse thinking
+                                if ($msgEl && window.nivFinalizeThinking) window.nivFinalizeThinking($msgEl);
                             streamDone = true;
                             delete this.active_streams[conv_id];
                             this.render_conversation_list();
@@ -5979,3 +5993,25 @@ $(document).off('click.nivtoggle').on('click.nivtoggle', '.niv-toggle-header', f
     var $section = $(this).closest('.niv-toggle-section');
     $section.toggleClass('niv-ts-open');
 });
+
+// ── Thinking Accordion — Click to toggle ──
+$(document).off('click.nivthought').on('click.nivthought', '.niv-tb-header', function(e) {
+    e.preventDefault();
+    var $block = $(this).closest('.niv-thought-block');
+    if ($block.hasClass('niv-tb-streaming')) return;
+    $block.toggleClass('niv-tb-open');
+});
+
+// ── Auto-collapse thinking when stream ends ──
+function nivFinalizeThinking($msg) {
+    if (!$msg) return;
+    var $thought = $msg.find('.niv-thought-block.niv-tb-streaming');
+    if (!$thought.length) return;
+    var timer = $thought.data('timerInterval');
+    if (timer) clearInterval(timer);
+    $thought.removeClass('niv-tb-streaming');
+    var elapsed = Math.floor((Date.now() - ($thought.data('startTime') || Date.now())) / 1000);
+    $thought.find('.niv-tb-label').text('Thought for ' + elapsed + 's');
+    setTimeout(function() { $thought.removeClass('niv-tb-open'); }, 800);
+}
+window.nivFinalizeThinking = nivFinalizeThinking;
