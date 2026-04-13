@@ -5752,6 +5752,60 @@ function nivPostFormat(html) {
     // ── 8. Collapsible Long Content ──
     // If total content height would be huge (many paragraphs), handled by CSS
 
+    // ── 10. Callout Boxes (Tip / Warning / Error / Info / Note) ──
+    // Detect blockquotes starting with emoji+keyword or [!TYPE] syntax
+    $tmp.find('blockquote').each(function() {
+        const $bq = $(this);
+        const html = $bq.html().trim();
+        const text = $bq.text().trim();
+
+        // Map of patterns → callout type
+        const calloutTypes = [
+            { pattern: /^(?:<[^>]+>)*\s*(?:💡|\*\*💡)\s*(?:Tip|TIP)/i, type: 'tip', icon: '💡', label: 'Tip' },
+            { pattern: /^(?:<[^>]+>)*\s*(?:⚠️|\*\*⚠️)\s*(?:Warning|WARNING|Caution|CAUTION)/i, type: 'warning', icon: '⚠️', label: 'Warning' },
+            { pattern: /^(?:<[^>]+>)*\s*(?:❌|\*\*❌)\s*(?:Error|ERROR|Danger|DANGER)/i, type: 'error', icon: '❌', label: 'Error' },
+            { pattern: /^(?:<[^>]+>)*\s*(?:ℹ️|\*\*ℹ️)\s*(?:Info|INFO|Note|NOTE)/i, type: 'info', icon: 'ℹ️', label: 'Note' },
+            { pattern: /^(?:<[^>]+>)*\s*(?:📝|\*\*📝)\s*(?:Note|NOTE)/i, type: 'info', icon: '📝', label: 'Note' },
+            { pattern: /^(?:<[^>]+>)*\s*(?:✅|\*\*✅)\s*(?:Success|SUCCESS|Done|DONE)/i, type: 'success', icon: '✅', label: 'Success' },
+            { pattern: /^(?:<[^>]+>)*\s*(?:🔥|\*\*🔥)\s*(?:Important|IMPORTANT)/i, type: 'warning', icon: '🔥', label: 'Important' },
+            // GitHub-style [!TIP], [!WARNING], [!NOTE], [!IMPORTANT], [!CAUTION]
+            { pattern: /^\[!TIP\]/i, type: 'tip', icon: '💡', label: 'Tip' },
+            { pattern: /^\[!WARNING\]/i, type: 'warning', icon: '⚠️', label: 'Warning' },
+            { pattern: /^\[!CAUTION\]/i, type: 'warning', icon: '⚠️', label: 'Caution' },
+            { pattern: /^\[!NOTE\]/i, type: 'info', icon: 'ℹ️', label: 'Note' },
+            { pattern: /^\[!IMPORTANT\]/i, type: 'warning', icon: '🔥', label: 'Important' },
+            { pattern: /^\[!ERROR\]/i, type: 'error', icon: '❌', label: 'Error' },
+        ];
+
+        let matched = null;
+        for (const ct of calloutTypes) {
+            if (ct.pattern.test(text) || ct.pattern.test(html)) {
+                matched = ct;
+                break;
+            }
+        }
+
+        if (matched) {
+            // Remove the trigger text (emoji + keyword + colon/dash)
+            let cleanHtml = html;
+            // Remove patterns like "**💡 Tip:**" or "💡 Tip:" or "[!TIP]"
+            cleanHtml = cleanHtml.replace(/^(?:<[^>]+>)*\s*(?:\*\*)?(?:💡|⚠️|❌|ℹ️|📝|✅|🔥)\s*(?:Tip|Warning|Caution|Error|Danger|Info|Note|Success|Important|Done)\s*[:：\-—]?\s*(?:\*\*)?/i, '');
+            cleanHtml = cleanHtml.replace(/^\[!(?:TIP|WARNING|CAUTION|NOTE|IMPORTANT|ERROR)\]\s*/i, '');
+            // Remove leading <br> or <p> after cleanup
+            cleanHtml = cleanHtml.replace(/^\s*(?:<br\s*\/?>\s*)+/i, '');
+
+            $bq.replaceWith(
+                '<div class="niv-callout niv-callout-' + matched.type + '">' +
+                    '<div class="niv-callout-header">' +
+                        '<span class="niv-callout-icon">' + matched.icon + '</span>' +
+                        '<span class="niv-callout-label">' + matched.label + '</span>' +
+                    '</div>' +
+                    '<div class="niv-callout-body">' + cleanHtml + '</div>' +
+                '</div>'
+            );
+        }
+    });
+
     // ── 9. Message entry animation class ──
     // (Applied via CSS on .niv-message, not here)
 

@@ -5848,3 +5848,96 @@ pre.niv-code-collapsed::after {
     a.niv-link-card { padding: 6px 10px; }
     ol.niv-steps > li { padding-left: 30px; }
 }
+
+/* ══════════════════════════════════════════════════════════════
+   CALLOUT BOXES — Tip / Warning / Error / Info / Success
+   ══════════════════════════════════════════════════════════════ */
+
+.niv-callout {
+    border-radius: 10px;
+    margin: 14px 0;
+    padding: 0;
+    overflow: hidden;
+    border-left: 4px solid;
+    position: relative;
+}
+.niv-callout-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px 4px;
+    font-weight: 650;
+    font-size: 0.9em;
+    letter-spacing: 0.02em;
+}
+.niv-callout-icon { font-size: 16px; line-height: 1; }
+.niv-callout-label { text-transform: uppercase; letter-spacing: 0.06em; font-size: 0.85em; }
+.niv-callout-body {
+    padding: 4px 14px 12px;
+    font-size: 0.95em;
+    line-height: 1.65;
+    color: var(--niv-text, #1a1a1a);
+}
+.niv-callout-body p { margin: 4px 0; }
+.niv-callout-body *:first-child { margin-top: 0; }
+.niv-callout-body *:last-child { margin-bottom: 0; }
+
+/* ── Tip ── */
+.niv-callout-tip {
+    background: rgba(16, 185, 129, 0.06);
+    border-left-color: #10b981;
+}
+.niv-callout-tip .niv-callout-header { color: #059669; }
+
+/* ── Warning ── */
+.niv-callout-warning {
+    background: rgba(245, 158, 11, 0.06);
+    border-left-color: #f59e0b;
+}
+.niv-callout-warning .niv-callout-header { color: #d97706; }
+
+/* ── Error ── */
+.niv-callout-error {
+    background: rgba(239, 68, 68, 0.06);
+    border-left-color: #ef4444;
+}
+.niv-callout-error .niv-callout-header { color: #dc2626; }
+
+/* ── Info / Note ── */
+.niv-callout-info {
+    background: rgba(59, 130, 246, 0.06);
+    border-left-color: #3b82f6;
+}
+.niv-callout-info .niv-callout-header { color: #2563eb; }
+
+/* ── Success ── */
+.niv-callout-success {
+    background: rgba(16, 185, 129, 0.06);
+    border-left-color: #10b981;
+}
+.niv-callout-success .niv-callout-header { color: #059669; }
+
+/* ── Dark Mode ── */
+body.niv-dark-mode .niv-callout-tip { background: rgba(16, 185, 129, 0.08); }
+body.niv-dark-mode .niv-callout-tip .niv-callout-header { color: #34d399; }
+body.niv-dark-mode .niv-callout-warning { background: rgba(245, 158, 11, 0.08); }
+body.niv-dark-mode .niv-callout-warning .niv-callout-header { color: #fbbf24; }
+body.niv-dark-mode .niv-callout-error { background: rgba(239, 68, 68, 0.08); }
+body.niv-dark-mode .niv-callout-error .niv-callout-header { color: #f87171; }
+body.niv-dark-mode .niv-callout-info { background: rgba(59, 130, 246, 0.08); }
+body.niv-dark-mode .niv-callout-info .niv-callout-header { color: #60a5fa; }
+body.niv-dark-mode .niv-callout-success { background: rgba(16, 185, 129, 0.08); }
+body.niv-dark-mode .niv-callout-success .niv-callout-header { color: #34d399; }
+body.niv-dark-mode .niv-callout-body { color: var(--niv-text, #e5e5e5); }
+
+/* ── Theme Compatibility ── */
+.niv-chat-container.theme-terminal .niv-callout { font-family: monospace !important; }
+.niv-chat-container.theme-terminal .niv-callout-tip { border-left-color: #00ff41; background: rgba(0,255,65,0.05); }
+.niv-chat-container.theme-terminal .niv-callout-tip .niv-callout-header { color: #00ff41; }
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+    .niv-callout { margin: 10px 0; }
+    .niv-callout-header { padding: 8px 12px 2px; }
+    .niv-callout-body { padding: 2px 12px 10px; }
+}
