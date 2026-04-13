@@ -5876,45 +5876,73 @@ function nivPostFormat(html) {
     })();
 
     // ── 12. Toggleable Sections — Collapsible content under headings ──
-    // Detect h2/h3 headings followed by content blocks, wrap in toggle
+    // Detect h2/h3 headings OR numbered bold headings, wrap in toggle
     (function() {
-        // Only process if there are 2+ headings (otherwise no point)
-        var headings = $tmp.children('h2, h3');
-        if (headings.length < 2) return;
+        // Strategy: find heading-like elements
+        // 1. Real headings: h2, h3
+        // 2. Numbered bold: <p> starting with "1. <strong>..." or "<strong>1. ..."
+        // 3. Bold-only paragraphs that act as section headers
 
-        // Collect sections: each heading + all siblings until next heading
+        function isHeadingLike(el) {
+            var $el = $(el);
+            var tag = el.tagName.toLowerCase();
+            
+            // Real headings
+            if (tag === 'h2' || tag === 'h3') return true;
+            
+            // Paragraph with numbered bold start: "1. **Title**" or "**1. Title**"
+            if (tag === 'p') {
+                var html = $el.html().trim();
+                var text = $el.text().trim();
+                // Pattern: starts with number+dot then strong, or strong containing number+dot
+                if (/^\d+\.\s*<strong>/.test(html)) return true;
+                if (/^<strong>\d+\./.test(html)) return true;
+                // Pattern: entire paragraph is just bold text (section title)
+                if (/^<strong>[^<]+<\/strong>\s*$/.test(html) && text.length < 80) return true;
+            }
+            return false;
+        }
+
+        function getHeadingTitle(el) {
+            var text = $(el).text().trim();
+            // Remove leading number+dot for cleaner title
+            return text.replace(/^\d+\.\s*/, '');
+        }
+
+        // Collect all heading-like elements
+        var headingEls = [];
+        $tmp.children().each(function() {
+            if (isHeadingLike(this)) headingEls.push(this);
+        });
+
+        if (headingEls.length < 2) return;
+
+        // Collect sections
         var sections = [];
-        headings.each(function() {
-            var $h = $(this);
-            var level = this.tagName; // H2 or H3
-            var title = $h.text().trim();
+        headingEls.forEach(function(hEl) {
+            var $h = $(hEl);
+            var title = getHeadingTitle(hEl);
             var $content = $();
 
-            // Gather all siblings after this heading until next same-level heading
             var $next = $h.next();
-            while ($next.length && !$next.is('h2, h3')) {
+            while ($next.length && !isHeadingLike($next[0])) {
                 $content = $content.add($next);
                 $next = $next.next();
             }
 
-            // Only wrap if there is actual content
             if ($content.length > 0 && title.length > 0) {
-                sections.push({ $heading: $h, $content: $content, title: title, level: level });
+                sections.push({ $heading: $h, $content: $content, title: title });
             }
         });
 
-        // Need at least 2 sections to make toggles useful
         if (sections.length < 2) return;
 
-        // Build toggle sections (first one open, rest closed)
         sections.forEach(function(sec, idx) {
             var isOpen = idx === 0;
             var uniqueId = 'niv-toggle-' + Math.random().toString(36).substr(2, 6);
 
-            // Create wrapper
             var $wrapper = $('<div class="niv-toggle-section' + (isOpen ? ' niv-ts-open' : '') + '" data-toggle-id="' + uniqueId + '"></div>');
 
-            // Create header (clickable)
             var $header = $('<div class="niv-toggle-header" data-toggle-target="' + uniqueId + '">' +
                 '<span class="niv-toggle-chevron">' +
                     '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
@@ -5922,7 +5950,6 @@ function nivPostFormat(html) {
                 '<span class="niv-toggle-title">' + sec.title + '</span>' +
             '</div>');
 
-            // Create body
             var $body = $('<div class="niv-toggle-body"></div>');
             sec.$content.each(function() {
                 $body.append($(this).clone());
@@ -5931,7 +5958,6 @@ function nivPostFormat(html) {
             $wrapper.append($header);
             $wrapper.append($body);
 
-            // Replace heading with wrapper, remove original content
             sec.$heading.before($wrapper);
             sec.$heading.remove();
             sec.$content.remove();
