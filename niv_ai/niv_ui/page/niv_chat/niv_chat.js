@@ -5806,6 +5806,75 @@ function nivPostFormat(html) {
         }
     });
 
+    // ── 11. Metric Tiles — Dashboard-style KPI cards ──
+    // Detect consecutive key-value lines with numeric values
+    // Pattern: groups of 3+ lines like "**Label**: number" or "- **Label**: number"
+    (function() {
+        const $children = $tmp.children('ul, ol');
+        $children.each(function() {
+            const $list = $(this);
+            const $items = $list.children('li');
+            if ($items.length < 2 || $items.length > 8) return;
+            
+            // Check if most items match "**Label**: numeric_value" pattern
+            let metricItems = [];
+            let matchCount = 0;
+            
+            $items.each(function() {
+                const html = $(this).html().trim();
+                const text = $(this).text().trim();
+                // Match: <strong>Label</strong>: value_with_number
+                const match = html.match(/^<strong>([^<]+)<\/strong>\s*[:：]\s*(.+)/i);
+                if (match) {
+                    const label = match[1].trim();
+                    const value = match[2].trim();
+                    // Check if value contains a number, currency, or percentage
+                    if (/[\d₹$€£%]/.test(value)) {
+                        // Detect icon from label
+                        let icon = '📊';
+                        const lbl = label.toLowerCase();
+                        if (/revenue|sales|amount|income|earning|turnover/.test(lbl)) icon = '💰';
+                        else if (/user|customer|client|member|employee|people|count/.test(lbl)) icon = '👥';
+                        else if (/growth|increase|rise|up/.test(lbl)) icon = '📈';
+                        else if (/decrease|decline|down|loss|drop/.test(lbl)) icon = '📉';
+                        else if (/order|purchase|buy/.test(lbl)) icon = '🛒';
+                        else if (/profit|margin|net/.test(lbl)) icon = '💎';
+                        else if (/time|duration|hour|day|speed/.test(lbl)) icon = '⏱️';
+                        else if (/rate|ratio|conversion/.test(lbl)) icon = '🎯';
+                        else if (/total|sum|all|overall/.test(lbl)) icon = '📋';
+                        else if (/pending|queue|waiting/.test(lbl)) icon = '⏳';
+                        else if (/active|online|live|running/.test(lbl)) icon = '🟢';
+                        else if (/error|fail|issue|bug/.test(lbl)) icon = '🔴';
+                        else if (/task|ticket|item|invoice/.test(lbl)) icon = '📝';
+                        else if (/stock|inventory|warehouse/.test(lbl)) icon = '📦';
+                        else if (/payment|collection|received/.test(lbl)) icon = '💳';
+                        else if (/disburs|loan|emi/.test(lbl)) icon = '🏦';
+                        else if (/branch|location|city/.test(lbl)) icon = '📍';
+                        
+                        metricItems.push({ icon, label, value });
+                        matchCount++;
+                    }
+                }
+            });
+            
+            // Only convert if 80%+ items are metric-like
+            if (matchCount >= 2 && matchCount / $items.length >= 0.7) {
+                let tilesHtml = '<div class="niv-metric-grid">';
+                metricItems.forEach(function(m) {
+                    // Strip any existing niv-num-pill spans from value for clean display
+                    let cleanValue = m.value.replace(/<span class="niv-[^"]*">/g, '').replace(/<\/span>/g, '');
+                    tilesHtml += '<div class="niv-metric-tile">' +
+                        '<div class="niv-mt-icon">' + m.icon + '</div>' +
+                        '<div class="niv-mt-value">' + cleanValue + '</div>' +
+                        '<div class="niv-mt-label">' + m.label + '</div>' +
+                    '</div>';
+                });
+                tilesHtml += '</div>';
+                $list.replaceWith(tilesHtml);
+            }
+        });
+    })();
+
     // ── 9. Message entry animation class ──
     // (Applied via CSS on .niv-message, not here)
 
