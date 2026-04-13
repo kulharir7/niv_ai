@@ -5875,69 +5875,6 @@ function nivPostFormat(html) {
         });
     })();
 
-    // ── 12. Toggleable Sections — Collapsible content under headings ──
-    // Detect h2/h3 headings followed by content blocks, wrap in toggle
-    (function() {
-        // Only process if there are 2+ headings (otherwise no point)
-        var headings = $tmp.children('h2, h3');
-        if (headings.length < 2) return;
-
-        // Collect sections: each heading + all siblings until next heading
-        var sections = [];
-        headings.each(function() {
-            var $h = $(this);
-            var level = this.tagName; // H2 or H3
-            var title = $h.text().trim();
-            var $content = $();
-
-            // Gather all siblings after this heading until next same-level heading
-            var $next = $h.next();
-            while ($next.length && !$next.is('h2, h3')) {
-                $content = $content.add($next);
-                $next = $next.next();
-            }
-
-            // Only wrap if there is actual content
-            if ($content.length > 0 && title.length > 0) {
-                sections.push({ $heading: $h, $content: $content, title: title, level: level });
-            }
-        });
-
-        // Need at least 2 sections to make toggles useful
-        if (sections.length < 2) return;
-
-        // Build toggle sections (first one open, rest closed)
-        sections.forEach(function(sec, idx) {
-            var isOpen = idx === 0;
-            var uniqueId = 'niv-toggle-' + Math.random().toString(36).substr(2, 6);
-
-            // Create wrapper
-            var $wrapper = $('<div class="niv-toggle-section' + (isOpen ? ' niv-ts-open' : '') + '" data-toggle-id="' + uniqueId + '"></div>');
-
-            // Create header (clickable)
-            var $header = $('<div class="niv-toggle-header" data-toggle-target="' + uniqueId + '">' +
-                '<span class="niv-toggle-chevron">' +
-                    '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
-                '</span>' +
-                '<span class="niv-toggle-title">' + sec.title + '</span>' +
-            '</div>');
-
-            // Create body
-            var $body = $('<div class="niv-toggle-body"></div>');
-            sec.$content.each(function() {
-                $body.append($(this).clone());
-            });
-
-            $wrapper.append($header);
-            $wrapper.append($body);
-
-            // Replace heading with wrapper, remove original content
-            sec.$heading.before($wrapper);
-            sec.$heading.remove();
-            sec.$content.remove();
-        });
-    })();
-
     // ── 9. Message entry animation class ──
     // (Applied via CSS on .niv-message, not here)
 
@@ -5946,10 +5883,3 @@ function nivPostFormat(html) {
 
 // Make it globally accessible
 window.nivPostFormat = nivPostFormat;
-
-// ── Toggleable Sections — Click handler (delegated) ──
-$(document).off('click.nivtoggle').on('click.nivtoggle', '.niv-toggle-header', function(e) {
-    e.preventDefault();
-    var $section = $(this).closest('.niv-toggle-section');
-    $section.toggleClass('niv-ts-open');
-});
