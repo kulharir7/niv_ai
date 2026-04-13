@@ -1423,12 +1423,15 @@ ${htmlCode}
         $(`.niv-theme-card[data-theme-id="${themeId}"]`).addClass("active");
 
         // Auto dark mode for certain themes
-        const forceDark = ["terminal", "cyberpunk", "ocean-deep"];
+        const forceDark = ["terminal", "cyberpunk", "ocean-deep", "glass", "aurora", "sunset-grad"];
         if (forceDark.includes(themeId)) {
             $("body").addClass("niv-dark-mode");
             $(".btn-dark-mode-toggle").prop("checked", true);
             localStorage.setItem("niv_dark_mode", "true");
         }
+        // Re-apply accent with correct dark/light after theme change
+        const savedAccent = localStorage.getItem("niv_accent") || "purple";
+        this.apply_accent(savedAccent);
     }
 
     apply_accent(accent) {
@@ -2706,7 +2709,6 @@ ${htmlCode}
                                     "niv_orchestrator": "🎯 Orchestrator",
                                     "frappe_coder": "💻 Frappe Developer",
                                     "data_analyst": "📊 Data Analyst",
-                                    "nbfc_specialist": "🏦 NBFC Specialist",
                                     "system_discovery": "🔍 System Discovery",
                                     "niv_critique": "✅ Quality Check",
                                     "niv_planner": "📋 Planner"
@@ -5556,3 +5558,37 @@ ${htmlCode}
         navigator.serviceWorker.register("/assets/niv_ai/js/niv_sw.js").catch(function() {});
     }
 })();
+
+// ── Smart Status Messages — Rotating thinking text ──
+const NIV_STATUS_MESSAGES = [
+    "Thinking...",
+    "Analyzing your request...",
+    "Searching for answers...",
+    "Processing data...",
+    "Preparing response...",
+    "Looking into it...",
+    "Working on it...",
+    "Gathering information...",
+    "Almost there...",
+    "Finalizing response..."
+];
+
+let _nivStatusIdx = 0;
+let _nivStatusTimer = null;
+
+function nivStartSmartStatus(el) {
+    if (!el) return;
+    _nivStatusIdx = 0;
+    el.textContent = NIV_STATUS_MESSAGES[0];
+    _nivStatusTimer = setInterval(() => {
+        _nivStatusIdx = (_nivStatusIdx + 1) % NIV_STATUS_MESSAGES.length;
+        if (el) el.textContent = NIV_STATUS_MESSAGES[_nivStatusIdx];
+    }, 2500);
+}
+
+function nivStopSmartStatus() {
+    if (_nivStatusTimer) {
+        clearInterval(_nivStatusTimer);
+        _nivStatusTimer = null;
+    }
+}

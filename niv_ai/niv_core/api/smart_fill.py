@@ -42,16 +42,11 @@ SMART_FILL_RULES = {
     },
     "Loan": {
         "applicant": [
-            "loan_type", "rate_of_interest", "repayment_method",
             "cost_center",
         ],
         "loan_type": [
             "rate_of_interest", "repayment_method", "repayment_periods",
         ],
-    },
-    "Loan Application": {
-        "applicant": ["loan_type", "company"],
-        "loan_type": ["rate_of_interest", "repayment_method"],
     },
     "Journal Entry": {
         "company": ["cost_center"],

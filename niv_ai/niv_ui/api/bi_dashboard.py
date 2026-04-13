@@ -51,7 +51,7 @@ def get_bi_data(period="this_year"):
         data["disbursement_trend"] = [{"month": r.month, "count": r.cnt, "amount": float(r.amt)}
             for r in frappe.db.sql(
                 "SELECT DATE_FORMAT(disbursement_date, '%b %y') month, COUNT(*) cnt, IFNULL(SUM(disbursed_amount),0) amt "
-                "FROM `tabLoan Disbursement` WHERE docstatus=1 AND disbursement_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) "
+                "FROM `tabLoan Disbursement` WHERE docstatus=1 AND disbursement_date >= DATE_SUB(CURDATE(), INTERVAL 12 MONTH) " if frappe.db.exists("DocType", "Loan Disbursement") else ""
                 "GROUP BY month, DATE_FORMAT(disbursement_date, '%Y-%m') ORDER BY DATE_FORMAT(disbursement_date, '%Y-%m')", as_dict=True)]
     except: data["disbursement_trend"] = []
     
@@ -74,7 +74,9 @@ def get_bi_data(period="this_year"):
     # Collection Today
     try:
         today_str = today.strftime("%Y-%m-%d")
-        tc = frappe.db.sql("SELECT IFNULL(SUM(amount_paid),0) amt FROM `tabLoan Repayment` WHERE docstatus=1 AND posting_date=%s", today_str)
+        # Dynamic: Only query loan tables if Loan module exists
+        has_loan = frappe.db.exists("DocType", "Loan Repayment")
+        tc = frappe.db.sql("SELECT IFNULL(SUM(amount_paid),0) amt FROM `tabLoan Repayment` WHERE docstatus=1 AND posting_date=%s", today_str) if has_loan else [[0]]
         avg = frappe.db.sql("SELECT IFNULL(AVG(d),0) avg_d FROM (SELECT SUM(amount_paid) d FROM `tabLoan Repayment` WHERE docstatus=1 AND posting_date >= DATE_SUB(CURDATE(), INTERVAL 30 DAY) GROUP BY posting_date) t")
         data["collection_today"] = {"today": float(tc[0][0] if tc else 0), "avg_daily": float(avg[0][0] if avg else 0)}
     except: data["collection_today"] = {}

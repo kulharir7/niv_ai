@@ -248,7 +248,6 @@ def _cmd_report(chat_id, telegram_user_id, args):
         "collection": "Show me the collection efficiency report",
         "overdue": "Show me all overdue loans with days overdue and amounts",
         "npa": "Show me the complete NPA report with classification",
-        "disbursement": "Show me loan disbursement summary for this month",
     }
 
     if not args.strip():
@@ -1122,8 +1121,6 @@ def _send_context_buttons(chat_id, response, original_query):
         ])
 
     # Context-aware follow-ups
-    if any(w in response_lower for w in ["loan", "disbursement", "emi", "repayment"]):
-        buttons.append([
             {"text": "⚠️ Overdue Loans", "callback_data": "more:Show overdue loans"},
             {"text": "📊 NPA Report", "callback_data": "more:Show NPA summary"},
         ])

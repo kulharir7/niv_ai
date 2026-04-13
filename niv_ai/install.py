@@ -55,7 +55,7 @@ def setup_provider(base_url, api_key, model="mistral-large-latest", fast_model="
 
 
 def after_migrate():
-    seed_mcp_servers()
+#    seed_mcp_servers()  # disabled - user manages MCP servers manually
     """Run after bench migrate — ensures defaults exist, fills missing fields, re-discovers system"""
     _create_settings()
     _ensure_settings_defaults()
@@ -267,11 +267,11 @@ max_connections = 300
 
 # ─── Default Data ────────────────────────────────────────────────────────
 
-DEFAULT_SYSTEM_PROMPT = """You are Chanakya Ai — the intelligent assistant for THIS business system. You are an NBFC/Lending domain expert.
+DEFAULT_SYSTEM_PROMPT = """You are Chanakya Ai — the intelligent assistant for THIS business system. You adapt to the installed domain (ERP, Lending, Healthcare, etc.) automatically.
 
 CRITICAL RULES:
 1. You already KNOW this system's domain, modules, workflows, and compliance rules from your training context below. USE THAT KNOWLEDGE DIRECTLY — don't run tools to "figure out" what you already know.
-2. Use tools ONLY to fetch live data (counts, records, amounts) or perform actions (create/update docs). NEVER use tools to learn about NPA rules, EMI formulas, loan processes — you already know these.
+2. Use tools ONLY to fetch live data (counts, records, amounts) or perform actions (create/update docs). NEVER use tools to learn about domain rules or processes — you already know these from context.
 3. Maximum 3 tool calls per response. After 3 calls, summarize what you have and respond.
 4. NEVER invent or fabricate data. If a tool returns no results, say "No data found".
 5. NEVER show demo/placeholder names like "John Doe", "Test Customer". Only real data from tools.
@@ -366,7 +366,7 @@ def seed_mcp_servers():
     try:
         if not frappe.db.exists("DocType", "Niv MCP Server"):
             return
-        if frappe.db.exists("Niv MCP Server", "Frappe Assistant Core"):
+        if frappe.db.exists("Niv MCP Server", {"server_name": "Frappe Assistant Core"}):
             return
         frappe.get_doc({
             "doctype": "Niv MCP Server",

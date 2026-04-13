@@ -45,13 +45,13 @@ class NivSettings {
 			this.mcpServers = mcpRes.message || [];
 		} catch(e) {
 			this.mcpServers = [
-				{ server_name: "Frappe Assistant Core", tool_count: 23, connection_type: "Direct", enabled: 1 },
+				
 				{ server_name: "niv_tools", tool_count: 6, connection_type: "Direct", enabled: 1 }
 			];
 		}
 		if (this.mcpServers.length === 0) {
 			this.mcpServers = [
-				{ server_name: "Frappe Assistant Core", tool_count: 23, connection_type: "Direct", enabled: 1 },
+				
 				{ server_name: "niv_tools", tool_count: 6, connection_type: "Direct", enabled: 1 }
 			];
 		}

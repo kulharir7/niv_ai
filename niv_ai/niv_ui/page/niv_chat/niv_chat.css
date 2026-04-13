@@ -5473,3 +5473,69 @@ body.niv-widget-mode .niv-message {
 [data-voice-state="error"] .av-mouth { d: path("M65 108 Q80 98 95 108"); }
 [data-voice-state="error"] .av-brows path:first-child { transform: rotate(8deg); transform-origin: 60px 60px; }
 [data-voice-state="error"] .av-brows path:last-child { transform: rotate(-8deg); transform-origin: 100px 60px; }
+
+/* ── Theme Text Color Fixes ── */
+/* Ensure all dark-bg themes have explicit light text on msg-content */
+.niv-chat-container.theme-glass .msg-content,
+.niv-chat-container.theme-glass .niv-message.user .msg-content {
+    color: #f0f0f0 !important;
+}
+.niv-chat-container.theme-aurora .msg-content,
+.niv-chat-container.theme-aurora .niv-message.user .msg-content {
+    color: #e2e8f0 !important;
+}
+.niv-chat-container.theme-sunset-grad .msg-content,
+.niv-chat-container.theme-sunset-grad .niv-message.user .msg-content {
+    color: #fde8d8 !important;
+}
+.niv-chat-container.theme-cyberpunk .msg-content,
+.niv-chat-container.theme-cyberpunk .niv-message.user .msg-content {
+    color: #e0d0ff !important;
+}
+.niv-chat-container.theme-ocean-deep .msg-content,
+.niv-chat-container.theme-ocean-deep .niv-message.user .msg-content {
+    color: #bae6fd !important;
+}
+.niv-chat-container.theme-terminal .niv-message.user .msg-content {
+    color: #00ff41 !important;
+}
+/* Minimal theme light mode fix */
+.niv-chat-container.theme-minimal .msg-content,
+.niv-chat-container.theme-minimal .niv-message.user .msg-content {
+    color: #333 !important;
+}
+body.niv-dark-mode .niv-chat-container.theme-minimal .msg-content,
+body.niv-dark-mode .niv-chat-container.theme-minimal .niv-message.user .msg-content {
+    color: #ccc !important;
+}
+
+/* ── User Message Text Fix for Dark Themes ── */
+/* Force user message text to be dark on light bubble OR light on dark bubble */
+.niv-chat-container.theme-glass .niv-message.user .msg-content,
+.niv-chat-container.theme-aurora .niv-message.user .msg-content,
+.niv-chat-container.theme-sunset-grad .niv-message.user .msg-content,
+.niv-chat-container.theme-cyberpunk .niv-message.user .msg-content,
+.niv-chat-container.theme-ocean-deep .niv-message.user .msg-content,
+.niv-chat-container.theme-terminal .niv-message.user .msg-content {
+    color: #fff !important;
+}
+
+/* Force dark user bubble bg for dark themes (override accent light colors) */
+.niv-chat-container.theme-glass .niv-message.user .msg-content {
+    background: rgba(124,58,237,0.25) !important;
+}
+.niv-chat-container.theme-aurora .niv-message.user .msg-content {
+    background: rgba(129,140,248,0.2) !important;
+}
+.niv-chat-container.theme-sunset-grad .niv-message.user .msg-content {
+    background: rgba(249,115,22,0.2) !important;
+}
+.niv-chat-container.theme-cyberpunk .niv-message.user .msg-content {
+    background: rgba(255,0,102,0.2) !important;
+}
+.niv-chat-container.theme-ocean-deep .niv-message.user .msg-content {
+    background: rgba(56,189,248,0.15) !important;
+}
+.niv-chat-container.theme-terminal .niv-message.user .msg-content {
+    background: rgba(0,255,65,0.1) !important;
+}

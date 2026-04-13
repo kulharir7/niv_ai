@@ -2420,7 +2420,6 @@ ${htmlCode}
                                     "niv_orchestrator": "🎯 Orchestrator",
                                     "frappe_coder": "💻 Frappe Developer",
                                     "data_analyst": "📊 Data Analyst",
-                                    "nbfc_specialist": "🏦 NBFC Specialist",
                                     "system_discovery": "🔍 System Discovery",
                                     "niv_critique": "✅ Quality Check",
                                     "niv_planner": "📋 Planner"

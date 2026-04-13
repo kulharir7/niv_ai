@@ -34,7 +34,7 @@ TOOL_ENHANCEMENTS = {
             "- Operators: =, !=, >, <, >=, <=, like, in, not in, between, is\n\n"
             "COMMON DOCTYPES: Customer, Supplier, Item, Sales Invoice, Purchase Invoice, "
             "Sales Order, Purchase Order, Journal Entry, Payment Entry, Employee, "
-            "Loan Application, Loan, Loan Repayment\n\n"
+            "Sales Invoice, Purchase Order, Customer\n\n"
             "TIP: Always include 'name' in fields. Default limit is 20."
         ),
         "parameters": {
@@ -42,7 +42,7 @@ TOOL_ENHANCEMENTS = {
                 "type": "string",
                 "description": (
                     "Exact DocType name in Title Case with spaces. "
-                    "Examples: 'Sales Invoice', 'Loan Application', 'Journal Entry'. "
+                    "Examples: 'Sales Invoice', 'Customer', 'Journal Entry'. "
                     "Use search_doctype tool if you don't know the exact name."
                 ),
             },
@@ -64,11 +64,11 @@ TOOL_ENHANCEMENTS = {
                     "- Sales Order: name, customer_name, transaction_date, grand_total, status, delivery_date\n"
                     "- Sales Invoice: name, customer_name, posting_date, grand_total, status\n"
                     "- Purchase Order: name, supplier_name, transaction_date, grand_total, status\n"
-                    "- Loan: name, applicant_name, loan_amount, status, posting_date, disbursement_date\n"
+                    "- (Domain-specific fields are auto-discovered from installed DocTypes)\n"
                     "- Customer: name, customer_name, customer_type, territory\n"
-                    "- Loan Repayment: name, against_loan, applicant, posting_date, amount_paid, principal_amount_paid, total_interest_paid, total_penalty_paid, payable_amount\n"
+                    
                     "NOTE: Sales Order uses 'transaction_date' NOT 'posting_date'. "
-                    "Loan Repayment uses 'amount_paid' NOT 'amount' or 'repayment_amount'. Check DocType fields if unsure."
+                    "Always check DocType fields if unsure about field names."
                 ),
             },
             "limit": {
@@ -213,13 +213,13 @@ TOOL_ENHANCEMENTS = {
             "- Single document lookup → use get_document\n\n"
             "RULES:\n"
             "- SELECT queries ONLY (no INSERT/UPDATE/DELETE)\n"
-            "- Table names are like `tabDocType Name` (e.g., `tabSales Invoice`, `tabLoan Application`)\n"
+            "- Table names are like `tabDocType Name` (e.g., `tabSales Invoice`, `tabCustomer`)\n"
             "- Field names use snake_case (e.g., loan_amount, transaction_date, grand_total)\n"
             "- Always add LIMIT to prevent huge result sets\n\n"
             "EXAMPLES:\n"
-            "- SELECT COUNT(*) FROM `tabLoan Application` WHERE status='Active'\n"
-            "- SELECT status, COUNT(*) as count, SUM(loan_amount) as total FROM `tabLoan` GROUP BY status\n"
-            "- SELECT a.name, a.loan_amount, b.amount_paid FROM `tabLoan` a JOIN `tabLoan Repayment` b ON b.against_loan = a.name"
+            "- SELECT COUNT(*) FROM `tabCustomer` WHERE disabled=0\n"
+            "- SELECT status, COUNT(*) as count, SUM(grand_total) as total FROM `tabSales Invoice` WHERE docstatus=1 GROUP BY status\n"
+            "- SELECT a.name, a.grand_total FROM `tabSales Invoice` a WHERE a.docstatus=1"
         ),
     },
 
@@ -239,7 +239,7 @@ TOOL_ENHANCEMENTS = {
             "Available: frappe, json, datetime. No os/subprocess access.\n\n"
             "BULK OPERATIONS: For batch update/create/delete, use:\n"
             "  from niv_ai.niv_core.tools.bulk_ops import bulk_update, bulk_create, bulk_delete\n"
-            "  result = bulk_update('Loan', {'status': 'Active', 'branch': 'Mumbai'}, {'status': 'Closed'}, dry_run=True)\n"
+            "  result = bulk_update('Customer', {'status': 'Active', 'branch': 'Mumbai'}, {'status': 'Closed'}, dry_run=True)\n"
             "  Always call with dry_run=True first to preview, then dry_run=False to apply.\n\nBULK IMPORT FROM EXCEL: When user uploads Excel/CSV and wants to import data into Growth System:\n  from niv_ai.niv_core.tools.bulk_import import preview_import, execute_import\n  result = preview_import(file_url, doctype)  # Preview and validate first\n  result = execute_import(file_url, doctype, skip_errors=True)  # Then create documents\n  file_url = uploaded file URL. Auto-maps Excel columns to DocType fields.\n\nDOCUMENT GENERATION: For PDFs (loan agreement, receipt, SOA, letters):\n  from niv_ai.niv_core.tools.doc_generator import generate_document\n              result = generate_document(template_type, context_dict)\n\n            API BUILDER: Create whitelisted API endpoints as Server Scripts:\n              from niv_ai.niv_core.tools.api_builder import create_api, list_apis, test_api, delete_api\n              result = create_api(api_name, description, code, dry_run=True)  # Preview first\n              result = create_api(api_name, description, code, dry_run=False)  # Then create\n              result = list_apis()  # List all API endpoints\n              result = test_api(api_name, params={})  # Test an API\n              result = delete_api(api_name, confirm=True)  # Delete an API\n  result = generate_document(template_type, context_dict)"
         ),
     },
