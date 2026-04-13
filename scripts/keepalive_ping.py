@@ -11,7 +11,7 @@ os.chdir('/home/gws/frappe-bench/sites')
 import frappe, requests, time
 
 try:
-    frappe.init(site='erp024.growthsystem.in')
+    frappe.init(site=open('currentsite.txt').read().strip())
     frappe.connect()
     
     provider = frappe.get_doc('Niv AI Provider', 'ollama-cloud')

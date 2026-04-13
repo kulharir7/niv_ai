@@ -133,7 +133,7 @@ def get_site():
     except Exception:
         pass
     # Fallback to default site
-    return "erp024.growthsystem.in"
+    return frappe.get_site_path().split("/")[-1] if frappe.get_site_path() else "site1.local"
 
 
 commands = [niv_setup, niv_health, niv_doctor]

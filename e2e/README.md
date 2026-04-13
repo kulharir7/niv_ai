@@ -16,7 +16,7 @@ npx playwright install chromium
 npx playwright test
 
 # Against production
-NIV_TEST_URL=https://erp024.growthsystem.in NIV_TEST_USER=Administrator NIV_TEST_PASS=yourpass npx playwright test
+NIV_TEST_URL=https://your-site.example.com NIV_TEST_USER=Administrator NIV_TEST_PASS=yourpass npx playwright test
 
 # Specific test file
 npx playwright test e2e/chat.spec.js
