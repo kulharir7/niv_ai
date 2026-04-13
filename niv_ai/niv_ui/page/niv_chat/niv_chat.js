@@ -5631,9 +5631,16 @@ function nivPostFormat(html) {
             '<span class="niv-num-pill niv-currency">$1$2</span>');
         // Percentages
         h = h.replace(/(\d+(?:\.\d+)?)\s*%/g, '<span class="niv-num-pill niv-pct">$1%</span>');
-        // Large standalone numbers (5+ digits)
+        // Large standalone numbers (comma-separated OR decimals like 500.0, 1000.0)
         h = h.replace(/(?<![.\w₹$€£#\-])(\d{1,3}(?:,\d{2,3})+(?:\.\d+)?)(?![.\w%])/g, 
             '<span class="niv-num-pill">$1</span>');
+        // Also highlight decimal numbers in table cells (500.0, 1000.0, etc.)
+        if (el.is('td')) {
+            h = h.replace(/(?<![.\w₹$€£#\-])(\d+\.\d+)(?![.\w%])/g, function(m, num) {
+                if (el.find('.niv-num-pill').length) return m; // skip if already wrapped
+                return '<span class="niv-num-pill">' + num + '</span>';
+            });
+        }
         el.html(h);
     });
 
@@ -5641,12 +5648,19 @@ function nivPostFormat(html) {
     const statusMap = {
         'active': 'green', 'success': 'green', 'done': 'green', 'approved': 'green', 
         'completed': 'green', 'paid': 'green', 'enabled': 'green', 'running': 'green', 'open': 'green',
+        'delivered': 'green', 'received': 'green', 'accepted': 'green', 'confirmed': 'green',
+        'sanctioned': 'green', 'disbursed': 'green', 'settled': 'green',
         'pending': 'yellow', 'draft': 'yellow', 'processing': 'yellow', 'in progress': 'yellow',
         'waiting': 'yellow', 'submitted': 'yellow', 'partially': 'yellow',
+        'to deliver': 'yellow', 'to bill': 'yellow', 'to deliver and bill': 'yellow',
+        'to receive': 'yellow', 'to receive and bill': 'yellow', 'not started': 'yellow',
+        'partly paid': 'yellow', 'partly delivered': 'yellow', 'partly billed': 'yellow',
+        'in transit': 'yellow', 'under review': 'yellow', 'initiated': 'yellow',
         'failed': 'red', 'error': 'red', 'rejected': 'red', 'overdue': 'red', 
-        'expired': 'red', 'disabled': 'red', 'blocked': 'red',
+        'expired': 'red', 'disabled': 'red', 'blocked': 'red', 'unpaid': 'red',
+        'return': 'red', 'returned': 'red', 'stopped': 'red', 'lost': 'red',
         'cancelled': 'gray', 'closed': 'gray', 'inactive': 'gray', 'archived': 'gray',
-        'on hold': 'gray'
+        'on hold': 'gray', 'not applicable': 'gray'
     };
     $tmp.find('td, li').each(function() {
         const el = $(this);
