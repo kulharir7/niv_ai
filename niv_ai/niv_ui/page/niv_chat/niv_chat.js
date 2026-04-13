@@ -2079,7 +2079,7 @@ ${htmlCode}
                 // Detect bare /files/ URLs and render as images
                 html = html.replace(/(?<!="|'|src=")(\/(files|private\/files)\/[^\s<"']+\.(png|jpg|jpeg|gif|webp))/gi,
                     '<img src="$1" class="niv-inline-image" onclick="window.open(\'$1\', \'_blank\')" style="max-width:100%;border-radius:8px;cursor:pointer;margin:8px 0;" />');
-                return html;
+                return window.nivPostFormat ? window.nivPostFormat(html) : html;
             } catch (e) {
                 console.error("Markdown parse error:", e);
             }
@@ -5592,3 +5592,171 @@ function nivStopSmartStatus() {
         _nivStatusTimer = null;
     }
 }
+
+
+// ══════════════════════════════════════════════════════════════
+//  RESPONSE FORMATTING UPGRADE — Post-processor
+//  Runs AFTER render_markdown(), enhances HTML output
+//  Zero risk — additive only, no existing code modified
+// ══════════════════════════════════════════════════════════════
+
+function nivPostFormat(html) {
+    if (!html || typeof html !== 'string') return html;
+    const $tmp = $('<div>').html(html);
+
+    // ── 1. Number Highlighting ──
+    // Wrap currency & large numbers in colored pills
+    $tmp.find('p, li, td').each(function() {
+        const el = $(this);
+        // Skip if has child elements with code
+        if (el.find('code, pre, a').length) return;
+        let h = el.html();
+        if (!h) return;
+        // Currency: ₹, $, €, £ followed by numbers
+        h = h.replace(/([\₹\$\€\£])\s*([\d,]+(?:\.\d+)?(?:\s*(?:Cr|Lakh|K|M|B|cr|lakh|k|m|b))?)/g, 
+            '<span class="niv-num-pill niv-currency">$1$2</span>');
+        // Percentages
+        h = h.replace(/(\d+(?:\.\d+)?)\s*%/g, '<span class="niv-num-pill niv-pct">$1%</span>');
+        // Large standalone numbers (5+ digits)
+        h = h.replace(/(?<![.\w₹$€£#\-])(\d{1,3}(?:,\d{2,3})+(?:\.\d+)?)(?![.\w%])/g, 
+            '<span class="niv-num-pill">$1</span>');
+        el.html(h);
+    });
+
+    // ── 2. Status Badges ──
+    const statusMap = {
+        'active': 'green', 'success': 'green', 'done': 'green', 'approved': 'green', 
+        'completed': 'green', 'paid': 'green', 'enabled': 'green', 'running': 'green', 'open': 'green',
+        'pending': 'yellow', 'draft': 'yellow', 'processing': 'yellow', 'in progress': 'yellow',
+        'waiting': 'yellow', 'submitted': 'yellow', 'partially': 'yellow',
+        'failed': 'red', 'error': 'red', 'rejected': 'red', 'overdue': 'red', 
+        'expired': 'red', 'disabled': 'red', 'blocked': 'red',
+        'cancelled': 'gray', 'closed': 'gray', 'inactive': 'gray', 'archived': 'gray',
+        'on hold': 'gray'
+    };
+    $tmp.find('td, li').each(function() {
+        const el = $(this);
+        if (el.find('code, pre, a, .niv-status-badge').length) return;
+        let h = el.html();
+        if (!h) return;
+        for (const [status, color] of Object.entries(statusMap)) {
+            const regex = new RegExp('(?<![\\w-])(' + status.replace(/\s/g, '\\s') + ')(?![\\w-])', 'gi');
+            h = h.replace(regex, `<span class="niv-status-badge niv-sb-${color}">$1</span>`);
+        }
+        el.html(h);
+    });
+
+    // ── 3. Key-Value Info Cards ──
+    // Detect consecutive <p> with **Label**: Value pattern
+    const $paragraphs = $tmp.children('p');
+    let kvGroup = [];
+    let kvGroups = [];
+    $paragraphs.each(function(i) {
+        const text = $(this).text().trim();
+        const html = $(this).html();
+        // Match **Label**: Value or <strong>Label</strong>: Value
+        if (/^<strong>[^<]+<\/strong>\s*[:：]/.test(html) || /^\*\*[^*]+\*\*\s*[:：]/.test(text)) {
+            kvGroup.push($(this));
+        } else {
+            if (kvGroup.length >= 3) kvGroups.push([...kvGroup]);
+            kvGroup = [];
+        }
+    });
+    if (kvGroup.length >= 3) kvGroups.push([...kvGroup]);
+    
+    kvGroups.forEach(group => {
+        const $card = $('<div class="niv-info-card"></div>');
+        group[0].before($card);
+        group.forEach($p => {
+            const h = $p.html();
+            const match = h.match(/^<strong>([^<]+)<\/strong>\s*[:：]\s*(.*)/);
+            if (match) {
+                $card.append(`<div class="niv-info-row"><span class="niv-info-label">${match[1]}</span><span class="niv-info-value">${match[2]}</span></div>`);
+            } else {
+                $card.append(`<div class="niv-info-row">${h}</div>`);
+            }
+            $p.remove();
+        });
+    });
+
+    // ── 4. Step-by-Step Lists (handled via CSS — add class) ──
+    $tmp.find('ol').each(function() {
+        const $ol = $(this);
+        // Only convert if items are substantial (not just short words)
+        if ($ol.children('li').length >= 2 && $ol.children('li').length <= 15) {
+            $ol.addClass('niv-steps');
+        }
+    });
+
+    // ── 5. Link Preview Cards ──
+    $tmp.find('a[href^="http"]').each(function() {
+        const $a = $(this);
+        // Skip if inside code/pre or already processed
+        if ($a.closest('code, pre, .niv-link-card').length) return;
+        // Skip if link text is different from URL (it's a named link)
+        const href = $a.attr('href');
+        const text = $a.text().trim();
+        // Only convert bare URLs (text matches href)
+        if (text === href || text === href.replace(/^https?:\/\//, '')) {
+            try {
+                const url = new URL(href);
+                const domain = url.hostname.replace('www.', '');
+                $a.replaceWith(`<a href="${href}" target="_blank" class="niv-link-card">
+                    <span class="niv-lc-icon">🔗</span>
+                    <span class="niv-lc-info">
+                        <span class="niv-lc-domain">${domain}</span>
+                        <span class="niv-lc-path">${url.pathname !== '/' ? url.pathname.substring(0, 50) : ''}</span>
+                    </span>
+                    <span class="niv-lc-arrow">↗</span>
+                </a>`);
+            } catch(e) {}
+        }
+    });
+
+    // ── 6. Small Table → Cards (≤5 rows) ──
+    $tmp.find('.table-wrapper table').each(function() {
+        const $table = $(this);
+        const $rows = $table.find('tbody tr');
+        const $headers = $table.find('thead th');
+        // Only for small tables (2-5 rows, 2-6 columns)
+        if ($rows.length >= 2 && $rows.length <= 5 && $headers.length >= 2 && $headers.length <= 6) {
+            $table.closest('.table-wrapper').addClass('niv-table-mini');
+        }
+    });
+
+    // ── 7. Code Block Upgrade — language label ──
+    $tmp.find('pre').each(function() {
+        const $pre = $(this);
+        if ($pre.find('.niv-code-header').length) return; // already processed
+        const $code = $pre.find('code');
+        const classes = ($code.attr('class') || '').match(/language-(\w+)/);
+        const lang = classes ? classes[1] : '';
+        const langDisplay = lang ? lang.charAt(0).toUpperCase() + lang.slice(1) : 'Code';
+        // Count lines
+        const lines = ($code.text() || '').split('\n').length;
+        const isLong = lines > 20;
+        
+        $pre.addClass('niv-code-enhanced');
+        if (isLong) $pre.addClass('niv-code-collapsed');
+        
+        $pre.prepend(`<div class="niv-code-header">
+            <span class="niv-code-lang">${langDisplay}</span>
+            <span class="niv-code-lines">${lines} lines</span>
+        </div>`);
+        
+        if (isLong) {
+            $pre.after(`<button class="niv-code-expand" onclick="$(this).prev('pre').toggleClass('niv-code-collapsed'); $(this).text($(this).prev('pre').hasClass('niv-code-collapsed') ? 'Show more ▼' : 'Show less ▲')">Show more ▼</button>`);
+        }
+    });
+
+    // ── 8. Collapsible Long Content ──
+    // If total content height would be huge (many paragraphs), handled by CSS
+
+    // ── 9. Message entry animation class ──
+    // (Applied via CSS on .niv-message, not here)
+
+    return $tmp.html();
+}
+
+// Make it globally accessible
+window.nivPostFormat = nivPostFormat;

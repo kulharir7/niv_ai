@@ -5539,3 +5539,312 @@ body.niv-dark-mode .niv-chat-container.theme-minimal .niv-message.user .msg-cont
 .niv-chat-container.theme-terminal .niv-message.user .msg-content {
     background: rgba(0,255,65,0.1) !important;
 }
+
+
+/* ══════════════════════════════════════════════════════════════
+   RESPONSE FORMATTING UPGRADE — Premium Styles
+   ══════════════════════════════════════════════════════════════ */
+
+/* ── 1. Number Pills ── */
+.niv-num-pill {
+    display: inline-flex;
+    align-items: center;
+    background: rgba(124, 58, 237, 0.08);
+    color: var(--niv-primary, #7c3aed);
+    padding: 1px 8px;
+    border-radius: 6px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    font-size: 0.95em;
+    white-space: nowrap;
+}
+.niv-num-pill.niv-currency {
+    background: rgba(16, 185, 129, 0.08);
+    color: #10b981;
+}
+.niv-num-pill.niv-pct {
+    background: rgba(59, 130, 246, 0.08);
+    color: #3b82f6;
+}
+body.niv-dark-mode .niv-num-pill { background: rgba(124, 58, 237, 0.15); }
+body.niv-dark-mode .niv-num-pill.niv-currency { background: rgba(16, 185, 129, 0.15); }
+body.niv-dark-mode .niv-num-pill.niv-pct { background: rgba(59, 130, 246, 0.15); }
+
+/* ── 2. Status Badges ── */
+.niv-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 0.85em;
+    font-weight: 600;
+    text-transform: capitalize;
+    letter-spacing: 0.02em;
+}
+.niv-status-badge::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    display: inline-block;
+}
+.niv-sb-green { background: rgba(16, 185, 129, 0.1); color: #10b981; }
+.niv-sb-green::before { background: #10b981; }
+.niv-sb-yellow { background: rgba(245, 158, 11, 0.1); color: #f59e0b; }
+.niv-sb-yellow::before { background: #f59e0b; }
+.niv-sb-red { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.niv-sb-red::before { background: #ef4444; }
+.niv-sb-gray { background: rgba(107, 114, 128, 0.1); color: #6b7280; }
+.niv-sb-gray::before { background: #6b7280; }
+
+body.niv-dark-mode .niv-sb-green { background: rgba(16, 185, 129, 0.15); }
+body.niv-dark-mode .niv-sb-yellow { background: rgba(245, 158, 11, 0.15); }
+body.niv-dark-mode .niv-sb-red { background: rgba(239, 68, 68, 0.15); }
+body.niv-dark-mode .niv-sb-gray { background: rgba(107, 114, 128, 0.15); }
+
+/* ── 3. Info Cards (Key-Value) ── */
+.niv-info-card {
+    background: var(--niv-hover, rgba(0,0,0,0.02));
+    border: 1px solid var(--niv-border, #e5e5e5);
+    border-radius: 12px;
+    padding: 4px 0;
+    margin: 12px 0;
+    overflow: hidden;
+}
+.niv-info-row {
+    display: flex;
+    align-items: baseline;
+    padding: 8px 16px;
+    gap: 12px;
+    border-bottom: 1px solid rgba(0,0,0,0.04);
+    transition: background 0.15s;
+}
+.niv-info-row:last-child { border-bottom: none; }
+.niv-info-row:hover { background: rgba(0,0,0,0.02); }
+body.niv-dark-mode .niv-info-row:hover { background: rgba(255,255,255,0.03); }
+body.niv-dark-mode .niv-info-row { border-bottom-color: rgba(255,255,255,0.05); }
+
+.niv-info-label {
+    color: var(--niv-text-muted, #a3a3a3);
+    font-size: 0.88em;
+    font-weight: 500;
+    min-width: 100px;
+    flex-shrink: 0;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.niv-info-value {
+    color: var(--niv-text, #1a1a1a);
+    font-weight: 500;
+    flex: 1;
+}
+
+/* ── 4. Step-by-Step Lists ── */
+ol.niv-steps {
+    list-style: none !important;
+    padding-left: 8px !important;
+    position: relative;
+    counter-reset: niv-step;
+}
+ol.niv-steps::before {
+    content: "";
+    position: absolute;
+    left: 18px;
+    top: 16px;
+    bottom: 16px;
+    width: 2px;
+    background: linear-gradient(180deg, var(--niv-primary, #7c3aed), rgba(124,58,237,0.15));
+    border-radius: 2px;
+}
+ol.niv-steps > li {
+    position: relative;
+    padding-left: 36px;
+    margin: 0 !important;
+    padding-top: 10px;
+    padding-bottom: 10px;
+    counter-increment: niv-step;
+}
+ol.niv-steps > li::before {
+    content: counter(niv-step);
+    position: absolute;
+    left: 6px;
+    top: 10px;
+    width: 24px;
+    height: 24px;
+    background: var(--niv-primary, #7c3aed);
+    color: #fff;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    z-index: 1;
+    box-shadow: 0 2px 8px rgba(124,58,237,0.25);
+}
+ol.niv-steps > li:last-child { padding-bottom: 4px; }
+
+/* ── 5. Link Preview Cards ── */
+a.niv-link-card {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: var(--niv-hover, rgba(0,0,0,0.03));
+    border: 1px solid var(--niv-border, #e5e5e5);
+    border-radius: 10px;
+    text-decoration: none !important;
+    color: var(--niv-text, #1a1a1a) !important;
+    margin: 6px 0;
+    transition: all 0.2s;
+    max-width: 100%;
+    border-bottom: 1px solid var(--niv-border, #e5e5e5) !important;
+}
+a.niv-link-card:hover {
+    border-color: var(--niv-primary, #7c3aed) !important;
+    background: rgba(124, 58, 237, 0.04);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.06);
+}
+.niv-lc-icon { font-size: 18px; flex-shrink: 0; }
+.niv-lc-info { display: flex; flex-direction: column; overflow: hidden; min-width: 0; }
+.niv-lc-domain { font-weight: 600; font-size: 13px; color: var(--niv-primary, #7c3aed) !important; }
+.niv-lc-path { font-size: 11px; color: var(--niv-text-muted, #a3a3a3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.niv-lc-arrow { color: var(--niv-text-muted); font-size: 14px; flex-shrink: 0; }
+
+/* ── 6. Mini Table Enhancement ── */
+.niv-table-mini table {
+    border-collapse: separate;
+    border-spacing: 0;
+}
+.niv-table-mini table thead th {
+    background: var(--niv-primary, #7c3aed) !important;
+    color: #fff !important;
+    font-weight: 600;
+    padding: 10px 14px;
+    font-size: 0.88em;
+}
+.niv-table-mini table thead th:first-child { border-radius: 8px 0 0 0; }
+.niv-table-mini table thead th:last-child { border-radius: 0 8px 0 0; }
+.niv-table-mini table tbody tr:last-child td:first-child { border-radius: 0 0 0 8px; }
+.niv-table-mini table tbody tr:last-child td:last-child { border-radius: 0 0 8px 0; }
+.niv-table-mini table tbody tr:hover { background: rgba(124, 58, 237, 0.06) !important; }
+
+/* ── 7. Code Block Enhanced ── */
+pre.niv-code-enhanced {
+    position: relative;
+    padding-top: 38px !important;
+}
+.niv-code-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 14px;
+    background: rgba(0,0,0,0.3);
+    border-radius: 10px 10px 0 0;
+    font-size: 11px;
+    z-index: 2;
+}
+.niv-code-lang {
+    color: #a78bfa;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+.niv-code-lines {
+    color: rgba(255,255,255,0.35);
+    font-size: 10px;
+}
+pre.niv-code-collapsed {
+    max-height: 320px;
+    overflow: hidden;
+}
+pre.niv-code-collapsed::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 60px;
+    background: linear-gradient(transparent, var(--niv-code-bg, #1e1e2e));
+    pointer-events: none;
+    border-radius: 0 0 10px 10px;
+}
+.niv-code-expand {
+    display: block;
+    width: 100%;
+    padding: 6px;
+    background: rgba(0,0,0,0.15);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    color: var(--niv-primary, #a78bfa);
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    margin-top: -6px;
+    transition: background 0.2s;
+}
+.niv-code-expand:hover {
+    background: rgba(124, 58, 237, 0.1);
+}
+
+/* ── 8. Message Entry Animation ── */
+.niv-message {
+    animation: nivMsgIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.niv-message.user {
+    animation-name: nivMsgInRight;
+}
+@keyframes nivMsgIn {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@keyframes nivMsgInRight {
+    from { opacity: 0; transform: translateX(16px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── 9. Smooth heading underline ── */
+.msg-content h2 {
+    padding-bottom: 6px;
+    border-bottom: 2px solid rgba(124, 58, 237, 0.15);
+}
+.msg-content h3::before {
+    content: "▎";
+    color: var(--niv-primary, #7c3aed);
+    margin-right: 6px;
+    font-weight: 400;
+}
+
+/* ── 10. Blockquote upgrade ── */
+.msg-content blockquote {
+    position: relative;
+    border-left: 3px solid var(--niv-primary, #7c3aed) !important;
+    background: rgba(124, 58, 237, 0.04) !important;
+    padding: 12px 16px 12px 20px !important;
+    border-radius: 0 10px 10px 0 !important;
+}
+.msg-content blockquote::before {
+    content: "❝";
+    position: absolute;
+    top: -4px;
+    left: 8px;
+    font-size: 24px;
+    color: var(--niv-primary, #7c3aed);
+    opacity: 0.3;
+}
+
+/* ── Responsive ── */
+@media (max-width: 600px) {
+    .niv-info-row { flex-direction: column; gap: 2px; }
+    .niv-info-label { min-width: auto; }
+    a.niv-link-card { padding: 6px 10px; }
+    ol.niv-steps > li { padding-left: 30px; }
+}
