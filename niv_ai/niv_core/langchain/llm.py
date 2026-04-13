@@ -118,7 +118,7 @@ def get_llm(provider_name=None, model=None, streaming=True, callbacks=None):
     from langchain_openai import ChatOpenAI
     # Enable thinking mode for models that support it (Kimi, Qwen3, DeepSeek-R1)
     model_lower = (model or "").lower()
-    thinking_models = ["kimi", "qwen3", "deepseek-r1", "qwq", "thinking", "gemma4", "gemma-4"]
+    thinking_models = ["kimi", "qwen3", "deepseek-r1", "qwq", "thinking"]  # Gemma4 uses system prompt <|think|> token, not API param
     extra_kwargs = {}
     if any(t in model_lower for t in thinking_models):
         extra_kwargs["model_kwargs"] = {"extra_body": {"think": True}}

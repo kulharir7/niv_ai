@@ -151,6 +151,14 @@ def _build_messages(message: str, conversation_id: str = None, system_prompt: st
     messages = []
 
     if system_prompt:
+        # Gemma 4: prepend <|think|> token to enable thinking mode
+        try:
+            from .llm import _get_provider_and_model
+            _model = _get_provider_and_model()[1] or ""
+            if "gemma4" in _model.lower() or "gemma-4" in _model.lower():
+                system_prompt = "<|think|>\n" + system_prompt
+        except Exception:
+            pass
         messages.append(SystemMessage(content=system_prompt))
 
     # RAG context (only if knowledge base enabled)
