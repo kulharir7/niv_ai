@@ -29,7 +29,6 @@ _THINKING_PATTERNS = [
     (re.compile(r'<reasoning>[\s\S]*?</reasoning>'), ''),
     (re.compile(r'\[\[THOUGHT\]\][\s\S]*?\[\[/THOUGHT\]\]'), ''),
     (re.compile(r'\[\[THINKING\]\][\s\S]*?\[\[/THINKING\]\]'), ''),
-    (re.compile(r'<\|channel>thought\n[\s\S]*?<channel\|>'), ''),  # Gemma 4
     (re.compile(r'(?m)^Thought:.*$'), ''),
     (re.compile(r'(?m)^Action:.*$'), ''),
     (re.compile(r'(?m)^Action Input:.*$'), ''),
@@ -42,7 +41,6 @@ _TAG_OPENERS = [
     ('<reasoning>', '</reasoning>'),
     ('[[THOUGHT]]', '[[/THOUGHT]]'),
     ('[[THINKING]]', '[[/THINKING]]'),
-    ('<|channel>thought\n', '<channel|>'),  # Gemma 4
 ]
 
 
@@ -151,14 +149,6 @@ def _build_messages(message: str, conversation_id: str = None, system_prompt: st
     messages = []
 
     if system_prompt:
-        # Gemma 4: prepend <|think|> token to enable thinking mode
-        try:
-            from .llm import _get_provider_and_model
-            _model = _get_provider_and_model()[1] or ""
-            if "gemma4" in _model.lower() or "gemma-4" in _model.lower():
-                system_prompt = "<|think|>\n" + system_prompt
-        except Exception:
-            pass
         messages.append(SystemMessage(content=system_prompt))
 
     # RAG context (only if knowledge base enabled)
@@ -248,30 +238,12 @@ def _flush_buffer(buffer, final=False):
     """Process buffer -> return (text_to_yield, remaining_buffer, thinking_text).
     
     Returns: (clean_text, remaining_buffer, thinking_text)
-    
-    Real-time thinking: If buffer has an open <think> tag (not closed yet),
-    stream the thinking content incrementally instead of holding entire buffer.
     """
     if not buffer:
         return "", "", ""
     
     if not final and _has_incomplete_thinking_tag(buffer):
-        # NEW: Stream thinking content in real-time!
-        # Check if we have an open <think> tag with content inside
-        for opener, closer in _TAG_OPENERS:
-            if opener in buffer and closer not in buffer:
-                idx = buffer.find(opener)
-                # Content before the tag (should be yielded as text)
-                pre_text = buffer[:idx].strip()
-                # Content after the opener (this is thinking text to stream)
-                think_content = buffer[idx + len(opener):]
-                if think_content.strip():
-                    # Yield the thinking so far, keep the opener in buffer for later closing
-                    return pre_text, opener, think_content.strip()
-                else:
-                    # Tag just opened, no content yet — hold
-                    return pre_text, buffer[idx:], ""
-        return "", buffer, ""  # Hold it (fallback)
+        return "", buffer, ""  # Hold it
     
     thinking, clean = _extract_thinking(buffer)
     clean = clean.strip() if final else clean
@@ -301,25 +273,6 @@ def _stream_llm_tokens(llm_stream):
             continue
         
         buffer += content
-        
-        # Check if we are inside an open thinking block
-        _in_think = False
-        for _op, _cl in _TAG_OPENERS:
-            if buffer.startswith(_op) and _cl not in buffer:
-                _in_think = True
-                break
-        
-        if _in_think:
-            # We are inside <think>...</think> — stream content as thought tokens
-            for _op, _cl in _TAG_OPENERS:
-                if buffer.startswith(_op):
-                    think_so_far = buffer[len(_op):]
-                    if think_so_far.strip():
-                        # Only emit the NEW content (not what we already sent)
-                        yield {"type": "thought", "content": content}
-                    break
-            continue
-        
         text, buffer, thinking = _flush_buffer(buffer, final=False)
         if thinking:
             yield {"type": "thought", "content": thinking}
