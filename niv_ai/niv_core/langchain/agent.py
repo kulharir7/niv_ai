@@ -29,6 +29,7 @@ _THINKING_PATTERNS = [
     (re.compile(r'<reasoning>[\s\S]*?</reasoning>'), ''),
     (re.compile(r'\[\[THOUGHT\]\][\s\S]*?\[\[/THOUGHT\]\]'), ''),
     (re.compile(r'\[\[THINKING\]\][\s\S]*?\[\[/THINKING\]\]'), ''),
+    (re.compile(r'<\|channel>thought\n[\s\S]*?<channel\|>'), ''),  # Gemma 4
     (re.compile(r'(?m)^Thought:.*$'), ''),
     (re.compile(r'(?m)^Action:.*$'), ''),
     (re.compile(r'(?m)^Action Input:.*$'), ''),
@@ -41,6 +42,7 @@ _TAG_OPENERS = [
     ('<reasoning>', '</reasoning>'),
     ('[[THOUGHT]]', '[[/THOUGHT]]'),
     ('[[THINKING]]', '[[/THINKING]]'),
+    ('<|channel>thought\n', '<channel|>'),  # Gemma 4
 ]
 
 
