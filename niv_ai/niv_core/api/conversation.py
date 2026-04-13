@@ -112,7 +112,10 @@ def delete_conversation(conversation_id):
     frappe.db.delete("Niv File", {"conversation": conversation_id})
     frappe.db.delete("Niv Tool Log", {"conversation": conversation_id})
     frappe.db.delete("Niv Usage Log", {"conversation": conversation_id})
-    frappe.db.delete("Niv Run Log", {"conversation": conversation_id})
+    try:
+        frappe.db.delete("Niv Run Log", {"conversation": conversation_id})
+    except Exception:
+        pass  # Table may not exist
 
     # Delete conversation
     frappe.delete_doc("Niv Conversation", conversation_id, ignore_permissions=True)
